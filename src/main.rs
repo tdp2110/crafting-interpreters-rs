@@ -11,6 +11,7 @@ fn main() {
     }
 
     let text = scanner::scan_tokens(fs::read_to_string(&args[1]).unwrap());
+
     match text {
         Ok(tokens) => for t in tokens { println!("{:?}", t) }
         Err(err) => println!("lexical error: {}", err)
