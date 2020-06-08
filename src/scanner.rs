@@ -35,6 +35,6 @@ pub struct Token {
     line: i64
 }
 
-pub fn tokenize(_input: String) -> Result<Vec<Token>, String> {
+pub fn scan_tokens(_input: String) -> Result<Vec<Token>, String> {
     unimplemented!();
 }
