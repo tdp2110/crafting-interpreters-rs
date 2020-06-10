@@ -120,7 +120,9 @@ impl Scanner {
     }
 
     fn advance(&mut self) -> char {
-        unimplemented!()
+        self.current += 1;
+
+        char::from(self.source[self.current - 1])
     }
 
     fn scan_token(&mut self) {
@@ -137,23 +139,68 @@ impl Scanner {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
+            '!' => {
+                let matches_eq = self.matches('=');
+                self.add_token(if matches_eq {
+                    TokenType::BangEqual
+                } else {
+                    TokenType::Bang
+                })
+            }
+            '<' => {
+                let matches_eq = self.matches('=');
+                self.add_token(if matches_eq {
+                    TokenType::LessEqual
+                } else {
+                    TokenType::Less
+                })
+            }
+            '>' => {
+                let matches_eq = self.matches('=');
+                self.add_token(if matches_eq {
+                    TokenType::GreaterEqual
+                } else {
+                    TokenType::Greater
+                })
+            }
             _ => self.err = Some(format!("scanner can't handle {}", c)),
         }
         unimplemented!()
     }
 
+    fn matches(&mut self, c: char) -> bool {
+        if self.is_at_end() {
+            return true;
+        }
+
+        if char::from(self.source[self.current]) != c {
+            return false;
+        }
+
+        self.current += 1;
+        true
+    }
+
     fn add_token(&mut self, token_type: TokenType) {
+        self.add_token_literal(token_type, None)
+    }
+
+    fn add_token_literal(&mut self, token_type: TokenType, literal: Option<Literal>) {
         let text = self.source[self.start..self.current].to_vec();
 
         self.tokens.push(Token {
             ty: token_type,
             lexeme: text,
-            literal: None,
+            literal,
             line: self.line,
         })
     }
 
     fn done(&self) -> bool {
-        unimplemented!()
+        self.err.is_some() || self.is_at_end()
+    }
+
+    fn is_at_end(&self) -> bool {
+        self.current >= self.source.len()
     }
 }
