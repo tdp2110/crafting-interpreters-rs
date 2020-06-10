@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum TokenType {
   // Single-character tokens.
   LeftParen, RightParen, LeftBrace, RightBrace,
@@ -21,6 +22,7 @@ pub enum TokenType {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Literal {
     Identifier(String),
     Str(String),
@@ -70,13 +72,15 @@ impl Default for Scanner {
 
 impl Scanner {
     fn scan_tokens(&mut self, input: String) {
+        self.source = input.into_bytes();
+
         while !self.done() {
             self.start = self.current;
             self.scan_token();
         }
 
         match self.err {
-            Some(_) => return,
+            Some(_) => {},
             None => self.tokens.push(Token { ty: TokenType::Eof,
                                              lexeme: Vec::new(),
                                              literal: None,
