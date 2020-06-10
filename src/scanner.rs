@@ -163,9 +163,28 @@ impl Scanner {
                     TokenType::Greater
                 })
             }
+            '/' => {
+                if self.matches('/') {
+                    while self.peek() != '\n' && !self.is_at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenType::Slash)
+                }
+            }
+            ' ' | '\r' | '\t' => {}
+            '\n' => self.line += 1,
             _ => self.err = Some(format!("scanner can't handle {}", c)),
         }
         unimplemented!()
+    }
+
+    fn peek(&self) -> char {
+        if self.is_at_end() {
+            '\0'
+        } else {
+            char::from(self.source[self.current])
+        }
     }
 
     fn matches(&mut self, c: char) -> bool {
