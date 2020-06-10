@@ -174,9 +174,34 @@ impl Scanner {
             }
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
+            '"' => self.string(),
             _ => self.err = Some(format!("scanner can't handle {}", c)),
         }
         unimplemented!()
+    }
+
+    fn string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            self.err = Some(format!("Unterminated string at line {}", self.line))
+        }
+
+        assert!(self.peek() == '"');
+
+        self.advance();
+
+        self.add_token_literal(
+            TokenType::String,
+            Some(Literal::Str(
+                String::from_utf8(self.source[self.start..self.current - 1].to_vec()).unwrap(),
+            )),
+        )
     }
 
     fn peek(&self) -> char {
