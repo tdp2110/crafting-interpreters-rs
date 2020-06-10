@@ -30,7 +30,7 @@ pub enum Literal {
 #[derive(Debug)]
 pub struct Token {
     ty: TokenType,
-    lexeme: String,
+    lexeme: Vec<u8>,
     literal: Option<Literal>,
     line: usize
 }
@@ -47,7 +47,7 @@ pub fn scan_tokens(input: String) -> Result<Vec<Token>, String> {
 }
 
 struct Scanner {
-    source: String,
+    source: Vec<u8>,
     tokens: Vec<Token>,
     err: Option<String>,
     start: usize,
@@ -58,7 +58,7 @@ struct Scanner {
 impl Default for Scanner {
     fn default () -> Scanner {
         Scanner {
-            source: String::new(),
+            source: Vec::new(),
             tokens: Vec::new(),
             err: None,
             start: 0,
@@ -70,7 +70,7 @@ impl Default for Scanner {
 
 impl Scanner {
     fn scan_tokens(&mut self, input: String) {
-        while self.not_done() {
+        while !self.done() {
             self.start = self.current;
             self.scan_token();
         }
@@ -78,7 +78,7 @@ impl Scanner {
         match self.err {
             Some(_) => return,
             None => self.tokens.push(Token { ty: TokenType::Eof,
-                                             lexeme: String::new(),
+                                             lexeme: Vec::new(),
                                              literal: None,
                                              line: self.line })
 
@@ -103,15 +103,13 @@ impl Scanner {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            c => self.err = Some(format!("scanner can't handle {}", c))
+            _ => self.err = Some(format!("scanner can't handle {}", c))
         }
         unimplemented!()
     }
 
     fn add_token(&mut self, token_type: TokenType) {
-        let text = String::from_utf8(
-            self.source.as_bytes()[self.start..self.current].to_vec()
-        ).unwrap();
+        let text = self.source[self.start..self.current].to_vec();
 
         self.tokens.push(Token { ty: token_type,
                                  lexeme: text,
@@ -119,7 +117,7 @@ impl Scanner {
                                  line: self.line })
     }
 
-    fn not_done(&self) -> bool {
+    fn done(&self) -> bool {
         unimplemented!()
     }
 }
