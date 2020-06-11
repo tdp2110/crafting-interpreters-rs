@@ -51,7 +51,6 @@ pub enum TokenType {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum Literal {
     Identifier(String),
     Str(String),
@@ -178,6 +177,8 @@ impl Scanner {
             _ => {
                 if Scanner::is_decimal_digit(c) {
                     self.number()
+                } else if Scanner::is_alpha(c) {
+                    self.identifier()
                 } else {
                     self.err = Some(format!("scanner can't handle {}", c))
                 }
@@ -186,8 +187,30 @@ impl Scanner {
         unimplemented!()
     }
 
+    fn is_alpha(c: char) -> bool {
+        c.is_alphabetic()
+    }
+
     fn is_decimal_digit(c: char) -> bool {
         c.is_digit(10)
+    }
+
+    fn is_alphanumeric(c: char) -> bool {
+        Scanner::is_alpha(c) || Scanner::is_decimal_digit(c)
+    }
+
+    fn identifier(&mut self) {
+        while Scanner::is_alphanumeric(self.peek()) {
+            self.advance();
+        }
+
+        let literal_val =
+            String::from_utf8(self.source[self.start..self.current].to_vec()).unwrap();
+
+        self.add_token_literal(
+            TokenType::Identifier,
+            Some(Literal::Identifier(literal_val)), // book doesn't do this. why not?
+        );
     }
 
     fn number(&mut self) {
