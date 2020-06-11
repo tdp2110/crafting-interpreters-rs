@@ -1,4 +1,6 @@
-#[derive(Debug)]
+use std::collections::HashMap;
+
+#[derive(Debug, Copy, Clone)]
 #[allow(dead_code)]
 pub enum TokenType {
     // Single-character tokens.
@@ -83,6 +85,7 @@ struct Scanner {
     start: usize,
     current: usize,
     line: usize,
+    keywords: HashMap<String, TokenType>,
 }
 
 impl Default for Scanner {
@@ -94,6 +97,27 @@ impl Default for Scanner {
             start: 0,
             current: 0,
             line: 1,
+            keywords: vec![
+                ("and", TokenType::And),
+                ("class", TokenType::Class),
+                ("else", TokenType::Else),
+                ("false", TokenType::False),
+                ("for", TokenType::For),
+                ("fun", TokenType::Fun),
+                ("if", TokenType::If),
+                ("nil", TokenType::Nil),
+                ("or", TokenType::Or),
+                ("print", TokenType::Print),
+                ("return", TokenType::Return),
+                ("super", TokenType::Super),
+                ("this", TokenType::This),
+                ("true", TokenType::True),
+                ("var", TokenType::Var),
+                ("while", TokenType::While),
+            ]
+            .into_iter()
+            .map(|(k, v)| (String::from(k), v))
+            .collect(),
         }
     }
 }
@@ -207,10 +231,18 @@ impl Scanner {
         let literal_val =
             String::from_utf8(self.source[self.start..self.current].to_vec()).unwrap();
 
-        self.add_token_literal(
-            TokenType::Identifier,
-            Some(Literal::Identifier(literal_val)), // book doesn't do this. why not?
-        );
+        let token_type = match self.keywords.get(&literal_val) {
+            Some(kw_token_type) => *kw_token_type,
+            None => TokenType::Identifier,
+        };
+
+        match token_type {
+            TokenType::Identifier => self.add_token_literal(
+                TokenType::Identifier,
+                Some(Literal::Identifier(literal_val)),
+            ), // book doesn't do this. why not?}
+            _ => self.add_token(token_type),
+        }
     }
 
     fn number(&mut self) {
