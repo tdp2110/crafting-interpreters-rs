@@ -208,7 +208,6 @@ impl Scanner {
                 }
             }
         }
-        unimplemented!()
     }
 
     fn is_alpha(c: char) -> bool {
