@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 
+mod expr;
 mod scanner;
 
 fn main() {
