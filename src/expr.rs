@@ -14,8 +14,8 @@ pub enum UnaryOp {
 
 #[allow(dead_code)]
 pub enum BinaryOp {
-    EqualsEquals,
-    NotEquals,
+    EqualEqual,
+    NotEqual,
     Less,
     LessEqual,
     Greater,

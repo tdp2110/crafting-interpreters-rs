@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 
 mod expr;
+mod parser;
 mod scanner;
 
 fn main() {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
 #[allow(dead_code)]
 pub enum TokenType {
     // Single-character tokens.
@@ -61,10 +61,10 @@ pub enum Literal {
 
 #[derive(Debug)]
 pub struct Token {
-    ty: TokenType,
-    lexeme: Vec<u8>,
-    literal: Option<Literal>,
-    line: usize,
+    pub ty: TokenType,
+    pub lexeme: Vec<u8>,
+    pub literal: Option<Literal>,
+    pub line: usize,
 }
 
 pub fn scan_tokens(input: String) -> Result<Vec<Token>, String> {
