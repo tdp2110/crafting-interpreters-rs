@@ -9,28 +9,40 @@ pub struct Parser {
     err: Option<String>,
 }
 
+/*
+Recursive descent using the following grammar
+
+expression     → equality ;
+equality       → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
+addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
+multiplication → unary ( ( "/" | "*" ) unary )* ;
+unary          → ( "!" | "-" ) unary
+               | primary ;
+primary        → NUMBER | STRING | "false" | "true" | "nil"
+               | "(" expression ")" ;
+*/
 impl Parser {
+    #[allow(dead_code)]
     fn expression(&mut self) -> expr::Expr {
         self.equality()
     }
 
     fn comparison(&mut self) -> expr::Expr {
-        unimplemented!()
-    }
+        let expr = self.addition();
 
-    fn equality(&mut self) -> expr::Expr {
-        let expr = self.comparison();
-
-        while self.match_tokens(vec![
-            scanner::TokenType::BangEqual,
-            scanner::TokenType::EqualEqual,
+        while self.match_one_of(vec![
+            scanner::TokenType::Greater,
+            scanner::TokenType::GreaterEqual,
+            scanner::TokenType::Less,
+            scanner::TokenType::LessEqual,
         ]) {
             let operator_token: scanner::TokenType = self.previous().ty;
-            let right = Box::new(self.comparison());
+            let right = Box::new(self.addition());
 
-            let binopMaybe = self.op_token_to_binop(operator_token);
+            let binop_maybe = Parser::op_token_to_binop(operator_token);
 
-            match binopMaybe {
+            match binop_maybe {
                 Ok(binop) => {
                     let left = Box::new(expr);
                     return expr::Expr::Binary(left, binop, right);
@@ -43,7 +55,161 @@ impl Parser {
         expr
     }
 
-    fn op_token_to_binop(&self, tok: scanner::TokenType) -> Result<expr::BinaryOp, String> {
+    fn addition(&mut self) -> expr::Expr {
+        let expr = self.multiplication();
+
+        while self.match_one_of(vec![scanner::TokenType::Minus, scanner::TokenType::Plus]) {
+            let operator_token: scanner::TokenType = self.previous().ty;
+            let right = Box::new(self.multiplication());
+
+            let binop_maybe = Parser::op_token_to_binop(operator_token);
+
+            match binop_maybe {
+                Ok(binop) => {
+                    let left = Box::new(expr);
+                    return expr::Expr::Binary(left, binop, right);
+                }
+                Err(err) => {
+                    self.err = Some(err);
+                }
+            }
+        }
+        expr
+    }
+
+    fn multiplication(&mut self) -> expr::Expr {
+        let expr = self.unary();
+
+        while self.match_one_of(vec![scanner::TokenType::Slash, scanner::TokenType::Star]) {
+            let operator_token: scanner::TokenType = self.previous().ty;
+            let right = Box::new(self.unary());
+
+            let binop_maybe = Parser::op_token_to_binop(operator_token);
+
+            match binop_maybe {
+                Ok(binop) => {
+                    let left = Box::new(expr);
+                    return expr::Expr::Binary(left, binop, right);
+                }
+                Err(err) => {
+                    self.err = Some(err);
+                }
+            }
+        }
+        expr
+    }
+
+    fn unary(&mut self) -> expr::Expr {
+        if self.match_one_of(vec![scanner::TokenType::Bang, scanner::TokenType::Minus]) {
+            let operator_token: scanner::TokenType = self.previous().ty;
+            let right = Box::new(self.unary());
+
+            let unary_op_maybe = Parser::op_token_to_unary_op(operator_token);
+
+            match unary_op_maybe {
+                Ok(unary_op) => {
+                    return expr::Expr::Unary(unary_op, right);
+                }
+                Err(err) => self.err = Some(err),
+            }
+        }
+        self.primary()
+    }
+
+    fn primary(&mut self) -> expr::Expr {
+        if self.matches(scanner::TokenType::False) {
+            return expr::Expr::Literal(expr::Literal::False);
+        }
+        if self.matches(scanner::TokenType::True) {
+            return expr::Expr::Literal(expr::Literal::True);
+        }
+        if self.matches(scanner::TokenType::Nil) {
+            return expr::Expr::Literal(expr::Literal::Nil);
+        }
+        if self.matches(scanner::TokenType::Number) {
+            match &self.previous().literal {
+                Some(scanner::Literal::Number(n)) => {
+                    return expr::Expr::Literal(expr::Literal::Number(*n))
+                }
+                Some(l) => panic!(
+                    "internal error in parser: when parsing number, found literal {:?}",
+                    l
+                ),
+                None => panic!("internal error in parser: when parsing number, found no literal"),
+            }
+        }
+        if self.matches(scanner::TokenType::String) {
+            match &self.previous().literal {
+                Some(scanner::Literal::Str(s)) => {
+                    return expr::Expr::Literal(expr::Literal::String(s.clone()))
+                }
+                Some(l) => panic!(
+                    "internal error in parser: when parsing string, found literal {:?}",
+                    l
+                ),
+                None => panic!("internal error in parser: when parsing string, found no literal"),
+            }
+        }
+        if self.matches(scanner::TokenType::LeftParen) {
+            let expr = Box::new(self.expression());
+            self.consume(
+                scanner::TokenType::RightParen,
+                "Expected ')' after expression.",
+            );
+            return expr::Expr::Grouping(expr);
+        }
+
+        self.err = Some(format!("Expected expression at {:?}", self.peek()));
+        expr::Expr::Literal(expr::Literal::Nil)
+    }
+
+    fn consume(&mut self, tok: scanner::TokenType, on_err_str: &str) {
+        if self.check(tok) {
+            self.advance();
+        }
+
+        self.err = Some(format!(
+            "Expected token type {:?}, but found token {:?}: {}",
+            tok,
+            self.peek(),
+            on_err_str
+        ))
+    }
+
+    fn op_token_to_unary_op(tok: scanner::TokenType) -> Result<expr::UnaryOp, String> {
+        match tok {
+            scanner::TokenType::Minus => Ok(expr::UnaryOp::Minus),
+            scanner::TokenType::Bang => Ok(expr::UnaryOp::Bang),
+            _ => Err(format!("invalid token in unary op {:?}", tok)),
+        }
+    }
+
+    fn equality(&mut self) -> expr::Expr {
+        let expr = self.comparison();
+
+        while self.match_one_of(vec![
+            scanner::TokenType::BangEqual,
+            scanner::TokenType::EqualEqual,
+        ]) {
+            let operator_token: scanner::TokenType = self.previous().ty;
+            let right = Box::new(self.comparison());
+
+            let binop_maybe = Parser::op_token_to_binop(operator_token);
+
+            match binop_maybe {
+                Ok(binop) => {
+                    let left = Box::new(expr);
+                    return expr::Expr::Binary(left, binop, right);
+                }
+                Err(err) => {
+                    self.err = Some(err);
+                }
+            }
+        }
+        expr
+    }
+
+    fn op_token_to_binop(tok: scanner::TokenType) -> Result<expr::BinaryOp, String> {
         match tok {
             scanner::TokenType::EqualEqual => Ok(expr::BinaryOp::EqualEqual),
             scanner::TokenType::BangEqual => Ok(expr::BinaryOp::NotEqual),
@@ -59,14 +225,20 @@ impl Parser {
         }
     }
 
-    fn match_tokens(&mut self, types: Vec<scanner::TokenType>) -> bool {
+    fn match_one_of(&mut self, types: Vec<scanner::TokenType>) -> bool {
         for ty in types.iter() {
-            if self.check(*ty) {
-                self.advance();
+            if self.matches(*ty) {
                 return true;
             }
         }
+        false
+    }
 
+    fn matches(&mut self, ty: scanner::TokenType) -> bool {
+        if self.check(ty) {
+            self.advance();
+            return true;
+        }
         false
     }
 
