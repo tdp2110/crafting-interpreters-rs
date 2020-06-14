@@ -19,12 +19,12 @@ fn main() {
                 println!("{:?}", t)
             }
 
-            println!("{:#?}", scanner::TokenType::LeftParen);
+            println!();
 
             let expr_maybe = parser::parse(tokens);
 
             match expr_maybe {
-                Ok(expr) => println!("ast:\n{:#?}", expr),
+                Ok(expr) => println!("AST:\n{:#?}", expr),
                 Err(err) => println!("parse error: {}", err),
             }
         }
