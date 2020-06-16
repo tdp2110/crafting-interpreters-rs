@@ -8,14 +8,14 @@ pub enum Expr {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum UnaryOp {
     Minus,
     Bang,
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum BinaryOp {
     EqualEqual,
     NotEqual,

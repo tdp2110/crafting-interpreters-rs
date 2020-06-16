@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 
 mod expr;
+mod interpreter;
 mod parser;
 mod scanner;
 
@@ -18,13 +19,21 @@ fn main() {
             for t in &tokens {
                 println!("{:?}", t)
             }
-
             println!();
 
             let expr_maybe = parser::parse(tokens);
 
             match expr_maybe {
-                Ok(expr) => println!("AST:\n{:#?}", expr),
+                Ok(expr) => {
+                    println!("AST:\n{:#?}", expr);
+                    let interpret_result = interpreter::interpret(&expr);
+                    println!();
+
+                    match interpret_result {
+                        Ok(val) => println!("Result:\n{:#?}", val),
+                        Err(err) => println!("Interpreter Error:\n{}", err),
+                    }
+                }
                 Err(err) => println!("parse error: {}", err),
             }
         }
