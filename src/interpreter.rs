@@ -63,9 +63,9 @@ fn equals(lhs: &Value, rhs: &Value) -> bool {
 fn interpret_unary(op: expr::UnaryOp, expr: &expr::Expr) -> Result<Value, String> {
     let val = interpret(expr)?;
 
-    match (op, val) {
+    match (op, &val) {
         (expr::UnaryOp::Minus, Value::Number(n)) => Ok(Value::Number(-n)),
-        (expr::UnaryOp::Bang, Value::Number(n)) => Ok(Value::Bool(n == 0.0)),
+        (expr::UnaryOp::Bang, _) => Ok(Value::Bool(!is_truthy(val))),
         (_, Value::String(_)) => Err(format!(
             "invalid application of unary op {:?} to object of type string",
             op
@@ -74,8 +74,15 @@ fn interpret_unary(op: expr::UnaryOp, expr: &expr::Expr) -> Result<Value, String
             "invalid application of unary op {:?} to object of type Bool",
             op
         )),
-        (expr::UnaryOp::Bang, Value::Bool(b)) => Ok(Value::Bool(!b)),
         (_, Value::Nil) => Err(format!("invalid application of unary op {:?} to nil", op)),
+    }
+}
+
+fn is_truthy(val: Value) -> bool {
+    match val {
+        Value::Nil => false,
+        Value::Bool(b) => b,
+        _ => true,
     }
 }
 
