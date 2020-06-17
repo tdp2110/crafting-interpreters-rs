@@ -26,12 +26,6 @@ fn interpret_binary(
     let rhs = interpret(rhs_expr)?;
 
     match (&lhs, op, &rhs) {
-        (Value::Number(n1), expr::BinaryOp::EqualEqual, Value::Number(n2)) => {
-            Ok(Value::Bool(n1 == n2))
-        }
-        (Value::Number(n1), expr::BinaryOp::NotEqual, Value::Number(n2)) => {
-            Ok(Value::Bool(n1 != n2))
-        }
         (Value::Number(n1), expr::BinaryOp::Less, Value::Number(n2)) => Ok(Value::Bool(n1 < n2)),
         (Value::Number(n1), expr::BinaryOp::LessEqual, Value::Number(n2)) => {
             Ok(Value::Bool(n1 <= n2))
@@ -44,35 +38,25 @@ fn interpret_binary(
         (Value::Number(n1), expr::BinaryOp::Minus, Value::Number(n2)) => Ok(Value::Number(n1 - n2)),
         (Value::Number(n1), expr::BinaryOp::Star, Value::Number(n2)) => Ok(Value::Number(n1 * n2)),
         (Value::Number(n1), expr::BinaryOp::Slash, Value::Number(n2)) => Ok(Value::Number(n1 / n2)), // What about exceptions!!!!??!?!?
-        (Value::String(s1), expr::BinaryOp::EqualEqual, Value::String(s2)) => {
-            Ok(Value::Bool(s1 == s2))
-        }
-        (Value::String(s1), expr::BinaryOp::NotEqual, Value::String(s2)) => {
-            Ok(Value::Bool(s1 != s2))
-        }
-        (Value::String(s1), expr::BinaryOp::Less, Value::String(s2)) => Ok(Value::Bool(s1 < s2)),
-        (Value::String(s1), expr::BinaryOp::LessEqual, Value::String(s2)) => {
-            Ok(Value::Bool(s1 <= s2))
-        }
-        (Value::String(s1), expr::BinaryOp::Greater, Value::String(s2)) => Ok(Value::Bool(s1 > s2)),
-        (Value::String(s1), expr::BinaryOp::GreaterEqual, Value::String(s2)) => {
-            Ok(Value::Bool(s1 >= s2))
-        }
         (Value::String(s1), expr::BinaryOp::Plus, Value::String(s2)) => {
             Ok(Value::String(format!("{}{}", s1, s2)))
         }
-        (Value::Nil, expr::BinaryOp::EqualEqual, Value::Nil) => Ok(Value::Bool(true)),
-        (Value::Nil, expr::BinaryOp::NotEqual, Value::Nil) => Ok(Value::Bool(false)),
-        (Value::Nil, expr::BinaryOp::EqualEqual, _) => Ok(Value::Bool(false)),
-        (_, expr::BinaryOp::EqualEqual, Value::Nil) => Ok(Value::Bool(false)),
-        (Value::Nil, expr::BinaryOp::NotEqual, _) => Ok(Value::Bool(true)),
-        (_, expr::BinaryOp::NotEqual, Value::Nil) => Ok(Value::Bool(true)),
-        (Value::Bool(b1), expr::BinaryOp::EqualEqual, Value::Bool(b2)) => Ok(Value::Bool(b1 == b2)),
-        (Value::Bool(b1), expr::BinaryOp::NotEqual, Value::Bool(b2)) => Ok(Value::Bool(b1 != b2)),
+        (_, expr::BinaryOp::EqualEqual, _) => Ok(Value::Bool(equals(&lhs, &rhs))),
+        (_, expr::BinaryOp::NotEqual, _) => Ok(Value::Bool(!equals(&lhs, &rhs))),
         (_, _, _) => Err(format!(
             "invalid operands in binary expression ({:?},{:?},{:?})",
             lhs, op, rhs
         )),
+    }
+}
+
+fn equals(lhs: &Value, rhs: &Value) -> bool {
+    match (lhs, rhs) {
+        (Value::Number(n1), Value::Number(n2)) => n1 == n2,
+        (Value::String(s1), Value::String(s2)) => s1 == s2,
+        (Value::Bool(b1), Value::Bool(b2)) => b1 == b2,
+        (Value::Nil, Value::Nil) => true,
+        (_, _) => false,
     }
 }
 
