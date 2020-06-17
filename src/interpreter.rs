@@ -1,4 +1,5 @@
 use crate::expr;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum Value {
@@ -6,6 +7,17 @@ pub enum Value {
     String(String),
     Bool(bool),
     Nil,
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            Value::Number(n) => write!(f, "{}", n),
+            Value::String(s) => write!(f, "'{}'", s),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Nil => write!(f, "nil"),
+        }
+    }
 }
 
 pub fn interpret(expr: &expr::Expr) -> Result<Value, String> {

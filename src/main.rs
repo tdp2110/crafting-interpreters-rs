@@ -30,7 +30,7 @@ fn main() {
                     println!();
 
                     match interpret_result {
-                        Ok(val) => println!("Result:\n{:#?}", val),
+                        Ok(val) => println!("Result:\n{}", val),
                         Err(err) => println!("Interpreter Error:\n{}", err),
                     }
                 }
