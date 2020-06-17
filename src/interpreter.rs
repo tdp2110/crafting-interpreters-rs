@@ -37,7 +37,13 @@ fn interpret_binary(
         (Value::Number(n1), expr::BinaryOp::Plus, Value::Number(n2)) => Ok(Value::Number(n1 + n2)),
         (Value::Number(n1), expr::BinaryOp::Minus, Value::Number(n2)) => Ok(Value::Number(n1 - n2)),
         (Value::Number(n1), expr::BinaryOp::Star, Value::Number(n2)) => Ok(Value::Number(n1 * n2)),
-        (Value::Number(n1), expr::BinaryOp::Slash, Value::Number(n2)) => Ok(Value::Number(n1 / n2)), // What about exceptions!!!!??!?!?
+        (Value::Number(n1), expr::BinaryOp::Slash, Value::Number(n2)) => {
+            if *n2 != 0.0 {
+                Ok(Value::Number(n1 / n2))
+            } else {
+                Err(String::from("division by zero"))
+            }
+        }
         (Value::String(s1), expr::BinaryOp::Plus, Value::String(s2)) => {
             Ok(Value::String(format!("{}{}", s1, s2)))
         }
