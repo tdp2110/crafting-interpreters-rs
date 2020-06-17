@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Expr {
     Literal(Literal),
@@ -7,14 +6,12 @@ pub enum Expr {
     Grouping(Box<Expr>),
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub enum UnaryOpTy {
     Minus,
     Bang,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub struct UnaryOp {
     pub ty: UnaryOpTy,
@@ -22,9 +19,8 @@ pub struct UnaryOp {
     pub col: i64,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
-pub enum BinaryOp {
+pub enum BinaryOpTy {
     EqualEqual,
     NotEqual,
     Less,
@@ -37,7 +33,13 @@ pub enum BinaryOp {
     Slash,
 }
 
-#[allow(dead_code)]
+#[derive(Debug, Copy, Clone)]
+pub struct BinaryOp {
+    pub ty: BinaryOpTy,
+    pub line: usize,
+    pub col: i64,
+}
+
 #[derive(Debug)]
 pub enum Literal {
     Number(f64),

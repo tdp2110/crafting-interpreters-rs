@@ -9,6 +9,23 @@ pub enum Value {
     Nil,
 }
 
+#[derive(Debug)]
+pub enum Type {
+    Number,
+    String,
+    Bool,
+    NilType,
+}
+
+pub fn type_of(val: &Value) -> Type {
+    match val {
+        Value::Number(_) => Type::Number,
+        Value::String(_) => Type::String,
+        Value::Bool(_) => Type::Bool,
+        Value::Nil => Type::NilType,
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
@@ -37,33 +54,48 @@ fn interpret_binary(
     let lhs = interpret(lhs_expr)?;
     let rhs = interpret(rhs_expr)?;
 
-    match (&lhs, op, &rhs) {
-        (Value::Number(n1), expr::BinaryOp::Less, Value::Number(n2)) => Ok(Value::Bool(n1 < n2)),
-        (Value::Number(n1), expr::BinaryOp::LessEqual, Value::Number(n2)) => {
+    match (&lhs, op.ty, &rhs) {
+        (Value::Number(n1), expr::BinaryOpTy::Less, Value::Number(n2)) => Ok(Value::Bool(n1 < n2)),
+        (Value::Number(n1), expr::BinaryOpTy::LessEqual, Value::Number(n2)) => {
             Ok(Value::Bool(n1 <= n2))
         }
-        (Value::Number(n1), expr::BinaryOp::Greater, Value::Number(n2)) => Ok(Value::Bool(n1 > n2)),
-        (Value::Number(n1), expr::BinaryOp::GreaterEqual, Value::Number(n2)) => {
+        (Value::Number(n1), expr::BinaryOpTy::Greater, Value::Number(n2)) => {
+            Ok(Value::Bool(n1 > n2))
+        }
+        (Value::Number(n1), expr::BinaryOpTy::GreaterEqual, Value::Number(n2)) => {
             Ok(Value::Bool(n1 >= n2))
         }
-        (Value::Number(n1), expr::BinaryOp::Plus, Value::Number(n2)) => Ok(Value::Number(n1 + n2)),
-        (Value::Number(n1), expr::BinaryOp::Minus, Value::Number(n2)) => Ok(Value::Number(n1 - n2)),
-        (Value::Number(n1), expr::BinaryOp::Star, Value::Number(n2)) => Ok(Value::Number(n1 * n2)),
-        (Value::Number(n1), expr::BinaryOp::Slash, Value::Number(n2)) => {
+        (Value::Number(n1), expr::BinaryOpTy::Plus, Value::Number(n2)) => {
+            Ok(Value::Number(n1 + n2))
+        }
+        (Value::Number(n1), expr::BinaryOpTy::Minus, Value::Number(n2)) => {
+            Ok(Value::Number(n1 - n2))
+        }
+        (Value::Number(n1), expr::BinaryOpTy::Star, Value::Number(n2)) => {
+            Ok(Value::Number(n1 * n2))
+        }
+        (Value::Number(n1), expr::BinaryOpTy::Slash, Value::Number(n2)) => {
             if *n2 != 0.0 {
                 Ok(Value::Number(n1 / n2))
             } else {
-                Err(String::from("division by zero"))
+                Err(format!(
+                    "division by zero at line={},col={}",
+                    op.line, op.col
+                ))
             }
         }
-        (Value::String(s1), expr::BinaryOp::Plus, Value::String(s2)) => {
+        (Value::String(s1), expr::BinaryOpTy::Plus, Value::String(s2)) => {
             Ok(Value::String(format!("{}{}", s1, s2)))
         }
-        (_, expr::BinaryOp::EqualEqual, _) => Ok(Value::Bool(equals(&lhs, &rhs))),
-        (_, expr::BinaryOp::NotEqual, _) => Ok(Value::Bool(!equals(&lhs, &rhs))),
+        (_, expr::BinaryOpTy::EqualEqual, _) => Ok(Value::Bool(equals(&lhs, &rhs))),
+        (_, expr::BinaryOpTy::NotEqual, _) => Ok(Value::Bool(!equals(&lhs, &rhs))),
         (_, _, _) => Err(format!(
-            "invalid operands in binary expression ({:?},{:?},{:?})",
-            lhs, op, rhs
+            "invalid operands in binary operator {:?} of type {:?} and {:?} at line={},col={}",
+            op.ty,
+            type_of(&lhs),
+            type_of(&rhs),
+            op.line,
+            op.col
         )),
     }
 }
