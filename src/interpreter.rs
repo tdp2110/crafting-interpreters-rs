@@ -81,18 +81,21 @@ fn equals(lhs: &Value, rhs: &Value) -> bool {
 fn interpret_unary(op: expr::UnaryOp, expr: &expr::Expr) -> Result<Value, String> {
     let val = interpret(expr)?;
 
-    match (op, &val) {
-        (expr::UnaryOp::Minus, Value::Number(n)) => Ok(Value::Number(-n)),
-        (expr::UnaryOp::Bang, _) => Ok(Value::Bool(!is_truthy(val))),
+    match (op.ty, &val) {
+        (expr::UnaryOpTy::Minus, Value::Number(n)) => Ok(Value::Number(-n)),
+        (expr::UnaryOpTy::Bang, _) => Ok(Value::Bool(!is_truthy(val))),
         (_, Value::String(_)) => Err(format!(
-            "invalid application of unary op {:?} to object of type string",
-            op
+            "invalid application of unary op {:?} to object of type String at line={},col={}",
+            op.ty, op.line, op.col
         )),
-        (expr::UnaryOp::Minus, Value::Bool(_)) => Err(format!(
-            "invalid application of unary op {:?} to object of type Bool",
-            op
+        (expr::UnaryOpTy::Minus, Value::Bool(_)) => Err(format!(
+            "invalid application of unary op {:?} to object of type Bool at line={},col={}",
+            op.ty, op.line, op.col
         )),
-        (_, Value::Nil) => Err(format!("invalid application of unary op {:?} to nil", op)),
+        (_, Value::Nil) => Err(format!(
+            "invalid application of unary op {:?} to nil at line={},col={}",
+            op.ty, op.line, op.col
+        )),
     }
 }
 

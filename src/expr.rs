@@ -9,9 +9,17 @@ pub enum Expr {
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
-pub enum UnaryOp {
+pub enum UnaryOpTy {
     Minus,
     Bang,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Copy, Clone)]
+pub struct UnaryOp {
+    pub ty: UnaryOpTy,
+    pub line: usize,
+    pub col: i64,
 }
 
 #[allow(dead_code)]

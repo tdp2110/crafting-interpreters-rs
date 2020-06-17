@@ -113,9 +113,9 @@ impl Parser {
 
     fn unary(&mut self) -> Result<expr::Expr, String> {
         if self.match_one_of(vec![scanner::TokenType::Bang, scanner::TokenType::Minus]) {
-            let operator_token: scanner::TokenType = self.previous().ty;
+            let operator_token = self.previous().clone();
             let right = Box::new(self.unary()?);
-            let unary_op_maybe = Parser::op_token_to_unary_op(operator_token);
+            let unary_op_maybe = Parser::op_token_to_unary_op(&operator_token);
 
             return match unary_op_maybe {
                 Ok(unary_op) => Ok(expr::Expr::Unary(unary_op, right)),
@@ -190,10 +190,18 @@ impl Parser {
         ))
     }
 
-    fn op_token_to_unary_op(tok: scanner::TokenType) -> Result<expr::UnaryOp, String> {
-        match tok {
-            scanner::TokenType::Minus => Ok(expr::UnaryOp::Minus),
-            scanner::TokenType::Bang => Ok(expr::UnaryOp::Bang),
+    fn op_token_to_unary_op(tok: &scanner::Token) -> Result<expr::UnaryOp, String> {
+        match tok.ty {
+            scanner::TokenType::Minus => Ok(expr::UnaryOp {
+                ty: expr::UnaryOpTy::Minus,
+                line: tok.line,
+                col: tok.col,
+            }),
+            scanner::TokenType::Bang => Ok(expr::UnaryOp {
+                ty: expr::UnaryOpTy::Bang,
+                line: tok.line,
+                col: tok.col,
+            }),
             _ => Err(format!("invalid token in unary op {:?}", tok)),
         }
     }
