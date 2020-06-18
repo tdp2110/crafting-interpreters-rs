@@ -18,7 +18,11 @@ pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, String> {
     match stmts_or_err {
         Ok(stmts_or_err) => {
             if !p.is_at_end() {
-                Err(format!("unexpected {:?}", p.tokens[p.current]))
+                let tok = &p.tokens[p.current];
+                Err(format!(
+                    "unexpected token of type {:?} at line={},col={}",
+                    tok.ty, tok.line, tok.col
+                ))
             } else {
                 Ok(stmts_or_err)
             }
@@ -206,7 +210,12 @@ impl Parser {
             return Ok(expr::Expr::Grouping(expr));
         }
 
-        Err(format!("Expected expression at {:?}", self.peek()))
+        Err(format!(
+            "Expected expression, but found token {:?} at line={},col={}",
+            self.peek().ty,
+            self.peek().line,
+            self.peek().col
+        ))
     }
 
     fn consume(
@@ -218,9 +227,11 @@ impl Parser {
             return Ok(self.advance());
         }
         Err(format!(
-            "Expected token type {:?}, but found token {:?}: {}",
+            "Expected token {:?}, but found token {:?} at line={},col={}: {}",
             tok,
-            self.peek(),
+            self.peek().ty,
+            self.peek().line,
+            self.peek().col,
             on_err_str
         ))
     }
@@ -237,7 +248,10 @@ impl Parser {
                 line: tok.line,
                 col: tok.col,
             }),
-            _ => Err(format!("invalid token in unary op {:?}", tok)),
+            _ => Err(format!(
+                "invalid token in unary op {:?} at line={},col={}",
+                tok.ty, tok.line, tok.col
+            )),
         }
     }
 
