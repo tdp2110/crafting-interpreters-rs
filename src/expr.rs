@@ -6,6 +6,12 @@ pub enum Expr {
     Grouping(Box<Expr>),
 }
 
+#[derive(Debug)]
+pub enum Stmt {
+    Expr(Expr),
+    Print(Expr),
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum UnaryOpTy {
     Minus,

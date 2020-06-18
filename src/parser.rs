@@ -8,19 +8,19 @@ struct Parser {
     current: usize,
 }
 
-pub fn parse(tokens: Vec<scanner::Token>) -> Result<expr::Expr, String> {
+pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, String> {
     let mut p = Parser {
         tokens,
         ..Default::default()
     };
-    let expr_or_err = p.parse();
+    let stmts_or_err = p.parse();
 
-    match expr_or_err {
-        Ok(expr) => {
+    match stmts_or_err {
+        Ok(stmts_or_err) => {
             if !p.is_at_end() {
                 Err(format!("unexpected {:?}", p.tokens[p.current]))
             } else {
-                Ok(expr)
+                Ok(stmts_or_err)
             }
         }
         Err(err) => Err(err),
@@ -29,6 +29,14 @@ pub fn parse(tokens: Vec<scanner::Token>) -> Result<expr::Expr, String> {
 
 /*
 Recursive descent using the following grammar
+
+program   → statement* EOF ;
+
+statement → exprStmt
+          | printStmt ;
+
+exprStmt  → expression ";" ;
+printStmt → "print" expression ";" ;
 
 expression     → equality ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -41,8 +49,35 @@ primary        → NUMBER | STRING | "false" | "true" | "nil"
                | "(" expression ")" ;
 */
 impl Parser {
-    pub fn parse(&mut self) -> Result<expr::Expr, String> {
-        self.expression()
+    pub fn parse(&mut self) -> Result<Vec<expr::Stmt>, String> {
+        let mut statements = Vec::new();
+
+        while !self.is_at_end() {
+            let stmt = self.statement()?;
+            statements.push(stmt);
+        }
+
+        Ok(statements)
+    }
+
+    fn statement(&mut self) -> Result<expr::Stmt, String> {
+        if self.matches(scanner::TokenType::Print) {
+            return self.print_statement();
+        }
+
+        self.expression_statement()
+    }
+
+    fn print_statement(&mut self) -> Result<expr::Stmt, String> {
+        let expr = self.expression()?;
+        self.consume(scanner::TokenType::Semicolon, "Expected ; after value")?;
+        Ok(expr::Stmt::Print(expr))
+    }
+
+    fn expression_statement(&mut self) -> Result<expr::Stmt, String> {
+        let expr = self.expression()?;
+        self.consume(scanner::TokenType::Semicolon, "Expected ; after value")?;
+        Ok(expr::Stmt::Expr(expr))
     }
 
     fn expression(&mut self) -> Result<expr::Expr, String> {
