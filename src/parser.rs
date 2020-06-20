@@ -47,7 +47,9 @@ varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
 exprStmt  → expression ";" ;
 printStmt → "print" expression ";" ;
 
-expression     → equality ;
+expression → assignment ;
+assignment → IDENTIFIER "=" assignment
+           | equality ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
 addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
@@ -127,7 +129,27 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<expr::Expr, String> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<expr::Expr, String> {
+        let expr = self.equality()?;
+
+        if self.matches(scanner::TokenType::Equal) {
+            let equals = self.previous().clone();
+            let value = self.assignment()?;
+
+            if let expr::Expr::Variable(sym) = &value {
+                return Ok(expr::Expr::Assign(sym.clone(), Box::new(value)));
+            } else {
+                return Err(format!(
+                    "invalid assignment target at line={},col={}",
+                    equals.line, equals.col
+                ));
+            }
+        }
+
+        Ok(expr)
     }
 
     fn comparison(&mut self) -> Result<expr::Expr, String> {

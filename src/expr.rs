@@ -5,6 +5,7 @@ pub enum Expr {
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Grouping(Box<Expr>),
     Variable(Symbol),
+    Assign(Symbol, Box<Expr>),
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]

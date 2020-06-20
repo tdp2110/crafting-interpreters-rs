@@ -59,6 +59,18 @@ impl Environment {
     pub fn get(&self, sym: &expr::Symbol) -> Option<&Option<Value>> {
         self.venv.get(&sym)
     }
+
+    pub fn assign(&mut self, sym: expr::Symbol, val: &Value) -> Result<(), String> {
+        if self.venv.contains_key(&sym) {
+            self.define(sym, Some(val.clone()));
+            return Ok(());
+        }
+
+        Err(format!(
+            "attempting to assign to undeclared variable at line={},col={}",
+            sym.line, sym.col
+        ))
+    }
 }
 
 #[derive(Default)]
@@ -116,6 +128,15 @@ impl Interpreter {
                     },
                     None => Err(err_string),
                 }
+            }
+            expr::Expr::Assign(sym, val_expr) => {
+                let val = self.interpret_expr(val_expr)?;
+
+                if let Err(err) = self.env.assign(sym.clone(), &val) {
+                    return Err(err);
+                }
+
+                Ok(val)
             }
         }
     }
