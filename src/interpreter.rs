@@ -48,20 +48,20 @@ pub fn interpret(stmts: &[expr::Stmt]) -> Result<(), String> {
 
 #[derive(Default)]
 struct Environment {
-    venv: HashMap<expr::Symbol, Option<Value>>,
+    venv: HashMap<String, Option<Value>>,
 }
 
 impl Environment {
     pub fn define(&mut self, sym: expr::Symbol, maybe_val: Option<Value>) {
-        self.venv.insert(sym, maybe_val);
+        self.venv.insert(sym.name, maybe_val);
     }
 
     pub fn get(&self, sym: &expr::Symbol) -> Option<&Option<Value>> {
-        self.venv.get(&sym)
+        self.venv.get(&sym.name)
     }
 
     pub fn assign(&mut self, sym: expr::Symbol, val: &Value) -> Result<(), String> {
-        if self.venv.contains_key(&sym) {
+        if self.venv.contains_key(&sym.name) {
             self.define(sym, Some(val.clone()));
             return Ok(());
         }
