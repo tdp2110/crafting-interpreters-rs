@@ -39,7 +39,7 @@ impl fmt::Display for Value {
     }
 }
 
-pub fn interpret(stmts: &Vec<expr::Stmt>) -> Result<(), String> {
+pub fn interpret(stmts: &[expr::Stmt]) -> Result<(), String> {
     let mut interpreter = Interpreter {
         ..Default::default()
     };
@@ -67,7 +67,7 @@ struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn interpret(&mut self, stmts: &Vec<expr::Stmt>) -> Result<(), String> {
+    pub fn interpret(&mut self, stmts: &[expr::Stmt]) -> Result<(), String> {
         for stmt in stmts.iter() {
             self.execute(stmt)?;
         }
@@ -175,7 +175,7 @@ impl Interpreter {
 
     fn equals(lhs: &Value, rhs: &Value) -> bool {
         match (lhs, rhs) {
-            (Value::Number(n1), Value::Number(n2)) => n1 == n2,
+            (Value::Number(n1), Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
             (Value::String(s1), Value::String(s2)) => s1 == s2,
             (Value::Bool(b1), Value::Bool(b2)) => b1 == b2,
             (Value::Nil, Value::Nil) => true,

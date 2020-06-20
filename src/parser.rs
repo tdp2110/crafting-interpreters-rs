@@ -85,11 +85,11 @@ impl Parser {
             .consume(scanner::TokenType::Identifier, "Expected variable name")?
             .clone();
 
-        let mut maybe_initializer: Option<expr::Expr> = None;
-
-        if self.matches(scanner::TokenType::Equal) {
-            maybe_initializer = Some(self.expression()?);
-        }
+        let maybe_initializer = if self.matches(scanner::TokenType::Equal) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
 
         self.consume(
             scanner::TokenType::Semicolon,
@@ -252,12 +252,11 @@ impl Parser {
         }
         if self.matches(scanner::TokenType::LeftParen) {
             let expr = Box::new(self.expression()?);
-            match self.consume(
+            if let Err(err) = self.consume(
                 scanner::TokenType::RightParen,
                 "Expected ')' after expression.",
             ) {
-                Err(err) => return Err(err),
-                _ => {}
+                return Err(err);
             }
             return Ok(expr::Expr::Grouping(expr));
         }
@@ -308,7 +307,7 @@ impl Parser {
     }
 
     fn equality(&mut self) -> Result<expr::Expr, String> {
-        let expr = self.comparison()?;
+        let mut expr = self.comparison()?;
 
         while self.match_one_of(vec![
             scanner::TokenType::BangEqual,
@@ -322,7 +321,7 @@ impl Parser {
             match binop_maybe {
                 Ok(binop) => {
                     let left = Box::new(expr);
-                    return Ok(expr::Expr::Binary(left, binop, right));
+                    expr = expr::Expr::Binary(left, binop, right);
                 }
                 Err(err) => return Err(err),
             }
