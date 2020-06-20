@@ -104,13 +104,19 @@ impl Interpreter {
             expr::Expr::Unary(op, e) => self.interpret_unary(*op, e),
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
             expr::Expr::Grouping(e) => self.interpret_expr(e),
-            expr::Expr::Variable(sym) => match self.env.get(sym) {
-                Some(maybe_val) => match maybe_val {
-                    Some(val) => Ok(val.clone()),
-                    None => Err(format!("Undefiend variable {:?}", sym)),
-                },
-                None => Err(format!("undefined variable {:?}", sym)),
-            },
+            expr::Expr::Variable(sym) => {
+                let err_string = format!(
+                    "Use of undefined variable {} at line={},col={}",
+                    sym.name, sym.line, sym.col
+                );
+                match self.env.get(sym) {
+                    Some(maybe_val) => match maybe_val {
+                        Some(val) => Ok(val.clone()),
+                        None => Err(err_string),
+                    },
+                    None => Err(err_string),
+                }
+            }
         }
     }
 

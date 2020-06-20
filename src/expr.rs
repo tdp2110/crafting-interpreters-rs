@@ -8,7 +8,11 @@ pub enum Expr {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct Symbol(pub String);
+pub struct Symbol {
+    pub name: String,
+    pub line: usize,
+    pub col: i64,
+}
 
 #[derive(Debug)]
 pub enum Stmt {

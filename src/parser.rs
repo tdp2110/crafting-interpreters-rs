@@ -97,7 +97,11 @@ impl Parser {
         )?;
 
         Ok(expr::Stmt::VarDecl(
-            expr::Symbol(String::from_utf8(name_token.lexeme).unwrap()),
+            expr::Symbol {
+                name: String::from_utf8(name_token.lexeme).unwrap(),
+                line: name_token.line,
+                col: name_token.col,
+            },
             maybe_initializer,
         ))
     }
@@ -239,7 +243,11 @@ impl Parser {
         if self.matches(scanner::TokenType::Identifier) {
             match &self.previous().literal {
                 Some(scanner::Literal::Identifier(s)) => {
-                    return Ok(expr::Expr::Variable(expr::Symbol(s.clone())))
+                    return Ok(expr::Expr::Variable(expr::Symbol {
+                        name: s.clone(),
+                        line: self.previous().line,
+                        col: self.previous().col,
+                    }))
                 }
                 Some(l) => panic!(
                     "internal error in parser: when parsing identifier, found literal {:?}",
