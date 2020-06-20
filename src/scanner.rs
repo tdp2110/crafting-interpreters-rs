@@ -175,6 +175,14 @@ impl Scanner {
                     TokenType::Bang
                 })
             }
+            '=' => {
+                let matches_eq = self.matches('=');
+                self.add_token(if matches_eq {
+                    TokenType::EqualEqual
+                } else {
+                    TokenType::Equal
+                })
+            }
             '<' => {
                 let matches_eq = self.matches('=');
                 self.add_token(if matches_eq {

@@ -34,10 +34,15 @@ pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, String> {
 /*
 Recursive descent using the following grammar
 
-program   → statement* EOF ;
+program     → declaration* EOF ;
 
-statement → exprStmt
-          | printStmt ;
+declaration → varDecl
+            | statement ;
+
+statement   → exprStmt
+            | printStmt ;
+
+varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
 
 exprStmt  → expression ";" ;
 printStmt → "print" expression ";" ;
@@ -49,19 +54,52 @@ addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
 multiplication → unary ( ( "/" | "*" ) unary )* ;
 unary          → ( "!" | "-" ) unary
                | primary ;
-primary        → NUMBER | STRING | "false" | "true" | "nil"
-               | "(" expression ")" ;
+
+primary → "true" | "false" | "nil"
+        | NUMBER | STRING
+        | "(" expression ")"
+        | IDENTIFIER ;
 */
 impl Parser {
     pub fn parse(&mut self) -> Result<Vec<expr::Stmt>, String> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            let stmt = self.statement()?;
+            let stmt = self.declaration()?;
             statements.push(stmt);
         }
 
         Ok(statements)
+    }
+
+    fn declaration(&mut self) -> Result<expr::Stmt, String> {
+        if self.matches(scanner::TokenType::Var) {
+            return self.var_decl();
+        }
+
+        self.statement()
+    }
+
+    fn var_decl(&mut self) -> Result<expr::Stmt, String> {
+        let name_token = self
+            .consume(scanner::TokenType::Identifier, "Expected variable name")?
+            .clone();
+
+        let mut maybe_initializer: Option<expr::Expr> = None;
+
+        if self.matches(scanner::TokenType::Equal) {
+            maybe_initializer = Some(self.expression()?);
+        }
+
+        self.consume(
+            scanner::TokenType::Semicolon,
+            "Expected ; after variable declaration",
+        )?;
+
+        Ok(expr::Stmt::VarDecl(
+            expr::Symbol(String::from_utf8(name_token.lexeme).unwrap()),
+            maybe_initializer,
+        ))
     }
 
     fn statement(&mut self) -> Result<expr::Stmt, String> {
@@ -196,6 +234,20 @@ impl Parser {
                     l
                 ),
                 None => panic!("internal error in parser: when parsing string, found no literal"),
+            }
+        }
+        if self.matches(scanner::TokenType::Identifier) {
+            match &self.previous().literal {
+                Some(scanner::Literal::Identifier(s)) => {
+                    return Ok(expr::Expr::Variable(expr::Symbol(s.clone())))
+                }
+                Some(l) => panic!(
+                    "internal error in parser: when parsing identifier, found literal {:?}",
+                    l
+                ),
+                None => {
+                    panic!("internal error in parser: when parsing identifier, found no literal")
+                }
             }
         }
         if self.matches(scanner::TokenType::LeftParen) {

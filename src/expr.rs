@@ -4,12 +4,17 @@ pub enum Expr {
     Unary(UnaryOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Grouping(Box<Expr>),
+    Variable(Symbol),
 }
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct Symbol(pub String);
 
 #[derive(Debug)]
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
+    VarDecl(Symbol, Option<Expr>),
 }
 
 #[derive(Debug, Copy, Clone)]
