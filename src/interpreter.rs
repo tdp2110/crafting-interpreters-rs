@@ -46,18 +46,51 @@ pub fn interpret(stmts: &[expr::Stmt]) -> Result<(), String> {
     interpreter.interpret(stmts)
 }
 
+struct SourceLocation {
+    line: usize,
+    col: i64,
+}
+
 #[derive(Default)]
 struct Environment {
-    venv: HashMap<String, Option<Value>>,
+    venv: HashMap<String, (Option<Value>, SourceLocation)>,
 }
 
 impl Environment {
     pub fn define(&mut self, sym: expr::Symbol, maybe_val: Option<Value>) {
-        self.venv.insert(sym.name, maybe_val);
+        self.venv.insert(
+            sym.name,
+            (
+                maybe_val,
+                SourceLocation {
+                    line: sym.line,
+                    col: sym.col,
+                },
+            ),
+        );
     }
 
-    pub fn get(&self, sym: &expr::Symbol) -> Option<&Option<Value>> {
-        self.venv.get(&sym.name)
+    pub fn get(&self, sym: &expr::Symbol) -> Result<&Value, String> {
+        match self.venv.get(&sym.name) {
+            Some((maybe_val, source_location)) => match maybe_val {
+                Some(val) => Ok(&val),
+                None => Err(format!(
+                    "Use of undefined variable {} at line={},col={}.\
+                                     \nNote: {} was previously declared at line={},col={}, \
+                                     but was never defined.",
+                    &sym.name,
+                    sym.line,
+                    sym.col,
+                    &sym.name,
+                    source_location.line,
+                    source_location.col
+                )),
+            },
+            None => Err(format!(
+                "Use of undefined variable {} at line={},col-{}.\nNote: {} was never declared.",
+                &sym.name, sym.line, sym.col, &sym.name
+            )),
+        }
     }
 
     pub fn assign(&mut self, sym: expr::Symbol, val: &Value) -> Result<(), String> {
@@ -116,19 +149,10 @@ impl Interpreter {
             expr::Expr::Unary(op, e) => self.interpret_unary(*op, e),
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
             expr::Expr::Grouping(e) => self.interpret_expr(e),
-            expr::Expr::Variable(sym) => {
-                let err_string = format!(
-                    "Use of undefined variable {} at line={},col={}",
-                    sym.name, sym.line, sym.col
-                );
-                match self.env.get(sym) {
-                    Some(maybe_val) => match maybe_val {
-                        Some(val) => Ok(val.clone()),
-                        None => Err(err_string),
-                    },
-                    None => Err(err_string),
-                }
-            }
+            expr::Expr::Variable(sym) => match self.env.get(sym) {
+                Ok(val) => Ok(val.clone()),
+                Err(err) => Err(err),
+            },
             expr::Expr::Assign(sym, val_expr) => {
                 let val = self.interpret_expr(val_expr)?;
 
