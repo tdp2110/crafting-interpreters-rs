@@ -153,6 +153,15 @@ impl Interpreter {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             },
+            expr::Stmt::If(cond, if_true, maybe_if_false) => {
+                if Interpreter::is_truthy(&self.interpret_expr(cond)?) {
+                    return Ok(self.execute(if_true)?);
+                }
+                if let Some(if_false) = maybe_if_false {
+                    return Ok(self.execute(if_false)?);
+                }
+                Ok(())
+            }
             expr::Stmt::Print(e) => match self.interpret_expr(e) {
                 Ok(val) => {
                     println!("{}", val);

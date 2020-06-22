@@ -18,6 +18,7 @@ pub struct Symbol {
 #[derive(Debug)]
 pub enum Stmt {
     Expr(Expr),
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),
     Block(Vec<Box<Stmt>>),

@@ -40,8 +40,11 @@ declaration → varDecl
             | statement ;
 
 statement → exprStmt
+          | ifStmt
           | printStmt
           | block ;
+
+ifStmt    → "if" "(" expression ")" statement ( "else" statement )? ;
 
 block     → "{" declaration* "}" ;
 
@@ -120,7 +123,28 @@ impl Parser {
             return Ok(expr::Stmt::Block(self.block()?));
         }
 
+        if self.matches(scanner::TokenType::If) {
+            return self.if_statement();
+        }
+
         self.expression_statement()
+    }
+
+    fn if_statement(&mut self) -> Result<expr::Stmt, String> {
+        self.consume(scanner::TokenType::LeftParen, "Expected ( after if.")?;
+        let cond = self.expression()?;
+        self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ) after if condition.",
+        )?;
+        let then_branch = Box::new(self.statement()?);
+        let maybe_else_branch = if self.matches(scanner::TokenType::Else) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(expr::Stmt::If(cond, then_branch, maybe_else_branch))
     }
 
     fn block(&mut self) -> Result<Vec<Box<expr::Stmt>>, String> {
