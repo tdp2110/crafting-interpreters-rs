@@ -46,12 +46,13 @@ pub fn interpret(stmts: &[expr::Stmt]) -> Result<(), String> {
     interpreter.interpret(stmts)
 }
 
+#[derive(Debug, Clone)]
 struct SourceLocation {
     line: usize,
     col: i64,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Environment {
     enclosing: Option<Box<Environment>>,
     // SourceLocation is the location of a declaration
@@ -165,6 +166,22 @@ impl Interpreter {
                     None => None,
                 };
                 self.env.define(sym.clone(), maybe_val);
+                Ok(())
+            }
+            expr::Stmt::Block(stmts) => {
+                self.env = Environment::with_enclosing(self.env.clone());
+
+                for stmt in stmts.iter() {
+                    self.execute(stmt)?;
+                }
+
+                if let Some(enclosing) = self.env.enclosing.clone() {
+                    self.env = *enclosing
+                } else {
+                    // TODO: how to do this without a runtime check?
+                    assert!(false, "impossible");
+                }
+
                 Ok(())
             }
         }

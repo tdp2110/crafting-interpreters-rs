@@ -39,8 +39,11 @@ program     → declaration* EOF ;
 declaration → varDecl
             | statement ;
 
-statement   → exprStmt
-            | printStmt ;
+statement → exprStmt
+          | printStmt
+          | block ;
+
+block     → "{" declaration* "}" ;
 
 varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
 
@@ -113,7 +116,23 @@ impl Parser {
             return self.print_statement();
         }
 
+        if self.matches(scanner::TokenType::LeftBrace) {
+            return Ok(expr::Stmt::Block(self.block()?));
+        }
+
         self.expression_statement()
+    }
+
+    fn block(&mut self) -> Result<Vec<Box<expr::Stmt>>, String> {
+        let mut stmts: Vec<Box<expr::Stmt>> = Vec::new();
+
+        while !self.check(scanner::TokenType::RightBrace) && !self.is_at_end() {
+            stmts.push(Box::new(self.declaration()?))
+        }
+
+        self.consume(scanner::TokenType::RightBrace, "Expected } after block.")?;
+
+        Ok(stmts)
     }
 
     fn print_statement(&mut self) -> Result<expr::Stmt, String> {

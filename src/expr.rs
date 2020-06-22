@@ -20,6 +20,7 @@ pub enum Stmt {
     Expr(Expr),
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),
+    Block(Vec<Box<Stmt>>),
 }
 
 #[derive(Debug, Copy, Clone)]
