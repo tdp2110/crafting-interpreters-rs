@@ -107,10 +107,13 @@ impl Environment {
                 but was never defined.",
                 &sym.name, sym.line, sym.col, &sym.name, source_location.line, source_location.col
             )),
-            LookupResult::UndefAndNotDeclared => Err(format!(
-                "Use of undefined variable {} at line={},col-{}.\nNote: {} was never declared.",
-                &sym.name, sym.line, sym.col, &sym.name
-            )),
+            LookupResult::UndefAndNotDeclared => match &self.enclosing {
+                Some(enclosing) => enclosing.get(sym),
+                None => Err(format!(
+                    "Use of undefined variable {} at line={},col-{}.\nNote: {} was never declared.",
+                    &sym.name, sym.line, sym.col, &sym.name
+                )),
+            },
         }
     }
 
@@ -120,10 +123,13 @@ impl Environment {
             return Ok(());
         }
 
-        Err(format!(
-            "attempting to assign to undeclared variable at line={},col={}",
-            sym.line, sym.col
-        ))
+        match &mut self.enclosing {
+            Some(enclosing) => enclosing.assign(sym, val),
+            None => Err(format!(
+                "attempting to assign to undeclared variable at line={},col={}",
+                sym.line, sym.col
+            )),
+        }
     }
 }
 
