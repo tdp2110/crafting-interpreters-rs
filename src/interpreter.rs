@@ -53,10 +53,25 @@ struct SourceLocation {
 
 #[derive(Default)]
 struct Environment {
+    enclosing: Option<Box<Environment>>,
+    // SourceLocation is the location of a declaration
     venv: HashMap<String, (Option<Value>, SourceLocation)>,
 }
 
+enum LookupResult<'a> {
+    Ok(&'a Value),
+    UndefButDeclared(SourceLocation),
+    UndefAndNotDeclared,
+}
+
 impl Environment {
+    pub fn with_enclosing(enclosing: Environment) -> Environment {
+        Environment {
+            enclosing: Some(Box::new(enclosing)),
+            venv: HashMap::new(),
+        }
+    }
+
     pub fn define(&mut self, sym: expr::Symbol, maybe_val: Option<Value>) {
         self.venv.insert(
             sym.name,
@@ -70,23 +85,29 @@ impl Environment {
         );
     }
 
-    pub fn get(&self, sym: &expr::Symbol) -> Result<&Value, String> {
+    pub fn lookup(&self, sym: &expr::Symbol) -> LookupResult {
         match self.venv.get(&sym.name) {
-            Some((maybe_val, source_location)) => match maybe_val {
-                Some(val) => Ok(&val),
-                None => Err(format!(
-                    "Use of undefined variable {} at line={},col={}.\
-                                     \nNote: {} was previously declared at line={},col={}, \
-                                     but was never defined.",
-                    &sym.name,
-                    sym.line,
-                    sym.col,
-                    &sym.name,
-                    source_location.line,
-                    source_location.col
-                )),
+            Some((maybe_val, defn_source_location)) => match maybe_val {
+                Some(val) => LookupResult::Ok(&val),
+                None => LookupResult::UndefButDeclared(SourceLocation {
+                    line: defn_source_location.line,
+                    col: defn_source_location.col,
+                }),
             },
-            None => Err(format!(
+            None => LookupResult::UndefAndNotDeclared,
+        }
+    }
+
+    pub fn get(&self, sym: &expr::Symbol) -> Result<&Value, String> {
+        match self.lookup(&sym) {
+            LookupResult::Ok(val) => Ok(&val),
+            LookupResult::UndefButDeclared(source_location) => Err(format!(
+                "Use of undefined variable {} at line={},col={}.\
+                \nNote: {} was previously declared at line={},col={}, \
+                but was never defined.",
+                &sym.name, sym.line, sym.col, &sym.name, source_location.line, source_location.col
+            )),
+            LookupResult::UndefAndNotDeclared => Err(format!(
                 "Use of undefined variable {} at line={},col-{}.\nNote: {} was never declared.",
                 &sym.name, sym.line, sym.col, &sym.name
             )),
