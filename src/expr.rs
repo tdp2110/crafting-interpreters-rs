@@ -6,6 +6,13 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Variable(Symbol),
     Assign(Symbol, Box<Expr>),
+    Logical(Box<Expr>, LogicalOp, Box<Expr>),
+}
+
+#[derive(Debug)]
+pub enum LogicalOp {
+    Or,
+    And,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]

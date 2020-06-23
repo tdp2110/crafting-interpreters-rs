@@ -215,6 +215,22 @@ impl Interpreter {
 
                 Ok(val)
             }
+            expr::Expr::Logical(left_expr, expr::LogicalOp::Or, right_expr) => {
+                let left = self.interpret_expr(left_expr)?;
+                if Interpreter::is_truthy(&left) {
+                    Ok(left)
+                } else {
+                    Ok(self.interpret_expr(right_expr)?)
+                }
+            }
+            expr::Expr::Logical(left_expr, expr::LogicalOp::And, right_expr) => {
+                let left = self.interpret_expr(left_expr)?;
+                if !Interpreter::is_truthy(&left) {
+                    Ok(left)
+                } else {
+                    Ok(self.interpret_expr(right_expr)?)
+                }
+            }
         }
     }
 

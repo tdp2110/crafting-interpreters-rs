@@ -54,8 +54,11 @@ exprStmt  → expression ";" ;
 printStmt → "print" expression ";" ;
 
 expression → assignment ;
-assignment → IDENTIFIER "=" assignment
-           | equality ;
+assignment → identifier "=" assignment
+           | logic_or ;
+logic_or   → logic_and ( "or" logic_and )* ;
+logic_and  → equality ( "and" equality )* ;
+
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
 addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
@@ -176,7 +179,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<expr::Expr, String> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.matches(scanner::TokenType::Equal) {
             let equals = self.previous().clone();
@@ -190,6 +193,28 @@ impl Parser {
                     equals.line, equals.col
                 ));
             }
+        }
+
+        Ok(expr)
+    }
+
+    fn or(&mut self) -> Result<expr::Expr, String> {
+        let mut expr = self.and()?;
+
+        while self.matches(scanner::TokenType::Or) {
+            let right = self.and()?;
+            expr = expr::Expr::Logical(Box::new(expr), expr::LogicalOp::Or, Box::new(right));
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<expr::Expr, String> {
+        let mut expr = self.equality()?;
+
+        while self.matches(scanner::TokenType::And) {
+            let right = self.equality()?;
+            expr = expr::Expr::Logical(Box::new(expr), expr::LogicalOp::And, Box::new(right));
         }
 
         Ok(expr)
