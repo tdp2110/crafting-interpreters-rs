@@ -29,6 +29,7 @@ pub enum Stmt {
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),
     Block(Vec<Box<Stmt>>),
+    While(Expr, Box<Stmt>),
 }
 
 #[derive(Debug, Copy, Clone)]

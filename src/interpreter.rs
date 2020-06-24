@@ -193,6 +193,12 @@ impl Interpreter {
 
                 Ok(())
             }
+            expr::Stmt::While(cond, body) => {
+                while Interpreter::is_truthy(&self.interpret_expr(cond)?) {
+                    self.execute(body)?;
+                }
+                Ok(())
+            }
         }
     }
 

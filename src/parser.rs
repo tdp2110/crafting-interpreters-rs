@@ -42,7 +42,10 @@ declaration → varDecl
 statement → exprStmt
           | ifStmt
           | printStmt
+          | whileStmt
           | block ;
+
+whileStmt → "while" "(" expression ")" statement ;
 
 ifStmt    → "if" "(" expression ")" statement ( "else" statement )? ;
 
@@ -122,6 +125,10 @@ impl Parser {
             return self.print_statement();
         }
 
+        if self.matches(scanner::TokenType::While) {
+            return self.while_statement();
+        }
+
         if self.matches(scanner::TokenType::LeftBrace) {
             return Ok(expr::Stmt::Block(self.block()?));
         }
@@ -131,6 +138,17 @@ impl Parser {
         }
 
         self.expression_statement()
+    }
+
+    fn while_statement(&mut self) -> Result<expr::Stmt, String> {
+        self.consume(scanner::TokenType::LeftParen, "Expected ( after while")?;
+        let cond = self.expression()?;
+        self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ) after while condition",
+        )?;
+        let body = Box::new(self.statement()?);
+        Ok(expr::Stmt::While(cond, body))
     }
 
     fn if_statement(&mut self) -> Result<expr::Stmt, String> {
