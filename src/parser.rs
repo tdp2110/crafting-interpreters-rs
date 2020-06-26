@@ -403,10 +403,10 @@ impl Parser {
                         peek_tok.line, peek_tok.col
                     ));
                 }
-                arguments.push(Box::new(self.expression()?));
                 if !self.matches(scanner::TokenType::Comma) {
                     break;
                 }
+                arguments.push(Box::new(self.expression()?));
             }
         }
 

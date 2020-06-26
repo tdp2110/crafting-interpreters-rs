@@ -1,7 +1,35 @@
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::expr;
 use std::fmt;
+
+trait Callable {
+    fn arity(&self) -> u8;
+    fn call(&self, args: &Vec<Value>) -> Result<Value, String>;
+}
+
+#[derive(Clone)]
+pub struct NativeFunction {
+    name: String,
+    arity: u8,
+    callable: fn(&Vec<Value>) -> Result<Value, String>,
+}
+
+impl fmt::Debug for NativeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "NativeFunction({})", self.name)
+    }
+}
+
+impl Callable for NativeFunction {
+    fn arity(&self) -> u8 {
+        self.arity
+    }
+    fn call(&self, args: &Vec<Value>) -> Result<Value, String> {
+        (self.callable)(args)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -9,6 +37,14 @@ pub enum Value {
     String(String),
     Bool(bool),
     Nil,
+    NativeFunction(NativeFunction),
+}
+
+fn as_callable(value: &Value) -> Option<&dyn Callable> {
+    match value {
+        Value::NativeFunction(f) => Some(f),
+        _ => None,
+    }
 }
 
 #[derive(Debug)]
@@ -17,6 +53,7 @@ pub enum Type {
     String,
     Bool,
     NilType,
+    NativeFunction,
 }
 
 pub fn type_of(val: &Value) -> Type {
@@ -25,6 +62,7 @@ pub fn type_of(val: &Value) -> Type {
         Value::String(_) => Type::String,
         Value::Bool(_) => Type::Bool,
         Value::Nil => Type::NilType,
+        Value::NativeFunction(_) => Type::NativeFunction,
     }
 }
 
@@ -35,6 +73,7 @@ impl fmt::Display for Value {
             Value::String(s) => write!(f, "'{}'", s),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
+            Value::NativeFunction(func) => write!(f, "NativeFunction({})", func.name),
         }
     }
 }
@@ -134,9 +173,44 @@ impl Environment {
     }
 }
 
-#[derive(Default)]
 struct Interpreter {
     env: Environment,
+    globals: Environment,
+}
+
+impl Default for Interpreter {
+    fn default() -> Interpreter {
+        let mut globals_venv = HashMap::new();
+        globals_venv.insert(
+            String::from("clock"),
+            (
+                Some(Value::NativeFunction(NativeFunction {
+                    name: String::from("clock"),
+                    arity: 0,
+                    callable: |_| {
+                        let start = SystemTime::now();
+                        let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
+
+                        Ok(Value::Number(since_the_epoch.as_millis() as f64))
+                    },
+                })),
+                SourceLocation {
+                    line: 1337,
+                    col: 1337,
+                },
+            ),
+        );
+
+        let globals = Environment {
+            enclosing: None,
+            venv: globals_venv,
+        };
+
+        Interpreter {
+            env: Default::default(),
+            globals,
+        }
+    }
 }
 
 impl Interpreter {
@@ -202,13 +276,20 @@ impl Interpreter {
         }
     }
 
+    pub fn lookup(&self, sym: &expr::Symbol) -> Result<&Value, String> {
+        match self.env.get(sym) {
+            Ok(val) => Ok(val),
+            _ => self.globals.get(sym),
+        }
+    }
+
     pub fn interpret_expr(&mut self, expr: &expr::Expr) -> Result<Value, String> {
         match expr {
             expr::Expr::Literal(lit) => Ok(Interpreter::interpret_literal(lit)),
             expr::Expr::Unary(op, e) => self.interpret_unary(*op, e),
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
             expr::Expr::Grouping(e) => self.interpret_expr(e),
-            expr::Expr::Variable(sym) => match self.env.get(sym) {
+            expr::Expr::Variable(sym) => match self.lookup(sym) {
                 Ok(val) => Ok(val.clone()),
                 Err(err) => Err(err),
             },
@@ -248,25 +329,34 @@ impl Interpreter {
         arg_exprs: &Vec<Box<expr::Expr>>,
     ) -> Result<Value, String> {
         let callee = self.interpret_expr(callee_expr)?;
-        let maybe_args: Result<Vec<_>, _> = arg_exprs
-            .into_iter()
-            .map(|arg| self.interpret_expr(arg))
-            .collect();
 
-        match maybe_args {
-            Ok(args) => Interpreter::do_call(callee, loc, args),
-            Err(err) => Err(err),
-        }
-    }
+        match as_callable(&callee) {
+            Some(callable) => {
+                let maybe_args: Result<Vec<_>, _> = arg_exprs
+                    .into_iter()
+                    .map(|arg| self.interpret_expr(arg))
+                    .collect();
 
-    fn do_call(
-        callee: Value,
-        loc: &expr::SourceLocation,
-        _args: Vec<Value>,
-    ) -> Result<Value, String> {
-        match callee {
-            _ => Err(format!(
-                "Value {:?} not callable at line={},col={}",
+                match maybe_args {
+                    Ok(args) => {
+                        if args.len() != callable.arity().into() {
+                            Err(format!(
+                                "Invalid call at line={},col={}: callee has arity {}, but \
+                                         was called with {} arguments",
+                                loc.line,
+                                loc.col,
+                                callable.arity(),
+                                args.len()
+                            ))
+                        } else {
+                            callable.call(&args)
+                        }
+                    }
+                    Err(err) => Err(err),
+                }
+            }
+            None => Err(format!(
+                "value {:?} is not callable at line={},col={}",
                 callee, loc.line, loc.col
             )),
         }
@@ -349,6 +439,10 @@ impl Interpreter {
             (expr::UnaryOpTy::Bang, _) => Ok(Value::Bool(!Interpreter::is_truthy(&val))),
             (_, Value::String(_)) => Err(format!(
                 "invalid application of unary op {:?} to object of type String at line={},col={}",
+                op.ty, op.line, op.col
+            )),
+            (_, Value::NativeFunction(_)) => Err(format!(
+                "invalid application of unary op {:?} to object of type NativeFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
             (expr::UnaryOpTy::Minus, Value::Bool(_)) => Err(format!(
