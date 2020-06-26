@@ -410,7 +410,7 @@ impl Interpreter {
                 Ok(Value::Bool(Interpreter::equals(&lhs, &rhs)))
             }
             (_, expr::BinaryOpTy::NotEqual, _) => Ok(Value::Bool(!Interpreter::equals(&lhs, &rhs))),
-            (_, _, _) => Err(format!(
+            _ => Err(format!(
                 "invalid operands in binary operator {:?} of type {:?} and {:?} at line={},col={}",
                 op.ty,
                 type_of(&lhs),

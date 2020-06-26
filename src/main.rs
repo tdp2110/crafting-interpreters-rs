@@ -15,19 +15,11 @@ fn main() {
 
     match scanner::scan_tokens(fs::read_to_string(&args[1]).unwrap()) {
         Ok(tokens) => {
-            println!("Tokens");
-            for t in &tokens {
-                println!("{:?}", t)
-            }
-            println!();
-
             let stmts_maybe = parser::parse(tokens);
 
             match stmts_maybe {
                 Ok(stmts) => {
-                    println!("AST:\n{:#?}", stmts);
                     let interpret_result = interpreter::interpret(&stmts);
-                    println!();
 
                     match interpret_result {
                         Ok(_) => {}
