@@ -173,11 +173,11 @@ impl Parser {
             "Expected ; after loop condition",
         )?;
 
-        let mut maybe_increment: Option<expr::Expr> = None;
-        if !self.check(scanner::TokenType::RightParen) {
-            maybe_increment = Some(self.expression()?);
-        }
-        let maybe_increment = maybe_increment;
+        let maybe_increment = if !self.check(scanner::TokenType::RightParen) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
 
         self.consume(
             scanner::TokenType::RightParen,
@@ -187,7 +187,7 @@ impl Parser {
         let mut body = self.statement()?;
 
         if let Some(increment) = maybe_increment {
-            body = expr::Stmt::Block(vec![Box::new(body), Box::new(expr::Stmt::Expr(increment))])
+            body = expr::Stmt::Block(vec![body, expr::Stmt::Expr(increment)])
         }
 
         let condition = match maybe_condition {
@@ -197,7 +197,7 @@ impl Parser {
         body = expr::Stmt::While(condition, Box::new(body));
 
         if let Some(initializer) = maybe_initializer {
-            body = expr::Stmt::Block(vec![Box::new(initializer), Box::new(body)])
+            body = expr::Stmt::Block(vec![initializer, body])
         }
         let body = body;
 
@@ -232,11 +232,11 @@ impl Parser {
         Ok(expr::Stmt::If(cond, then_branch, maybe_else_branch))
     }
 
-    fn block(&mut self) -> Result<Vec<Box<expr::Stmt>>, String> {
-        let mut stmts: Vec<Box<expr::Stmt>> = Vec::new();
+    fn block(&mut self) -> Result<Vec<expr::Stmt>, String> {
+        let mut stmts = Vec::new();
 
         while !self.check(scanner::TokenType::RightBrace) && !self.is_at_end() {
-            stmts.push(Box::new(self.declaration()?))
+            stmts.push(self.declaration()?)
         }
 
         self.consume(scanner::TokenType::RightBrace, "Expected } after block.")?;
@@ -406,7 +406,7 @@ impl Parser {
                 if !self.matches(scanner::TokenType::Comma) {
                     break;
                 }
-                arguments.push(Box::new(self.expression()?));
+                arguments.push(self.expression()?);
             }
         }
 

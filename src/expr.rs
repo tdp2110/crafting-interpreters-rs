@@ -3,7 +3,7 @@ pub enum Expr {
     Literal(Literal),
     Unary(UnaryOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
-    Call(Box<Expr>, SourceLocation, Vec<Box<Expr>>),
+    Call(Box<Expr>, SourceLocation, Vec<Expr>),
     Grouping(Box<Expr>),
     Variable(Symbol),
     Assign(Symbol, Box<Expr>),
@@ -35,7 +35,7 @@ pub enum Stmt {
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),
-    Block(Vec<Box<Stmt>>),
+    Block(Vec<Stmt>),
     While(Expr, Box<Stmt>),
 }
 

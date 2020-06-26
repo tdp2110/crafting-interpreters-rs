@@ -6,14 +6,14 @@ use std::fmt;
 
 trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, args: &Vec<Value>) -> Result<Value, String>;
+    fn call(&self, args: &[Value]) -> Result<Value, String>;
 }
 
 #[derive(Clone)]
 pub struct NativeFunction {
     name: String,
     arity: u8,
-    callable: fn(&Vec<Value>) -> Result<Value, String>,
+    callable: fn(&[Value]) -> Result<Value, String>,
 }
 
 impl fmt::Debug for NativeFunction {
@@ -26,7 +26,7 @@ impl Callable for NativeFunction {
     fn arity(&self) -> u8 {
         self.arity
     }
-    fn call(&self, args: &Vec<Value>) -> Result<Value, String> {
+    fn call(&self, args: &[Value]) -> Result<Value, String> {
         (self.callable)(args)
     }
 }
@@ -262,7 +262,7 @@ impl Interpreter {
                     self.env = *enclosing
                 } else {
                     // TODO: how to do this without a runtime check?
-                    assert!(false, "impossible");
+                    panic!("impossible");
                 }
 
                 Ok(())
@@ -324,16 +324,16 @@ impl Interpreter {
 
     fn call(
         &mut self,
-        callee_expr: &Box<expr::Expr>,
+        callee_expr: &expr::Expr,
         loc: &expr::SourceLocation,
-        arg_exprs: &Vec<Box<expr::Expr>>,
+        arg_exprs: &[expr::Expr],
     ) -> Result<Value, String> {
         let callee = self.interpret_expr(callee_expr)?;
 
         match as_callable(&callee) {
             Some(callable) => {
                 let maybe_args: Result<Vec<_>, _> = arg_exprs
-                    .into_iter()
+                    .iter()
                     .map(|arg| self.interpret_expr(arg))
                     .collect();
 
