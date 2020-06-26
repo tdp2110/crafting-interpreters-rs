@@ -237,6 +237,38 @@ impl Interpreter {
                     Ok(self.interpret_expr(right_expr)?)
                 }
             }
+            expr::Expr::Call(callee, loc, args) => self.call(callee, loc, args),
+        }
+    }
+
+    fn call(
+        &mut self,
+        callee_expr: &Box<expr::Expr>,
+        loc: &expr::SourceLocation,
+        arg_exprs: &Vec<Box<expr::Expr>>,
+    ) -> Result<Value, String> {
+        let callee = self.interpret_expr(callee_expr)?;
+        let maybe_args: Result<Vec<_>, _> = arg_exprs
+            .into_iter()
+            .map(|arg| self.interpret_expr(arg))
+            .collect();
+
+        match maybe_args {
+            Ok(args) => Interpreter::do_call(callee, loc, args),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn do_call(
+        callee: Value,
+        loc: &expr::SourceLocation,
+        _args: Vec<Value>,
+    ) -> Result<Value, String> {
+        match callee {
+            _ => Err(format!(
+                "Value {:?} not callable at line={},col={}",
+                callee, loc.line, loc.col
+            )),
         }
     }
 

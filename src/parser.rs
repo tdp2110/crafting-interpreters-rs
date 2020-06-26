@@ -71,8 +71,9 @@ equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
 addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
 multiplication → unary ( ( "/" | "*" ) unary )* ;
-unary          → ( "!" | "-" ) unary
-               | primary ;
+unary → ( "!" | "-" ) unary | call ;
+call  → primary ( "(" arguments? ")" )* ;
+arguments → expression ( "," expression )* ;
 
 primary → "true" | "false" | "nil"
         | NUMBER | STRING
@@ -374,7 +375,54 @@ impl Parser {
                 Err(err) => Err(err),
             };
         }
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> Result<expr::Expr, String> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.matches(scanner::TokenType::LeftParen) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: expr::Expr) -> Result<expr::Expr, String> {
+        let mut arguments = Vec::new();
+
+        if !self.check(scanner::TokenType::LeftParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    let peek_tok = self.peek();
+                    return Err(format!(
+                        "Cannot have more than 255 arguments to a function call. Line={},col={}",
+                        peek_tok.line, peek_tok.col
+                    ));
+                }
+                arguments.push(Box::new(self.expression()?));
+                if !self.matches(scanner::TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+
+        let token = self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ) after arguments.",
+        )?;
+
+        Ok(expr::Expr::Call(
+            Box::new(callee),
+            expr::SourceLocation {
+                line: token.line,
+                col: token.col,
+            },
+            arguments,
+        ))
     }
 
     fn primary(&mut self) -> Result<expr::Expr, String> {

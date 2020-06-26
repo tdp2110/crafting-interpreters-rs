@@ -3,10 +3,17 @@ pub enum Expr {
     Literal(Literal),
     Unary(UnaryOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
+    Call(Box<Expr>, SourceLocation, Vec<Box<Expr>>),
     Grouping(Box<Expr>),
     Variable(Symbol),
     Assign(Symbol, Box<Expr>),
     Logical(Box<Expr>, LogicalOp, Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceLocation {
+    pub line: usize,
+    pub col: i64,
 }
 
 #[derive(Debug)]
