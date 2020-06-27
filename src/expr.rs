@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Literal),
     Unary(UnaryOp, Box<Expr>),
@@ -16,7 +16,7 @@ pub struct SourceLocation {
     pub col: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LogicalOp {
     Or,
     And,
@@ -29,9 +29,10 @@ pub struct Symbol {
     pub col: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Expr(Expr),
+    FunDecl(Symbol, Vec<Symbol>, Vec<Stmt>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),
@@ -73,7 +74,7 @@ pub struct BinaryOp {
     pub col: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Number(f64),
     String(String),

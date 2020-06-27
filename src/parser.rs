@@ -36,8 +36,12 @@ Recursive descent using the following grammar
 
 program     → declaration* EOF ;
 
-declaration → varDecl
+declaration → funDecl
+            | varDecl
             | statement ;
+
+funDecl  → "fun" function ;
+function → IDENTIFIER "(" parameters? ")" block ;
 
 statement → exprStmt
           | forStmt
@@ -97,7 +101,69 @@ impl Parser {
             return self.var_decl();
         }
 
+        if self.matches(scanner::TokenType::Fun) {
+            return self.fun_decl();
+        }
+
         self.statement()
+    }
+
+    fn fun_decl(&mut self) -> Result<expr::Stmt, String> {
+        let name_tok = self
+            .consume(scanner::TokenType::Identifier, "Expected variable name")?
+            .clone();
+
+        let fun_symbol = expr::Symbol {
+            name: String::from_utf8(name_tok.lexeme).unwrap(),
+            line: name_tok.line,
+            col: name_tok.col,
+        };
+
+        self.consume(
+            scanner::TokenType::LeftParen,
+            "Expected ( after function name",
+        )?;
+
+        let mut arguments = Vec::new();
+
+        if !self.check(scanner::TokenType::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    let peek_tok = self.peek();
+                    return Err(format!(
+                        "Cannot have more than 255 arguments to a function call. Line={},col={}",
+                        peek_tok.line, peek_tok.col
+                    ));
+                }
+
+                let tok = self
+                    .consume(scanner::TokenType::Identifier, "Expected parameter name")?
+                    .clone();
+
+                arguments.push(expr::Symbol {
+                    name: String::from_utf8(tok.lexeme).unwrap(),
+                    line: tok.line,
+                    col: tok.col,
+                });
+
+                if !self.matches(scanner::TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        let arguments = arguments;
+
+        self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ) after parameter list",
+        )?;
+        self.consume(
+            scanner::TokenType::LeftBrace,
+            "Expected { before function body",
+        )?;
+        let body = self.block()?;
+
+        Ok(expr::Stmt::FunDecl(fun_symbol, arguments, body))
     }
 
     fn var_decl(&mut self) -> Result<expr::Stmt, String> {
@@ -403,10 +469,10 @@ impl Parser {
                         peek_tok.line, peek_tok.col
                     ));
                 }
+                arguments.push(self.expression()?);
                 if !self.matches(scanner::TokenType::Comma) {
                     break;
                 }
-                arguments.push(self.expression()?);
             }
         }
 

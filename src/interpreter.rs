@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::expr;
@@ -6,14 +7,14 @@ use std::fmt;
 
 trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, args: &[Value]) -> Result<Value, String>;
+    fn call(&self, interpreter: &Interpreter, args: &[Value]) -> Result<Value, String>;
 }
 
 #[derive(Clone)]
 pub struct NativeFunction {
-    name: String,
-    arity: u8,
-    callable: fn(&[Value]) -> Result<Value, String>,
+    pub name: String,
+    pub arity: u8,
+    pub callable: fn(&[Value]) -> Result<Value, String>,
 }
 
 impl fmt::Debug for NativeFunction {
@@ -26,8 +27,52 @@ impl Callable for NativeFunction {
     fn arity(&self) -> u8 {
         self.arity
     }
-    fn call(&self, args: &[Value]) -> Result<Value, String> {
+    fn call(&self, _interpreter: &Interpreter, args: &[Value]) -> Result<Value, String> {
         (self.callable)(args)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LoxFunction {
+    name: expr::Symbol,
+    parameters: Vec<expr::Symbol>,
+    body: Vec<expr::Stmt>,
+}
+
+impl Callable for LoxFunction {
+    fn arity(&self) -> u8 {
+        self.parameters.len().try_into().unwrap()
+    }
+    fn call(&self, interpreter: &Interpreter, args: &[Value]) -> Result<Value, String> {
+        let env: HashMap<_, _> = self
+            .parameters
+            .iter()
+            .zip(args.iter())
+            .map(|(param, arg)| {
+                (
+                    param.name.clone(),
+                    (
+                        Some(arg.clone()),
+                        SourceLocation {
+                            line: param.line,
+                            col: param.col,
+                        },
+                    ),
+                )
+            })
+            .collect();
+
+        let mut interp2 = Interpreter {
+            env: Environment {
+                enclosing: Some(Box::new(interpreter.env.clone())),
+                venv: env,
+            },
+            globals: interpreter.globals.clone(),
+        };
+
+        interp2.interpret(&self.body)?;
+
+        Ok(Value::Nil)
     }
 }
 
@@ -38,11 +83,13 @@ pub enum Value {
     Bool(bool),
     Nil,
     NativeFunction(NativeFunction),
+    LoxFunction(LoxFunction),
 }
 
 fn as_callable(value: &Value) -> Option<&dyn Callable> {
     match value {
         Value::NativeFunction(f) => Some(f),
+        Value::LoxFunction(f) => Some(f),
         _ => None,
     }
 }
@@ -54,6 +101,7 @@ pub enum Type {
     Bool,
     NilType,
     NativeFunction,
+    LoxFunction,
 }
 
 pub fn type_of(val: &Value) -> Type {
@@ -63,6 +111,7 @@ pub fn type_of(val: &Value) -> Type {
         Value::Bool(_) => Type::Bool,
         Value::Nil => Type::NilType,
         Value::NativeFunction(_) => Type::NativeFunction,
+        Value::LoxFunction(_) => Type::LoxFunction,
     }
 }
 
@@ -74,6 +123,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::NativeFunction(func) => write!(f, "NativeFunction({})", func.name),
+            Value::LoxFunction(func) => write!(f, "LoxFunction({})", func.name.name),
         }
     }
 }
@@ -227,6 +277,16 @@ impl Interpreter {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             },
+            expr::Stmt::FunDecl(name, parameters, body) => {
+                let lox_function = LoxFunction {
+                    name: name.clone(),
+                    parameters: parameters.clone(),
+                    body: body.clone(),
+                };
+                self.env
+                    .define(name.clone(), Some(Value::LoxFunction(lox_function)));
+                Ok(())
+            }
             expr::Stmt::If(cond, if_true, maybe_if_false) => {
                 if Interpreter::is_truthy(&self.interpret_expr(cond)?) {
                     return Ok(self.execute(if_true)?);
@@ -349,7 +409,7 @@ impl Interpreter {
                                 args.len()
                             ))
                         } else {
-                            callable.call(&args)
+                            callable.call(self, &args)
                         }
                     }
                     Err(err) => Err(err),
@@ -443,6 +503,10 @@ impl Interpreter {
             )),
             (_, Value::NativeFunction(_)) => Err(format!(
                 "invalid application of unary op {:?} to object of type NativeFunction at line={},col={}",
+                op.ty, op.line, op.col
+            )),
+            (_, Value::LoxFunction(_)) => Err(format!(
+                "invalid application of unary op {:?} to object of type LoxFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
             (expr::UnaryOpTy::Minus, Value::Bool(_)) => Err(format!(
