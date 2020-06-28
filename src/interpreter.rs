@@ -34,9 +34,9 @@ impl Callable for NativeFunction {
 
 #[derive(Clone, Debug)]
 pub struct LoxFunction {
-    name: expr::Symbol,
-    parameters: Vec<expr::Symbol>,
-    body: Vec<expr::Stmt>,
+    pub name: expr::Symbol,
+    pub parameters: Vec<expr::Symbol>,
+    pub body: Vec<expr::Stmt>,
 }
 
 impl Callable for LoxFunction {
@@ -68,11 +68,15 @@ impl Callable for LoxFunction {
                 venv: env,
             },
             globals: interpreter.globals.clone(),
+            retval: None,
         };
 
         interp2.interpret(&self.body)?;
 
-        Ok(Value::Nil)
+        Ok(match interp2.retval {
+            Some(val) => val,
+            None => Value::Nil,
+        })
     }
 }
 
@@ -226,6 +230,7 @@ impl Environment {
 struct Interpreter {
     env: Environment,
     globals: Environment,
+    retval: Option<Value>,
 }
 
 impl Default for Interpreter {
@@ -259,6 +264,7 @@ impl Default for Interpreter {
         Interpreter {
             env: Default::default(),
             globals,
+            retval: None,
         }
     }
 }
@@ -272,6 +278,10 @@ impl Interpreter {
     }
 
     pub fn execute(&mut self, stmt: &expr::Stmt) -> Result<(), String> {
+        if self.retval.is_some() {
+            return Ok(());
+        }
+
         match stmt {
             expr::Stmt::Expr(e) => match self.interpret_expr(e) {
                 Ok(_) => Ok(()),
@@ -331,6 +341,14 @@ impl Interpreter {
                 while Interpreter::is_truthy(&self.interpret_expr(cond)?) {
                     self.execute(body)?;
                 }
+                Ok(())
+            }
+            expr::Stmt::Return(_, maybe_res) => {
+                self.retval = Some(if let Some(res) = maybe_res {
+                    self.interpret_expr(res)?
+                } else {
+                    Value::Nil
+                });
                 Ok(())
             }
         }

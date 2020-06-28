@@ -37,6 +37,7 @@ pub enum Stmt {
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),
     Block(Vec<Stmt>),
+    Return(SourceLocation, Option<Expr>),
     While(Expr, Box<Stmt>),
 }
 
