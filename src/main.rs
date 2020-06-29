@@ -22,7 +22,9 @@ fn main() {
                     let interpret_result = interpreter::interpret(&stmts);
 
                     match interpret_result {
-                        Ok(_) => {}
+                        Ok(output) => {
+                            println!("{}", output);
+                        }
                         Err(err) => println!("Interpreter Error:\n{}", err),
                     }
                 }

@@ -7,7 +7,7 @@ use std::fmt;
 
 trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, interpreter: &Interpreter, args: &[Value]) -> Result<Value, String>;
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String>;
 }
 
 #[derive(Clone)]
@@ -27,7 +27,7 @@ impl Callable for NativeFunction {
     fn arity(&self) -> u8 {
         self.arity
     }
-    fn call(&self, _interpreter: &Interpreter, args: &[Value]) -> Result<Value, String> {
+    fn call(&self, _interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
         (self.callable)(args)
     }
 }
@@ -43,7 +43,7 @@ impl Callable for LoxFunction {
     fn arity(&self) -> u8 {
         self.parameters.len().try_into().unwrap()
     }
-    fn call(&self, interpreter: &Interpreter, args: &[Value]) -> Result<Value, String> {
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
         let env: HashMap<_, _> = self
             .parameters
             .iter()
@@ -69,9 +69,12 @@ impl Callable for LoxFunction {
             },
             globals: interpreter.globals.clone(),
             retval: None,
+            output: Vec::new(),
         };
 
         interp2.interpret(&self.body)?;
+
+        interpreter.output.extend(interp2.output);
 
         Ok(match interp2.retval {
             Some(val) => val,
@@ -132,11 +135,13 @@ impl fmt::Display for Value {
     }
 }
 
-pub fn interpret(stmts: &[expr::Stmt]) -> Result<(), String> {
+pub fn interpret(stmts: &[expr::Stmt]) -> Result<String, String> {
     let mut interpreter = Interpreter {
         ..Default::default()
     };
-    interpreter.interpret(stmts)
+    interpreter.interpret(stmts)?;
+
+    Ok(interpreter.output.join("\n"))
 }
 
 #[derive(Debug, Clone)]
@@ -231,6 +236,7 @@ struct Interpreter {
     env: Environment,
     globals: Environment,
     retval: Option<Value>,
+    output: Vec<String>,
 }
 
 impl Default for Interpreter {
@@ -265,6 +271,7 @@ impl Default for Interpreter {
             env: Default::default(),
             globals,
             retval: None,
+            output: Vec::new(),
         }
     }
 }
@@ -308,7 +315,7 @@ impl Interpreter {
             }
             expr::Stmt::Print(e) => match self.interpret_expr(e) {
                 Ok(val) => {
-                    println!("{}", val);
+                    self.output.push(format!("{}", val));
                     Ok(())
                 }
                 Err(err) => Err(err),
