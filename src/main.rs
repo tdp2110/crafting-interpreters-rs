@@ -13,24 +13,41 @@ fn main() {
         return println!("Expected a file input arg");
     }
 
-    match scanner::scan_tokens(fs::read_to_string(&args[1]).unwrap()) {
-        Ok(tokens) => {
-            let stmts_maybe = parser::parse(tokens);
+    let maybe_input = fs::read_to_string(&args[1]);
 
-            match stmts_maybe {
-                Ok(stmts) => {
-                    let interpret_result = interpreter::interpret(&stmts);
+    match maybe_input {
+        Ok(input) => match scanner::scan_tokens(input) {
+            Ok(tokens) => {
+                let stmts_maybe = parser::parse(tokens);
 
-                    match interpret_result {
-                        Ok(output) => {
-                            println!("{}", output);
+                match stmts_maybe {
+                    Ok(stmts) => {
+                        let interpret_result = interpreter::interpret(&stmts);
+
+                        match interpret_result {
+                            Ok(output) => {
+                                println!("{}", output);
+                            }
+                            Err(err) => {
+                                println!("Interpreter Error: {}", err);
+                                std::process::exit(-1);
+                            }
                         }
-                        Err(err) => println!("Interpreter Error:\n{}", err),
+                    }
+                    Err(err) => {
+                        println!("parse error: {}", err);
+                        std::process::exit(-1)
                     }
                 }
-                Err(err) => println!("parse error: {}", err),
             }
+            Err(err) => {
+                println!("lexical error: {}", err);
+                std::process::exit(-1);
+            }
+        },
+        Err(err) => {
+            println!("Error: {}", err);
+            std::process::exit(-1);
         }
-        Err(err) => println!("lexical error: {}", err),
     }
 }
