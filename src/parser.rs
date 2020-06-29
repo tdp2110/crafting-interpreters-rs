@@ -509,7 +509,7 @@ impl Parser {
     fn finish_call(&mut self, callee: expr::Expr) -> Result<expr::Expr, String> {
         let mut arguments = Vec::new();
 
-        if !self.check(scanner::TokenType::LeftParen) {
+        if !self.check(scanner::TokenType::RightParen) {
             loop {
                 if arguments.len() >= 255 {
                     let peek_tok = self.peek();

@@ -563,3 +563,171 @@ impl Interpreter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::interpreter;
+    use crate::parser;
+    use crate::scanner;
+
+    fn evaluate(code: &str) -> Result<String, String> {
+        let tokens = scanner::scan_tokens(code.to_string()).unwrap();
+        let stmts = parser::parse(tokens)?;
+        interpreter::interpret(&stmts)
+    }
+
+    #[test]
+    fn test_fact() {
+        fn fact(n: i32) -> i32 {
+            if n <= 1 {
+                return 1;
+            }
+            return n * fact(n - 1);
+        };
+
+        let res = evaluate(
+            "fun fact(n) { \n\
+               if (n <= 1) {\n\
+                   return 1; \n\
+               }\n\
+               return n * fact(n - 1); \n\
+             } \n\
+             print fact(10); ",
+        );
+        match res {
+            Ok(output) => assert_eq!(output, format!("{}", fact(10))),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_invalid_binary_operands() {
+        let res = evaluate("1 + \"string\";");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => assert!(err.starts_with("invalid operands in binary operator")),
+        }
+    }
+
+    #[test]
+    fn test_invalid_unary_operand() {
+        let res = evaluate("-\"cat\";");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => {
+                assert!(err
+                    .starts_with("invalid application of unary op Minus to object of type String"))
+            }
+        }
+    }
+
+    #[test]
+    fn return_not_enclosed_in_fundecl() {
+        let res = evaluate("return 1;");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => assert!(err.starts_with("return statement not enclosed in a FunDecl at")),
+        }
+    }
+
+    #[test]
+    fn test_clock() {
+        let res = evaluate("print clock();");
+
+        match res {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_for() {
+        let res = evaluate(
+            "for (var i = 0; i < 5; i = i + 1) \n\
+             { \n\
+                 print(i); \n\
+             }",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "0\n1\n2\n3\n4"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_lox_funcs() {
+        let res = evaluate(
+            "fun sayHi(first, last) {\n\
+               return \"Hi, \" + first + \" \" + last + \"!\";\n\
+             }\n\
+             \n\
+             print sayHi(\"Dear\", \"Reader\");\n\
+             \n\
+             fun add(x,y,z) {\n\
+                 return x + y + z;\n\
+             }\n\
+             \n\
+             print add(1,2,3);",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "'Hi, Dear Reader!'\n6"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_scopes() {
+        let res = evaluate(
+            "var a = \"global a\";\
+                            var b = \"global b\";\n\
+                            var c = \"global c\";\n\
+                            {
+                              var a = \"outer a\";\n\
+                              var b = \"outer b\";\n\
+                              {
+                                var a = \"inner a\";\n\
+                                print a;\n\
+                                print b;\n\
+                                print c;\n\
+                              }
+                              print a;\n\
+                              print b;\n\
+                              print c;\n\
+                            }
+                            print a;\n\
+                            print b;\n\
+                            print c;\n",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(
+                output,
+                "'inner a'\n\
+                 'outer b'\n\
+                 'global c'\n\
+                 'outer a'\n\
+                 'outer b'\n\
+                 'global c'\n\
+                 'global a'\n\
+                 'global b'\n\
+                 'global c'"
+            ),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_implicit_return_nil() {
+        let res = evaluate("fun f() {} print f();");
+
+        match res {
+            Ok(output) => assert_eq!(output, "nil"),
+            Err(err) => panic!(err),
+        }
+    }
+}
