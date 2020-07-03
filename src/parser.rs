@@ -174,9 +174,10 @@ impl Parser {
             scanner::TokenType::LeftBrace,
             "Expected { before function body",
         )?;
+        let saved_is_in_fundec = self.in_fundec;
         self.in_fundec = true;
         let body = self.block()?;
-        self.in_fundec = false;
+        self.in_fundec = saved_is_in_fundec;
 
         Ok(expr::Stmt::FunDecl(fun_symbol, arguments, body))
     }

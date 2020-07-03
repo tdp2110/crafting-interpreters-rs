@@ -730,4 +730,23 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
+    #[test]
+    fn test_closure_binding() {
+        let res = evaluate(
+            "fun f(n) {\n\
+               var m = 2;\n\
+               fun g(p) {\n\
+                 return p + m;\n\
+               }\n\
+               return g(n);\n\
+             }\n\
+             print f(1);",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "3"),
+            Err(err) => panic!(err),
+        }
+    }
 }
