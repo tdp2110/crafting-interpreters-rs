@@ -93,7 +93,7 @@ comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
 addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
 multiplication → unary ( ( "/" | "*" ) unary )* ;
 unary → ( "!" | "-" ) unary | call ;
-call  → primary ( "(" arguments? ")" )* ;
+call → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments → expression ( "," expression )* ;
 
 primary → "true" | "false" | "nil"
@@ -542,6 +542,21 @@ impl Parser {
         loop {
             if self.matches(scanner::TokenType::LeftParen) {
                 expr = self.finish_call(expr)?;
+            } else if self.matches(scanner::TokenType::Dot) {
+                let name_tok = self
+                    .consume(
+                        scanner::TokenType::Identifier,
+                        "Expected property name after '.'.",
+                    )?
+                    .clone();
+                expr = expr::Expr::Get(
+                    Box::new(expr),
+                    expr::Symbol {
+                        name: String::from_utf8(name_tok.lexeme).unwrap(),
+                        line: name_tok.line,
+                        col: name_tok.col,
+                    },
+                );
             } else {
                 break;
             }

@@ -93,13 +93,29 @@ impl Callable for LoxClass {
         0
     }
     fn call(&self, _interpreter: &mut Interpreter, _args: &[Value]) -> Result<Value, String> {
-        Ok(Value::LoxInstance(LoxInstance { cls: self.clone() })) // TODO! How should we handle backreferences?
+        Ok(Value::LoxInstance(LoxInstance {
+            cls: self.clone(),
+            fields: HashMap::new(),
+        })) // TODO! How should we handle backreferences?
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
     pub cls: LoxClass,
+    fields: HashMap<String, Value>,
+}
+
+impl LoxInstance {
+    fn getattr(&self, attr: &expr::Symbol) -> Result<Value, String> {
+        match self.fields.get(&attr.name) {
+            Some(val) => Ok(val.clone()),
+            None => Err(format!(
+                "AttributeError: '{}' instance has no '{}' attribute.",
+                self.cls.name.name, attr.name
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -411,6 +427,8 @@ impl Interpreter {
             expr::Expr::Literal(lit) => Ok(Interpreter::interpret_literal(lit)),
             expr::Expr::Unary(op, e) => self.interpret_unary(*op, e),
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
+            expr::Expr::Call(callee, loc, args) => self.call(callee, loc, args),
+            expr::Expr::Get(lhs, attr) => self.getattr(lhs, attr),
             expr::Expr::Grouping(e) => self.interpret_expr(e),
             expr::Expr::Variable(sym) => match self.lookup(sym) {
                 Ok(val) => Ok(val.clone()),
@@ -441,7 +459,17 @@ impl Interpreter {
                     Ok(self.interpret_expr(right_expr)?)
                 }
             }
-            expr::Expr::Call(callee, loc, args) => self.call(callee, loc, args),
+        }
+    }
+
+    fn getattr(&mut self, lhs: &Box<expr::Expr>, attr: &expr::Symbol) -> Result<Value, String> {
+        let val = self.interpret_expr(lhs)?;
+        match val {
+            Value::LoxInstance(inst) => inst.getattr(&attr),
+            _ => Err(format!(
+                "Only LoxInstance values have attributes. Found {:?}.",
+                type_of(&val)
+            )),
         }
     }
 

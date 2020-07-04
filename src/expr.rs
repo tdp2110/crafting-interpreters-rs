@@ -4,6 +4,7 @@ pub enum Expr {
     Unary(UnaryOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Call(Box<Expr>, SourceLocation, Vec<Expr>),
+    Get(Box<Expr>, Symbol),
     Grouping(Box<Expr>),
     Variable(Symbol),
     Assign(Symbol, Box<Expr>),
