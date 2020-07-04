@@ -30,9 +30,17 @@ pub struct Symbol {
 }
 
 #[derive(Debug, Clone)]
+pub struct FunDecl {
+    pub name: Symbol,
+    pub params: Vec<Symbol>,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Expr(Expr),
-    FunDecl(Symbol, Vec<Symbol>, Vec<Stmt>),
+    FunDecl(FunDecl),
+    ClassDecl(Symbol, Vec<FunDecl>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),

@@ -46,12 +46,16 @@ Recursive descent using the following grammar
 
 program     → declaration* EOF ;
 
-declaration → funDecl
+declaration → classDecl
+            | funDecl
             | varDecl
             | statement ;
 
+classDecl   → "class" IDENTIFIER "{" function* "}" ;
+
 funDecl  → "fun" function ;
 function → IDENTIFIER "(" parameters? ")" block ;
+parameters  → IDENTIFIER ( "," IDENTIFIER )* ;
 
 statement → exprStmt
           | forStmt
@@ -115,15 +119,49 @@ impl Parser {
         }
 
         if self.matches(scanner::TokenType::Fun) {
-            return self.fun_decl();
+            return Ok(expr::Stmt::FunDecl(self.fun_decl("function")?));
+        }
+
+        if self.matches(scanner::TokenType::Class) {
+            return self.class_decl();
         }
 
         self.statement()
     }
 
-    fn fun_decl(&mut self) -> Result<expr::Stmt, String> {
+    fn class_decl(&mut self) -> Result<expr::Stmt, String> {
         let name_tok = self
-            .consume(scanner::TokenType::Identifier, "Expected variable name")?
+            .consume(scanner::TokenType::Identifier, "Expected class name")?
+            .clone();
+
+        let class_symbol = expr::Symbol {
+            name: String::from_utf8(name_tok.lexeme).unwrap(),
+            line: name_tok.line,
+            col: name_tok.col,
+        };
+
+        self.consume(scanner::TokenType::LeftBrace, "Expected { after class name")?;
+
+        let mut methods = Vec::new();
+        while !self.check(scanner::TokenType::RightBrace) && !self.is_at_end() {
+            methods.push(self.fun_decl("method")?);
+        }
+        let methods = methods;
+
+        self.consume(
+            scanner::TokenType::RightBrace,
+            "Expected } after class body",
+        )?;
+
+        Ok(expr::Stmt::ClassDecl(class_symbol, methods))
+    }
+
+    fn fun_decl(&mut self, kind: &str) -> Result<expr::FunDecl, String> {
+        let name_tok = self
+            .consume(
+                scanner::TokenType::Identifier,
+                format!("Expected {}  name", kind).as_ref(),
+            )?
             .clone();
 
         let fun_symbol = expr::Symbol {
@@ -134,18 +172,18 @@ impl Parser {
 
         self.consume(
             scanner::TokenType::LeftParen,
-            "Expected ( after function name",
+            format!("Expected ( after {} name", kind).as_ref(),
         )?;
 
-        let mut arguments = Vec::new();
+        let mut parameters = Vec::new();
 
         if !self.check(scanner::TokenType::RightParen) {
             loop {
-                if arguments.len() >= 255 {
+                if parameters.len() >= 255 {
                     let peek_tok = self.peek();
                     return Err(format!(
-                        "Cannot have more than 255 arguments to a function call. Line={},col={}",
-                        peek_tok.line, peek_tok.col
+                        "Cannot have more than 255 parameters in a {} declaration. Line={},col={}",
+                        kind, peek_tok.line, peek_tok.col
                     ));
                 }
 
@@ -153,7 +191,7 @@ impl Parser {
                     .consume(scanner::TokenType::Identifier, "Expected parameter name")?
                     .clone();
 
-                arguments.push(expr::Symbol {
+                parameters.push(expr::Symbol {
                     name: String::from_utf8(tok.lexeme).unwrap(),
                     line: tok.line,
                     col: tok.col,
@@ -164,7 +202,7 @@ impl Parser {
                 }
             }
         }
-        let arguments = arguments;
+        let parameters = parameters;
 
         self.consume(
             scanner::TokenType::RightParen,
@@ -179,7 +217,11 @@ impl Parser {
         let body = self.block()?;
         self.in_fundec = saved_is_in_fundec;
 
-        Ok(expr::Stmt::FunDecl(fun_symbol, arguments, body))
+        Ok(expr::FunDecl {
+            name: fun_symbol,
+            params: parameters,
+            body: body,
+        })
     }
 
     fn var_decl(&mut self) -> Result<expr::Stmt, String> {
