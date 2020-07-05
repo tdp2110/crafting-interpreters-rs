@@ -806,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn test_closure_binding() {
+    fn test_closures_1() {
         let res = evaluate(
             "fun f(n) {\n\
                var m = 2;\n\
@@ -820,6 +820,23 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "3"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_closures_2() {
+        let res = evaluate(
+            "fun mkfun(n) {\n\
+               fun f(m) {\n\
+                 return m + n;\n\
+                 }\n\
+               return f;\n\
+               }\n\
+             print mkfun(2)(3);",
+        );
+        match res {
+            Ok(output) => assert_eq!(output, "5"),
             Err(err) => panic!(err),
         }
     }
