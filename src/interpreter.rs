@@ -107,7 +107,7 @@ impl Callable for LoxClass {
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
     pub class_name: expr::Symbol,
-    fields: HashMap<String, Value>,
+    pub fields: HashMap<String, Value>,
 }
 
 impl LoxInstance {
@@ -525,13 +525,22 @@ impl Interpreter {
     fn setattr(
         &mut self,
         lhs_exp: &Box<expr::Expr>,
-        _attr: &expr::Symbol,
+        attr: &expr::Symbol,
         rhs_exp: &Box<expr::Expr>,
     ) -> Result<Value, String> {
         let lhs = self.interpret_expr(lhs_exp)?;
-        let _rhs = self.interpret_expr(rhs_exp)?;
+        let rhs = self.interpret_expr(rhs_exp)?;
         match lhs {
-            Value::LoxInstance(_, _inst) => unimplemented!(),
+            Value::LoxInstance(_, id) => match self.lox_instances.get_mut(&id) {
+                Some(inst) => {
+                    inst.fields.insert(attr.name.clone(), rhs.clone());
+                    Ok(rhs)
+                }
+                None => panic!(
+                    "Internal interpreter error: could not find instance with id {}",
+                    id
+                ),
+            },
             _ => Err(format!(
                 "Only LoxInstance values have attributes. Found {:?}.",
                 type_of(&lhs)
@@ -670,7 +679,7 @@ impl Interpreter {
                 "invalid application of unary op {:?} to object of type LoxClass at line={},col={}",
                 op.ty, op.line, op.col
             )),
-            (_, Value::LoxInstance(class_name, inst)) => Err(format!(
+            (_, Value::LoxInstance(class_name, _)) => Err(format!(
                 "invalid application of unary op {:?} to object of type {:?} at line={},col={}",
                 class_name.name, op.ty, op.line, op.col
             )),
@@ -940,6 +949,38 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "LoxInstance(DevonshireCream)"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setattr_1() {
+        let res = evaluate(
+            "class Foo {}\n\
+             var foo = Foo();\n\
+             foo.attr = 42;\n\
+             print foo.attr;",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setattr_2() {
+        let res = evaluate(
+            "class Bar {}\n\
+             class Foo {}\n\
+             var foo = Foo();\n\
+             foo.bar = Bar();\n\
+             foo.bar.baz = \"baz\";\n\
+             print foo.bar.baz;",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "\'baz\'"),
             Err(err) => panic!(err),
         }
     }
