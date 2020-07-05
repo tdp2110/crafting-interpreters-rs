@@ -220,7 +220,7 @@ impl Parser {
         Ok(expr::FunDecl {
             name: fun_symbol,
             params: parameters,
-            body: body,
+            body,
         })
     }
 

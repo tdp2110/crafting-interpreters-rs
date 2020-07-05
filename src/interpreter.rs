@@ -505,7 +505,7 @@ impl Interpreter {
         }
     }
 
-    fn getattr(&mut self, lhs: &Box<expr::Expr>, attr: &expr::Symbol) -> Result<Value, String> {
+    fn getattr(&mut self, lhs: &expr::Expr, attr: &expr::Symbol) -> Result<Value, String> {
         let val = self.interpret_expr(lhs)?;
         match val {
             Value::LoxInstance(_, id) => match self.lox_instances.get(&id) {
@@ -524,9 +524,9 @@ impl Interpreter {
 
     fn setattr(
         &mut self,
-        lhs_exp: &Box<expr::Expr>,
+        lhs_exp: &expr::Expr,
         attr: &expr::Symbol,
-        rhs_exp: &Box<expr::Expr>,
+        rhs_exp: &expr::Expr,
     ) -> Result<Value, String> {
         let lhs = self.interpret_expr(lhs_exp)?;
         let rhs = self.interpret_expr(rhs_exp)?;
