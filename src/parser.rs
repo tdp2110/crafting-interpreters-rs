@@ -83,8 +83,8 @@ exprStmt  → expression ";" ;
 printStmt → "print" expression ";" ;
 
 expression → assignment ;
-assignment → identifier "=" assignment
-           | logic_or ;
+assignment → ( call "." )? IDENTIFIER "=" assignment
+           | logic_or;
 logic_or   → logic_and ( "or" logic_and )* ;
 logic_and  → equality ( "and" equality )* ;
 
@@ -427,6 +427,8 @@ impl Parser {
 
             if let expr::Expr::Variable(sym) = &expr {
                 return Ok(expr::Expr::Assign(sym.clone(), Box::new(value)));
+            } else if let expr::Expr::Get(e, attr) = expr {
+                return Ok(expr::Expr::Set(e, attr, Box::new(value)));
             } else {
                 return Err(format!(
                     "invalid assignment target at line={},col={}",

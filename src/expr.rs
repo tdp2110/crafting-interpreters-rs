@@ -9,6 +9,7 @@ pub enum Expr {
     Variable(Symbol),
     Assign(Symbol, Box<Expr>),
     Logical(Box<Expr>, LogicalOp, Box<Expr>),
+    Set(Box<Expr>, Symbol, Box<Expr>),
 }
 
 #[derive(Debug, Clone)]

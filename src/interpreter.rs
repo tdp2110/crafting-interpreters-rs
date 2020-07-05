@@ -37,6 +37,7 @@ pub struct LoxFunction {
     pub name: expr::Symbol,
     pub parameters: Vec<expr::Symbol>,
     pub body: Vec<expr::Stmt>,
+    pub closure: Environment,
 }
 
 impl Callable for LoxFunction {
@@ -44,7 +45,7 @@ impl Callable for LoxFunction {
         self.parameters.len().try_into().unwrap()
     }
     fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
-        let env: HashMap<_, _> = self
+        let args_env: HashMap<_, _> = self
             .parameters
             .iter()
             .zip(args.iter())
@@ -62,11 +63,15 @@ impl Callable for LoxFunction {
             })
             .collect();
 
+        let mut env = self.closure.clone();
+        env.venv.extend(args_env);
+        let env = env;
+
         let mut interp2 = Interpreter {
-            env: Environment {
-                enclosing: Some(Box::new(interpreter.env.clone())),
-                venv: env,
-            },
+            counter: interpreter.counter,
+            lox_functions: interpreter.lox_functions.clone(),
+            lox_instances: interpreter.lox_instances.clone(),
+            env,
             globals: interpreter.globals.clone(),
             retval: None,
             output: Vec::new(),
@@ -74,6 +79,8 @@ impl Callable for LoxFunction {
 
         interp2.interpret(&self.body)?;
 
+        interpreter.lox_functions = interp2.lox_functions;
+        interpreter.lox_instances = interp2.lox_instances;
         interpreter.output.extend(interp2.output);
 
         Ok(match interp2.retval {
@@ -92,17 +99,14 @@ impl Callable for LoxClass {
     fn arity(&self) -> u8 {
         0
     }
-    fn call(&self, _interpreter: &mut Interpreter, _args: &[Value]) -> Result<Value, String> {
-        Ok(Value::LoxInstance(LoxInstance {
-            cls: self.clone(),
-            fields: HashMap::new(),
-        })) // TODO! How should we handle backreferences?
+    fn call(&self, interpreter: &mut Interpreter, _args: &[Value]) -> Result<Value, String> {
+        Ok(interpreter.create_instance(&self.name))
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
-    pub cls: LoxClass,
+    pub class_name: expr::Symbol,
     fields: HashMap<String, Value>,
 }
 
@@ -112,7 +116,7 @@ impl LoxInstance {
             Some(val) => Ok(val.clone()),
             None => Err(format!(
                 "AttributeError: '{}' instance has no '{}' attribute.",
-                self.cls.name.name, attr.name
+                self.class_name.name, attr.name
             )),
         }
     }
@@ -125,16 +129,22 @@ pub enum Value {
     Bool(bool),
     Nil,
     NativeFunction(NativeFunction),
-    LoxFunction(LoxFunction),
+    LoxFunction(expr::Symbol, u64),
     LoxClass(LoxClass),
-    LoxInstance(LoxInstance),
+    LoxInstance(expr::Symbol, u64),
 }
 
-fn as_callable(value: &Value) -> Option<&dyn Callable> {
+fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Callable>> {
     match value {
-        Value::NativeFunction(f) => Some(f),
-        Value::LoxFunction(f) => Some(f),
-        Value::LoxClass(cls) => Some(cls),
+        Value::NativeFunction(f) => Some(Box::new(f.clone())),
+        Value::LoxFunction(_, id) => match interpreter.lox_functions.get(id) {
+            Some(f) => Some(Box::new(f.clone())),
+            None => panic!(
+                "Internal interpreter error! Could not find loxFunction with id {}.",
+                id
+            ),
+        },
+        Value::LoxClass(cls) => Some(Box::new(cls.clone())),
         _ => None,
     }
 }
@@ -158,9 +168,9 @@ pub fn type_of(val: &Value) -> Type {
         Value::Bool(_) => Type::Bool,
         Value::Nil => Type::NilType,
         Value::NativeFunction(_) => Type::NativeFunction,
-        Value::LoxFunction(_) => Type::LoxFunction,
+        Value::LoxFunction(_, _) => Type::LoxFunction,
         Value::LoxClass(_) => Type::LoxClass,
-        Value::LoxInstance(_) => Type::LoxInstance,
+        Value::LoxInstance(_, _) => Type::LoxInstance,
     }
 }
 
@@ -172,9 +182,9 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::NativeFunction(func) => write!(f, "NativeFunction({})", func.name),
-            Value::LoxFunction(func) => write!(f, "LoxFunction({})", func.name.name),
+            Value::LoxFunction(sym, _) => write!(f, "LoxFunction({})", sym.name),
             Value::LoxClass(cls) => write!(f, "LoxClass({})", cls.name.name),
-            Value::LoxInstance(inst) => write!(f, "LoxInstance({})", inst.cls.name.name),
+            Value::LoxInstance(sym, _) => write!(f, "LoxInstance({})", sym.name),
         }
     }
 }
@@ -189,19 +199,19 @@ pub fn interpret(stmts: &[expr::Stmt]) -> Result<String, String> {
 }
 
 #[derive(Debug, Clone)]
-struct SourceLocation {
+pub struct SourceLocation {
     line: usize,
     col: i64,
 }
 
-#[derive(Default, Clone)]
-struct Environment {
+#[derive(Debug, Default, Clone)]
+pub struct Environment {
     enclosing: Option<Box<Environment>>,
     // SourceLocation is the location of a declaration
     venv: HashMap<String, (Option<Value>, SourceLocation)>,
 }
 
-enum LookupResult<'a> {
+pub enum LookupResult<'a> {
     Ok(&'a Value),
     UndefButDeclared(SourceLocation),
     UndefAndNotDeclared,
@@ -276,11 +286,14 @@ impl Environment {
     }
 }
 
-struct Interpreter {
-    env: Environment,
-    globals: Environment,
-    retval: Option<Value>,
-    output: Vec<String>,
+pub struct Interpreter {
+    pub counter: u64,
+    pub lox_functions: HashMap<u64, LoxFunction>,
+    pub lox_instances: HashMap<u64, LoxInstance>,
+    pub env: Environment,
+    pub globals: Environment,
+    pub retval: Option<Value>,
+    pub output: Vec<String>,
 }
 
 impl Default for Interpreter {
@@ -312,6 +325,9 @@ impl Default for Interpreter {
         };
 
         Interpreter {
+            counter: 0,
+            lox_functions: HashMap::new(),
+            lox_instances: HashMap::new(),
             env: Default::default(),
             globals,
             retval: None,
@@ -326,6 +342,22 @@ impl Interpreter {
             self.execute(stmt)?;
         }
         Ok(())
+    }
+
+    fn alloc_id(&mut self) -> u64 {
+        let res = self.counter;
+        self.counter += 1;
+        res
+    }
+
+    fn create_instance(&mut self, class_name: &expr::Symbol) -> Value {
+        let inst_id = self.alloc_id();
+        let inst = LoxInstance {
+            class_name: class_name.clone(),
+            fields: HashMap::new(),
+        };
+        self.lox_instances.insert(inst_id, inst);
+        Value::LoxInstance(class_name.clone(), inst_id)
     }
 
     pub fn execute(&mut self, stmt: &expr::Stmt) -> Result<(), String> {
@@ -349,13 +381,23 @@ impl Interpreter {
                 params: parameters,
                 body,
             }) => {
+                let func_id = self.alloc_id();
+                self.env.define(
+                    name.clone(),
+                    Some(Value::LoxFunction(name.clone(), func_id)),
+                );
+
+                println!("defined {} with id {}.", name.name, func_id);
+
                 let lox_function = LoxFunction {
                     name: name.clone(),
                     parameters: parameters.clone(),
                     body: body.clone(),
+                    closure: self.env.clone(),
                 };
-                self.env
-                    .define(name.clone(), Some(Value::LoxFunction(lox_function)));
+
+                self.lox_functions.insert(func_id, lox_function);
+
                 Ok(())
             }
             expr::Stmt::If(cond, if_true, maybe_if_false) => {
@@ -429,6 +471,7 @@ impl Interpreter {
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
             expr::Expr::Call(callee, loc, args) => self.call(callee, loc, args),
             expr::Expr::Get(lhs, attr) => self.getattr(lhs, attr),
+            expr::Expr::Set(lhs, attr, rhs) => self.setattr(lhs, attr, rhs),
             expr::Expr::Grouping(e) => self.interpret_expr(e),
             expr::Expr::Variable(sym) => match self.lookup(sym) {
                 Ok(val) => Ok(val.clone()),
@@ -465,10 +508,33 @@ impl Interpreter {
     fn getattr(&mut self, lhs: &Box<expr::Expr>, attr: &expr::Symbol) -> Result<Value, String> {
         let val = self.interpret_expr(lhs)?;
         match val {
-            Value::LoxInstance(inst) => inst.getattr(&attr),
+            Value::LoxInstance(_, id) => match self.lox_instances.get(&id) {
+                Some(inst) => inst.getattr(&attr),
+                None => panic!(
+                    "Internal interpreter error: could not find an instance with id {}.",
+                    id
+                ),
+            },
             _ => Err(format!(
                 "Only LoxInstance values have attributes. Found {:?}.",
                 type_of(&val)
+            )),
+        }
+    }
+
+    fn setattr(
+        &mut self,
+        lhs_exp: &Box<expr::Expr>,
+        _attr: &expr::Symbol,
+        rhs_exp: &Box<expr::Expr>,
+    ) -> Result<Value, String> {
+        let lhs = self.interpret_expr(lhs_exp)?;
+        let _rhs = self.interpret_expr(rhs_exp)?;
+        match lhs {
+            Value::LoxInstance(_, _inst) => unimplemented!(),
+            _ => Err(format!(
+                "Only LoxInstance values have attributes. Found {:?}.",
+                type_of(&lhs)
             )),
         }
     }
@@ -481,7 +547,7 @@ impl Interpreter {
     ) -> Result<Value, String> {
         let callee = self.interpret_expr(callee_expr)?;
 
-        match as_callable(&callee) {
+        match as_callable(&self, &callee) {
             Some(callable) => {
                 let maybe_args: Result<Vec<_>, _> = arg_exprs
                     .iter()
@@ -596,7 +662,7 @@ impl Interpreter {
                 "invalid application of unary op {:?} to object of type NativeFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
-            (_, Value::LoxFunction(_)) => Err(format!(
+            (_, Value::LoxFunction(_, _)) => Err(format!(
                 "invalid application of unary op {:?} to object of type LoxFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
@@ -604,9 +670,9 @@ impl Interpreter {
                 "invalid application of unary op {:?} to object of type LoxClass at line={},col={}",
                 op.ty, op.line, op.col
             )),
-            (_, Value::LoxInstance(inst)) => Err(format!(
+            (_, Value::LoxInstance(class_name, inst)) => Err(format!(
                 "invalid application of unary op {:?} to object of type {:?} at line={},col={}",
-                inst.cls, op.ty, op.line, op.col
+                class_name.name, op.ty, op.line, op.col
             )),
             (expr::UnaryOpTy::Minus, Value::Bool(_)) => Err(format!(
                 "invalid application of unary op {:?} to object of type Bool at line={},col={}",
