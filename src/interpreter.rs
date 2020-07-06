@@ -63,27 +63,21 @@ impl Callable for LoxFunction {
             })
             .collect();
 
+        let saved_env = interpreter.env.clone();
+        let saved_retval = interpreter.retval.clone();
+
         let mut env = self.closure.clone();
         env.venv.extend(args_env);
         let env = env;
 
-        let mut interp2 = Interpreter {
-            counter: interpreter.counter,
-            lox_functions: interpreter.lox_functions.clone(),
-            lox_instances: interpreter.lox_instances.clone(),
-            env,
-            globals: interpreter.globals.clone(),
-            retval: None,
-            output: Vec::new(),
-        };
+        interpreter.env = env;
+        interpreter.interpret(&self.body)?;
 
-        interp2.interpret(&self.body)?;
+        let retval = interpreter.retval.clone();
+        interpreter.env = saved_env;
+        interpreter.retval = saved_retval;
 
-        interpreter.lox_functions = interp2.lox_functions;
-        interpreter.lox_instances = interp2.lox_instances;
-        interpreter.output.extend(interp2.output);
-
-        Ok(match interp2.retval {
+        Ok(match retval {
             Some(val) => val,
             None => Value::Nil,
         })
