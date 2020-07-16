@@ -87,6 +87,7 @@ impl Callable for LoxFunction {
 #[derive(Clone, Debug)]
 pub struct LoxClass {
     pub name: expr::Symbol,
+    pub methods: HashMap<expr::Symbol, u64>,
 }
 
 impl Callable for LoxClass {
@@ -124,7 +125,7 @@ pub enum Value {
     Nil,
     NativeFunction(NativeFunction),
     LoxFunction(expr::Symbol, u64),
-    LoxClass(LoxClass),
+    LoxClass(expr::Symbol, u64),
     LoxInstance(expr::Symbol, u64),
 }
 
@@ -138,7 +139,13 @@ fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Calla
                 id
             ),
         },
-        Value::LoxClass(cls) => Some(Box::new(cls.clone())),
+        Value::LoxClass(_, id) => match interpreter.lox_classes.get(id) {
+            Some(cls) => Some(Box::new(cls.clone())),
+            None => panic!(
+                "Internal interpreter error! Could not find loxClass with id {}.",
+                id
+            ),
+        },
         _ => None,
     }
 }
@@ -163,7 +170,7 @@ pub fn type_of(val: &Value) -> Type {
         Value::Nil => Type::NilType,
         Value::NativeFunction(_) => Type::NativeFunction,
         Value::LoxFunction(_, _) => Type::LoxFunction,
-        Value::LoxClass(_) => Type::LoxClass,
+        Value::LoxClass(_, _) => Type::LoxClass,
         Value::LoxInstance(_, _) => Type::LoxInstance,
     }
 }
@@ -177,7 +184,7 @@ impl fmt::Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::NativeFunction(func) => write!(f, "NativeFunction({})", func.name),
             Value::LoxFunction(sym, _) => write!(f, "LoxFunction({})", sym.name),
-            Value::LoxClass(cls) => write!(f, "LoxClass({})", cls.name.name),
+            Value::LoxClass(sym, _) => write!(f, "LoxClass({})", sym.name),
             Value::LoxInstance(sym, _) => write!(f, "LoxInstance({})", sym.name),
         }
     }
@@ -284,6 +291,7 @@ pub struct Interpreter {
     pub counter: u64,
     pub lox_functions: HashMap<u64, LoxFunction>,
     pub lox_instances: HashMap<u64, LoxInstance>,
+    pub lox_classes: HashMap<u64, LoxClass>,
     pub env: Environment,
     pub globals: Environment,
     pub retval: Option<Value>,
@@ -322,6 +330,7 @@ impl Default for Interpreter {
             counter: 0,
             lox_functions: HashMap::new(),
             lox_instances: HashMap::new(),
+            lox_classes: HashMap::new(),
             env: Default::default(),
             globals,
             retval: None,
@@ -364,10 +373,33 @@ impl Interpreter {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             },
-            expr::Stmt::ClassDecl(sym, _methods) => {
-                self.env.define(sym.clone(), None);
-                let cls = LoxClass { name: sym.clone() };
-                self.env.assign(sym.clone(), &Value::LoxClass(cls))?;
+            expr::Stmt::ClassDecl(sym, stmt_methods) => {
+                let class_id = self.alloc_id();
+                self.env
+                    .define(sym.clone(), Some(Value::LoxClass(sym.clone(), class_id)));
+
+                let mut methods = HashMap::new();
+                for method in stmt_methods.iter() {
+                    let func_id = self.alloc_id();
+
+                    methods.insert(method.name.clone(), func_id);
+
+                    let lox_function = LoxFunction {
+                        name: method.name.clone(),
+                        parameters: method.params.clone(),
+                        body: method.body.clone(),
+                        closure: self.env.clone(),
+                    };
+
+                    self.lox_functions.insert(func_id, lox_function);
+                }
+
+                let cls = LoxClass {
+                    name: sym.clone(),
+                    methods: methods,
+                };
+
+                self.lox_classes.insert(class_id, cls);
                 Ok(())
             }
             expr::Stmt::FunDecl(expr::FunDecl {
@@ -669,7 +701,7 @@ impl Interpreter {
                 "invalid application of unary op {:?} to object of type LoxFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
-            (_, Value::LoxClass(_)) => Err(format!(
+            (_, Value::LoxClass(_, _)) => Err(format!(
                 "invalid application of unary op {:?} to object of type LoxClass at line={},col={}",
                 op.ty, op.line, op.col
             )),
