@@ -87,7 +87,8 @@ impl Callable for LoxFunction {
 #[derive(Clone, Debug)]
 pub struct LoxClass {
     pub name: expr::Symbol,
-    pub methods: HashMap<expr::Symbol, u64>,
+    pub id: u64,
+    pub methods: HashMap<String, u64>,
 }
 
 impl Callable for LoxClass {
@@ -95,24 +96,45 @@ impl Callable for LoxClass {
         0
     }
     fn call(&self, interpreter: &mut Interpreter, _args: &[Value]) -> Result<Value, String> {
-        Ok(interpreter.create_instance(&self.name))
+        Ok(interpreter.create_instance(&self.name, self.id))
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
     pub class_name: expr::Symbol,
+    pub class_id: u64,
     pub fields: HashMap<String, Value>,
 }
 
 impl LoxInstance {
-    fn getattr(&self, attr: &expr::Symbol) -> Result<Value, String> {
-        match self.fields.get(&attr.name) {
+    fn getattr(&self, attr: &String, interpreter: &Interpreter) -> Result<Value, String> {
+        match self.fields.get(attr) {
             Some(val) => Ok(val.clone()),
-            None => Err(format!(
-                "AttributeError: '{}' instance has no '{}' attribute.",
-                self.class_name.name, attr.name
-            )),
+            None => {
+                if let Some(cls) = interpreter.lox_classes.get(&self.class_id) {
+                    if let Some(method_id) = cls.methods.get(attr) {
+                        if let Some(lox_fn) = interpreter.lox_functions.get(method_id) {
+                            Ok(Value::LoxFunction(lox_fn.name.clone(), *method_id))
+                        } else {
+                            panic!(
+                                "Internal interpreter error! Could not find lox fn with id {}.",
+                                method_id
+                            );
+                        }
+                    } else {
+                        Err(format!(
+                            "AttributeError: '{}' instance has no '{}' attribute.",
+                            self.class_name.name, attr
+                        ))
+                    }
+                } else {
+                    panic!(
+                        "Internal interpreter error! Could not find class with id {}",
+                        self.class_id
+                    );
+                }
+            }
         }
     }
 }
@@ -353,10 +375,11 @@ impl Interpreter {
         res
     }
 
-    fn create_instance(&mut self, class_name: &expr::Symbol) -> Value {
+    fn create_instance(&mut self, class_name: &expr::Symbol, class_id: u64) -> Value {
         let inst_id = self.alloc_id();
         let inst = LoxInstance {
             class_name: class_name.clone(),
+            class_id,
             fields: HashMap::new(),
         };
         self.lox_instances.insert(inst_id, inst);
@@ -382,7 +405,7 @@ impl Interpreter {
                 for method in stmt_methods.iter() {
                     let func_id = self.alloc_id();
 
-                    methods.insert(method.name.clone(), func_id);
+                    methods.insert(method.name.name.clone(), func_id);
 
                     let lox_function = LoxFunction {
                         name: method.name.clone(),
@@ -396,6 +419,7 @@ impl Interpreter {
 
                 let cls = LoxClass {
                     name: sym.clone(),
+                    id: class_id,
                     methods: methods,
                 };
 
@@ -496,7 +520,7 @@ impl Interpreter {
             expr::Expr::Unary(op, e) => self.interpret_unary(*op, e),
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
             expr::Expr::Call(callee, loc, args) => self.call(callee, loc, args),
-            expr::Expr::Get(lhs, attr) => self.getattr(lhs, attr),
+            expr::Expr::Get(lhs, attr) => self.getattr(lhs, &attr.name),
             expr::Expr::Set(lhs, attr, rhs) => self.setattr(lhs, attr, rhs),
             expr::Expr::Grouping(e) => self.interpret_expr(e),
             expr::Expr::Variable(sym) => match self.lookup(sym) {
@@ -531,11 +555,11 @@ impl Interpreter {
         }
     }
 
-    fn getattr(&mut self, lhs: &expr::Expr, attr: &expr::Symbol) -> Result<Value, String> {
+    fn getattr(&mut self, lhs: &expr::Expr, attr: &String) -> Result<Value, String> {
         let val = self.interpret_expr(lhs)?;
         match val {
             Value::LoxInstance(_, id) => match self.lox_instances.get(&id) {
-                Some(inst) => inst.getattr(&attr),
+                Some(inst) => inst.getattr(&attr, &self),
                 None => panic!(
                     "Internal interpreter error: could not find an instance with id {}.",
                     id
@@ -1007,6 +1031,24 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'baz\'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_methods_1() {
+        let res = evaluate(
+            "class Bacon {\
+                eat() {\
+                  print \"Crunch crunch crunch!\";\
+                }\
+              }\
+              \
+              Bacon().eat();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "\'Crunch crunch crunch!\'"),
             Err(err) => panic!(err),
         }
     }
