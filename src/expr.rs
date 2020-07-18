@@ -1,6 +1,7 @@
 #[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Literal),
+    This,
     Unary(UnaryOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Call(Box<Expr>, SourceLocation, Vec<Expr>),

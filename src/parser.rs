@@ -634,6 +634,9 @@ impl Parser {
                 None => panic!("internal error in parser: when parsing string, found no literal"),
             }
         }
+        if self.matches(scanner::TokenType::This) {
+            return Ok(expr::Expr::This);
+        }
         if self.matches(scanner::TokenType::Identifier) {
             match &self.previous().literal {
                 Some(scanner::Literal::Identifier(s)) => {

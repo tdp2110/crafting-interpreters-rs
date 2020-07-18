@@ -38,6 +38,7 @@ pub struct LoxFunction {
     pub parameters: Vec<expr::Symbol>,
     pub body: Vec<expr::Stmt>,
     pub closure: Environment,
+    pub this_binding: Option<Box<Value>>,
 }
 
 impl Callable for LoxFunction {
@@ -68,6 +69,19 @@ impl Callable for LoxFunction {
 
         let mut env = self.closure.clone();
         env.venv.extend(args_env);
+        if let Some(val) = &self.this_binding {
+            let this_symbol = Interpreter::this_symbol();
+            env.venv.insert(
+                this_symbol.name,
+                (
+                    Some(*val.clone()),
+                    SourceLocation {
+                        line: this_symbol.line,
+                        col: this_symbol.col,
+                    },
+                ),
+            );
+        }
         let env = env;
 
         interpreter.env = env;
@@ -104,18 +118,26 @@ impl Callable for LoxClass {
 pub struct LoxInstance {
     pub class_name: expr::Symbol,
     pub class_id: u64,
+    pub id: u64,
     pub fields: HashMap<String, Value>,
 }
 
 impl LoxInstance {
-    fn getattr(&self, attr: &String, interpreter: &Interpreter) -> Result<Value, String> {
+    fn getattr(&self, attr: &str, interpreter: &Interpreter) -> Result<Value, String> {
         match self.fields.get(attr) {
             Some(val) => Ok(val.clone()),
             None => {
                 if let Some(cls) = interpreter.lox_classes.get(&self.class_id) {
                     if let Some(method_id) = cls.methods.get(attr) {
                         if let Some(lox_fn) = interpreter.lox_functions.get(method_id) {
-                            Ok(Value::LoxFunction(lox_fn.name.clone(), *method_id))
+                            Ok(Value::LoxFunction(
+                                lox_fn.name.clone(),
+                                *method_id,
+                                Some(Box::new(Value::LoxInstance(
+                                    self.class_name.clone(),
+                                    self.id,
+                                ))),
+                            ))
                         } else {
                             panic!(
                                 "Internal interpreter error! Could not find lox fn with id {}.",
@@ -146,16 +168,24 @@ pub enum Value {
     Bool(bool),
     Nil,
     NativeFunction(NativeFunction),
-    LoxFunction(expr::Symbol, u64),
-    LoxClass(expr::Symbol, u64),
-    LoxInstance(expr::Symbol, u64),
+    LoxFunction(
+        expr::Symbol,
+        /*id*/ u64,
+        /*this binding*/ Option<Box<Value>>,
+    ),
+    LoxClass(expr::Symbol, /*id*/ u64),
+    LoxInstance(expr::Symbol, /*id*/ u64),
 }
 
 fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Callable>> {
     match value {
         Value::NativeFunction(f) => Some(Box::new(f.clone())),
-        Value::LoxFunction(_, id) => match interpreter.lox_functions.get(id) {
-            Some(f) => Some(Box::new(f.clone())),
+        Value::LoxFunction(_, id, this_binding) => match interpreter.lox_functions.get(id) {
+            Some(f) => {
+                let mut f_copy = f.clone();
+                f_copy.this_binding = this_binding.clone();
+                Some(Box::new(f_copy))
+            }
             None => panic!(
                 "Internal interpreter error! Could not find loxFunction with id {}.",
                 id
@@ -191,7 +221,7 @@ pub fn type_of(val: &Value) -> Type {
         Value::Bool(_) => Type::Bool,
         Value::Nil => Type::NilType,
         Value::NativeFunction(_) => Type::NativeFunction,
-        Value::LoxFunction(_, _) => Type::LoxFunction,
+        Value::LoxFunction(_, _, _) => Type::LoxFunction,
         Value::LoxClass(_, _) => Type::LoxClass,
         Value::LoxInstance(_, _) => Type::LoxInstance,
     }
@@ -205,7 +235,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
             Value::NativeFunction(func) => write!(f, "NativeFunction({})", func.name),
-            Value::LoxFunction(sym, _) => write!(f, "LoxFunction({})", sym.name),
+            Value::LoxFunction(sym, _, _) => write!(f, "LoxFunction({})", sym.name),
             Value::LoxClass(sym, _) => write!(f, "LoxClass({})", sym.name),
             Value::LoxInstance(sym, _) => write!(f, "LoxInstance({})", sym.name),
         }
@@ -380,6 +410,7 @@ impl Interpreter {
         let inst = LoxInstance {
             class_name: class_name.clone(),
             class_id,
+            id: inst_id,
             fields: HashMap::new(),
         };
         self.lox_instances.insert(inst_id, inst);
@@ -412,6 +443,7 @@ impl Interpreter {
                         parameters: method.params.clone(),
                         body: method.body.clone(),
                         closure: self.env.clone(),
+                        this_binding: None,
                     };
 
                     self.lox_functions.insert(func_id, lox_function);
@@ -420,7 +452,7 @@ impl Interpreter {
                 let cls = LoxClass {
                     name: sym.clone(),
                     id: class_id,
-                    methods: methods,
+                    methods,
                 };
 
                 self.lox_classes.insert(class_id, cls);
@@ -434,7 +466,7 @@ impl Interpreter {
                 let func_id = self.alloc_id();
                 self.env.define(
                     name.clone(),
-                    Some(Value::LoxFunction(name.clone(), func_id)),
+                    Some(Value::LoxFunction(name.clone(), func_id, None)),
                 );
 
                 println!("defined {} with id {}.", name.name, func_id);
@@ -444,6 +476,7 @@ impl Interpreter {
                     parameters: parameters.clone(),
                     body: body.clone(),
                     closure: self.env.clone(),
+                    this_binding: None,
                 };
 
                 self.lox_functions.insert(func_id, lox_function);
@@ -514,8 +547,20 @@ impl Interpreter {
         }
     }
 
+    fn this_symbol() -> expr::Symbol {
+        return expr::Symbol {
+            name: String::from("this"),
+            line: 0,
+            col: -1,
+        };
+    }
+
     pub fn interpret_expr(&mut self, expr: &expr::Expr) -> Result<Value, String> {
         match expr {
+            expr::Expr::This => match self.lookup(&Interpreter::this_symbol()) {
+                Ok(val) => Ok(val.clone()),
+                Err(err) => Err(err),
+            },
             expr::Expr::Literal(lit) => Ok(Interpreter::interpret_literal(lit)),
             expr::Expr::Unary(op, e) => self.interpret_unary(*op, e),
             expr::Expr::Binary(lhs, op, rhs) => self.interpret_binary(lhs, *op, rhs),
@@ -555,7 +600,7 @@ impl Interpreter {
         }
     }
 
-    fn getattr(&mut self, lhs: &expr::Expr, attr: &String) -> Result<Value, String> {
+    fn getattr(&mut self, lhs: &expr::Expr, attr: &str) -> Result<Value, String> {
         let val = self.interpret_expr(lhs)?;
         match val {
             Value::LoxInstance(_, id) => match self.lox_instances.get(&id) {
@@ -721,7 +766,7 @@ impl Interpreter {
                 "invalid application of unary op {:?} to object of type NativeFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
-            (_, Value::LoxFunction(_, _)) => Err(format!(
+            (_, Value::LoxFunction(_, _, _)) => Err(format!(
                 "invalid application of unary op {:?} to object of type LoxFunction at line={},col={}",
                 op.ty, op.line, op.col
             )),
@@ -1049,6 +1094,50 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'Crunch crunch crunch!\'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_method_this_binding_1() {
+        let res = evaluate(
+            "class Cake {\
+               taste() {\
+               var adjective = \"delicious\";\
+               print \"The \" + this.flavor + \" cake is \" + adjective + \"!\";\
+               }\
+             }\
+             \
+             var cake = Cake();\
+             cake.flavor = \"German chocolate\";\
+             cake.taste();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "\'The German chocolate cake is delicious!\'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_method_this_binding_2() {
+        let res = evaluate(
+            "class Thing {\
+               getCallback() {\
+                 fun localFunction() {\
+                   print this;\
+                 }\
+                 \
+                 return localFunction;\
+               }\
+             }\
+             \
+             var callback = Thing().getCallback();\
+             callback();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "LoxInstance(Thing)"),
             Err(err) => panic!(err),
         }
     }
