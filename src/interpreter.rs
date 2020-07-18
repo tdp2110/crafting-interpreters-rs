@@ -95,21 +95,31 @@ impl Callable for LoxFunction {
         interpreter.env = saved_env;
         interpreter.retval = saved_retval;
 
-        Ok(match retval {
-            Some(val) => val,
+        match retval {
+            Some(val) => {
+                let val_type = type_of(&val);
+                if self.is_initializer && val_type != Type::Nil {
+                    Err(format!(
+                        "TypeError: init should only return nil (perhaps implicitly), not {:?}",
+                        val_type
+                    ))
+                } else {
+                    Ok(val)
+                }
+            }
             None => {
                 if self.is_initializer {
                     match &self.this_binding {
-                        Some(this_val) => *this_val.clone(),
+                        Some(this_val) => Ok(*this_val.clone()),
                         None => {
                             panic!("Internal intepreter error: could not find binding for this.")
                         }
                     }
                 } else {
-                    Value::Nil
+                    Ok(Value::Nil)
                 }
             }
-        })
+        }
     }
 }
 
@@ -242,12 +252,12 @@ fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Calla
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Type {
     Number,
     String,
     Bool,
-    NilType,
+    Nil,
     NativeFunction,
     LoxFunction,
     LoxClass,
@@ -259,7 +269,7 @@ pub fn type_of(val: &Value) -> Type {
         Value::Number(_) => Type::Number,
         Value::String(_) => Type::String,
         Value::Bool(_) => Type::Bool,
-        Value::Nil => Type::NilType,
+        Value::Nil => Type::Nil,
         Value::NativeFunction(_) => Type::NativeFunction,
         Value::LoxFunction(_, _, _) => Type::LoxFunction,
         Value::LoxClass(_, _) => Type::LoxClass,
@@ -967,6 +977,32 @@ mod tests {
     }
 
     #[test]
+    fn test_implict_nil_return_1() {
+        let res = evaluate(
+            "fun f() { return; }\n\
+             print f();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "nil"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_implict_nil_return_2() {
+        let res = evaluate(
+            "fun f() { }\n\
+             print f();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "nil"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
     fn test_scopes() {
         let res = evaluate(
             "var a = \"global a\";\
@@ -1222,6 +1258,52 @@ mod tests {
         match res {
             Ok(output) => assert_eq!(output, "42\n1337\n1337"),
             Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_early_return_init() {
+        let res = evaluate(
+            "class Foo {\n\
+               init(val) {\n\
+                 if (val > 100) {\n\
+                   this.val = 100;\n\
+                   return;\n\
+                 }\n\
+                 this.val = val;\n\
+               }\n\
+             }\n\
+             \n\
+             var foo1 = Foo(42);\n\
+             print foo1.val;\n\
+             var foo2 = Foo(200);\n\
+             print foo2.val;",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42\n100"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_return_non_nil_in_init() {
+        let res = evaluate(
+            "class Foo {\n\
+               init(val) {\n\
+                 return 42;\n\
+               }\n\
+             }\n\
+             \n\
+             var foo = Foo(42);",
+        );
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => assert_eq!(
+                err,
+                "TypeError: init should only return nil (perhaps implicitly), not Number"
+            ),
         }
     }
 }

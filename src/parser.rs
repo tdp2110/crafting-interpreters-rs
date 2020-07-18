@@ -294,10 +294,12 @@ impl Parser {
             None
         };
 
-        self.consume(
-            scanner::TokenType::Semicolon,
-            "Expected ; after return value",
-        )?;
+        if let Some(_) = maybe_retval {
+            self.consume(
+                scanner::TokenType::Semicolon,
+                "Expected ; after return value",
+            )?;
+        }
 
         Ok(expr::Stmt::Return(
             expr::SourceLocation {
