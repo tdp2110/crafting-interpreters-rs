@@ -5,6 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::expr;
 use std::fmt;
 
+static INIT: &str = "init";
+
 trait Callable {
     fn arity(&self, interpreter: &Interpreter) -> u8;
     fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String>;
@@ -39,6 +41,7 @@ pub struct LoxFunction {
     pub body: Vec<expr::Stmt>,
     pub closure: Environment,
     pub this_binding: Option<Box<Value>>,
+    pub is_initializer: bool,
 }
 
 impl Callable for LoxFunction {
@@ -69,12 +72,13 @@ impl Callable for LoxFunction {
 
         let mut env = self.closure.clone();
         env.venv.extend(args_env);
-        if let Some(val) = &self.this_binding {
+
+        if let Some(this_val) = &self.this_binding {
             let this_symbol = Interpreter::this_symbol();
             env.venv.insert(
                 this_symbol.name,
                 (
-                    Some(*val.clone()),
+                    Some(*this_val.clone()),
                     SourceLocation {
                         line: this_symbol.line,
                         col: this_symbol.col,
@@ -93,7 +97,18 @@ impl Callable for LoxFunction {
 
         Ok(match retval {
             Some(val) => val,
-            None => Value::Nil,
+            None => {
+                if self.is_initializer {
+                    match &self.this_binding {
+                        Some(this_val) => *this_val.clone(),
+                        None => {
+                            panic!("Internal intepreter error: could not find binding for this.")
+                        }
+                    }
+                } else {
+                    Value::Nil
+                }
+            }
         })
     }
 }
@@ -463,12 +478,15 @@ impl Interpreter {
 
                     methods.insert(method.name.name.clone(), func_id);
 
+                    let is_initializer = method.name.name == INIT;
+
                     let lox_function = LoxFunction {
                         name: method.name.clone(),
                         parameters: method.params.clone(),
                         body: method.body.clone(),
                         closure: self.env.clone(),
                         this_binding: None,
+                        is_initializer,
                     };
 
                     self.lox_functions.insert(func_id, lox_function);
@@ -494,14 +512,13 @@ impl Interpreter {
                     Some(Value::LoxFunction(name.clone(), func_id, None)),
                 );
 
-                println!("defined {} with id {}.", name.name, func_id);
-
                 let lox_function = LoxFunction {
                     name: name.clone(),
                     parameters: parameters.clone(),
                     body: body.clone(),
                     closure: self.env.clone(),
                     this_binding: None,
+                    is_initializer: false,
                 };
 
                 self.lox_functions.insert(func_id, lox_function);
@@ -1182,6 +1199,28 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_explicit_call_init() {
+        let res = evaluate(
+            "class Foo {\
+               init(val) {\
+                 this.val = val;\
+               }\
+             }\
+             \
+             var foo1 = Foo(42);\
+             print foo1.val;\
+             var foo2 = foo1.init(1337);\
+             print foo2.val;\
+             print foo1.val;",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42\n1337\n1337"),
             Err(err) => panic!(err),
         }
     }
