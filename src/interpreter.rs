@@ -477,7 +477,7 @@ impl Interpreter {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             },
-            expr::Stmt::ClassDecl(sym, stmt_methods) => {
+            expr::Stmt::ClassDecl(sym, _, stmt_methods) => {
                 let class_id = self.alloc_id();
                 self.env
                     .define(sym.clone(), Some(Value::LoxClass(sym.clone(), class_id)));

@@ -43,7 +43,7 @@ pub struct FunDecl {
 pub enum Stmt {
     Expr(Expr),
     FunDecl(FunDecl),
-    ClassDecl(Symbol, Vec<FunDecl>),
+    ClassDecl(Symbol, /*superclass*/ Option<Symbol>, Vec<FunDecl>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     VarDecl(Symbol, Option<Expr>),

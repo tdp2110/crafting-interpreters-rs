@@ -51,7 +51,8 @@ declaration → classDecl
             | varDecl
             | statement ;
 
-classDecl   → "class" IDENTIFIER "{" function* "}" ;
+classDecl → "class" IDENTIFIER ( "<" IDENTIFIER )?
+            "{" function* "}" ;
 
 funDecl  → "fun" function ;
 function → IDENTIFIER "(" parameters? ")" block ;
@@ -140,6 +141,18 @@ impl Parser {
             col: name_tok.col,
         };
 
+        let superclass_maybe = if self.matches(scanner::TokenType::Less) {
+            let superclass_tok =
+                self.consume(scanner::TokenType::Identifier, "Expected class name.")?;
+            Some(expr::Symbol {
+                name: String::from_utf8(superclass_tok.lexeme.clone()).unwrap(),
+                line: superclass_tok.line,
+                col: superclass_tok.col,
+            })
+        } else {
+            None
+        };
+
         self.consume(scanner::TokenType::LeftBrace, "Expected { after class name")?;
 
         let mut methods = Vec::new();
@@ -153,7 +166,11 @@ impl Parser {
             "Expected } after class body",
         )?;
 
-        Ok(expr::Stmt::ClassDecl(class_symbol, methods))
+        Ok(expr::Stmt::ClassDecl(
+            class_symbol,
+            superclass_maybe,
+            methods,
+        ))
     }
 
     fn fun_decl(&mut self, kind: &str) -> Result<expr::FunDecl, String> {
