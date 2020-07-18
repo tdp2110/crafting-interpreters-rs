@@ -6,7 +6,7 @@ use crate::expr;
 use std::fmt;
 
 trait Callable {
-    fn arity(&self) -> u8;
+    fn arity(&self, interpreter: &Interpreter) -> u8;
     fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String>;
 }
 
@@ -24,7 +24,7 @@ impl fmt::Debug for NativeFunction {
 }
 
 impl Callable for NativeFunction {
-    fn arity(&self) -> u8 {
+    fn arity(&self, _interpreter: &Interpreter) -> u8 {
         self.arity
     }
     fn call(&self, _interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
@@ -42,7 +42,7 @@ pub struct LoxFunction {
 }
 
 impl Callable for LoxFunction {
-    fn arity(&self) -> u8 {
+    fn arity(&self, _interpreter: &Interpreter) -> u8 {
         self.parameters.len().try_into().unwrap()
     }
     fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
@@ -106,11 +106,36 @@ pub struct LoxClass {
 }
 
 impl Callable for LoxClass {
-    fn arity(&self) -> u8 {
-        0
+    fn arity(&self, interpreter: &Interpreter) -> u8 {
+        match self.init(interpreter) {
+            Some(initializer) => initializer.parameters.len().try_into().unwrap(),
+            None => 0,
+        }
     }
-    fn call(&self, interpreter: &mut Interpreter, _args: &[Value]) -> Result<Value, String> {
-        Ok(interpreter.create_instance(&self.name, self.id))
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
+        let instance = interpreter.create_instance(&self.name, self.id);
+
+        if let Some(mut initializer) = self.init(&interpreter) {
+            initializer.this_binding = Some(Box::new(instance.clone()));
+            initializer.call(interpreter, args)?;
+        }
+
+        Ok(instance)
+    }
+}
+
+impl LoxClass {
+    fn init(&self, interpreter: &Interpreter) -> Option<LoxFunction> {
+        match self.methods.get(&String::from("init")) {
+            Some(initializer_id) => match interpreter.lox_functions.get(initializer_id) {
+                Some(initializer) => Some(initializer.clone()),
+                None => panic!(
+                    "Internal interpreter error! couldn't find an initializer method with id {}.",
+                    initializer_id
+                ),
+            },
+            None => None,
+        }
     }
 }
 
@@ -548,11 +573,11 @@ impl Interpreter {
     }
 
     fn this_symbol() -> expr::Symbol {
-        return expr::Symbol {
+        expr::Symbol {
             name: String::from("this"),
             line: 0,
             col: -1,
-        };
+        }
     }
 
     pub fn interpret_expr(&mut self, expr: &expr::Expr) -> Result<Value, String> {
@@ -660,13 +685,13 @@ impl Interpreter {
 
                 match maybe_args {
                     Ok(args) => {
-                        if args.len() != callable.arity().into() {
+                        if args.len() != callable.arity(self).into() {
                             Err(format!(
                                 "Invalid call at line={},col={}: callee has arity {}, but \
                                          was called with {} arguments",
                                 loc.line,
                                 loc.col,
-                                callable.arity(),
+                                callable.arity(self),
                                 args.len()
                             ))
                         } else {
@@ -1138,6 +1163,25 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "LoxInstance(Thing)"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_init_1() {
+        let res = evaluate(
+            "class Foo {\
+               init(val) {\
+                 this.val = val;\
+               }\
+             }\
+             \
+             var foo = Foo(42);\
+             print foo.val;",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42"),
             Err(err) => panic!(err),
         }
     }
