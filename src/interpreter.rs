@@ -126,6 +126,7 @@ impl Callable for LoxFunction {
 #[derive(Clone, Debug)]
 pub struct LoxClass {
     pub name: expr::Symbol,
+    pub superclass: Option<u64>,
     pub id: u64,
     pub methods: HashMap<String, u64>,
 }
@@ -162,6 +163,31 @@ impl LoxClass {
             None => None,
         }
     }
+
+    fn find_method(
+        &self,
+        method_name: &str,
+        interpreter: &Interpreter,
+    ) -> Option<(expr::Symbol, u64)> {
+        if let Some(method_id) = self.methods.get(method_name) {
+            if let Some(lox_fn) = interpreter.lox_functions.get(method_id) {
+                return Some((lox_fn.name.clone(), *method_id));
+            }
+            panic!(
+                "Internal interpreter error! Could not find lox fn with id {}.",
+                method_id
+            );
+        } else if let Some(superclass_id) = self.superclass {
+            if let Some(superclass) = interpreter.lox_classes.get(&superclass_id) {
+                return superclass.find_method(method_name, interpreter);
+            }
+            panic!(
+                "Internal interpreter error! Could not find lox fn with id {}.",
+                superclass_id
+            )
+        }
+        None
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -178,28 +204,20 @@ impl LoxInstance {
             Some(val) => Ok(val.clone()),
             None => {
                 if let Some(cls) = interpreter.lox_classes.get(&self.class_id) {
-                    if let Some(method_id) = cls.methods.get(attr) {
-                        if let Some(lox_fn) = interpreter.lox_functions.get(method_id) {
-                            Ok(Value::LoxFunction(
-                                lox_fn.name.clone(),
-                                *method_id,
-                                Some(Box::new(Value::LoxInstance(
-                                    self.class_name.clone(),
-                                    self.id,
-                                ))),
-                            ))
-                        } else {
-                            panic!(
-                                "Internal interpreter error! Could not find lox fn with id {}.",
-                                method_id
-                            );
-                        }
-                    } else {
-                        Err(format!(
-                            "AttributeError: '{}' instance has no '{}' attribute.",
-                            self.class_name.name, attr
-                        ))
+                    if let Some((func_name, method_id)) = cls.find_method(attr, interpreter) {
+                        return Ok(Value::LoxFunction(
+                            func_name.clone(),
+                            method_id,
+                            Some(Box::new(Value::LoxInstance(
+                                self.class_name.clone(),
+                                self.id,
+                            ))),
+                        ));
                     }
+                    return Err(format!(
+                        "AttributeError: '{}' instance has no '{}' attribute.",
+                        self.class_name.name, attr
+                    ));
                 } else {
                     panic!(
                         "Internal interpreter error! Could not find class with id {}",
@@ -477,7 +495,7 @@ impl Interpreter {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             },
-            expr::Stmt::ClassDecl(sym, _, stmt_methods) => {
+            expr::Stmt::ClassDecl(sym, maybe_superclass, stmt_methods) => {
                 let class_id = self.alloc_id();
                 self.env
                     .define(sym.clone(), Some(Value::LoxClass(sym.clone(), class_id)));
@@ -502,8 +520,31 @@ impl Interpreter {
                     self.lox_functions.insert(func_id, lox_function);
                 }
 
+                let superclass_id = if let Some(superclass_var) = maybe_superclass {
+                    if superclass_var.name == sym.name {
+                        return Err(format!(
+                            "A class cannot inerit from itself (line={}, col={})",
+                            sym.line, sym.col
+                        ));
+                    }
+
+                    let superclass_val =
+                        self.interpret_expr(&expr::Expr::Variable(superclass_var.clone()))?;
+                    if let Value::LoxClass(_, id) = superclass_val {
+                        Some(id)
+                    } else {
+                        return Err(format!(
+                            "Only classes should appear as superclasses. Found {:?}.",
+                            type_of(&superclass_val)
+                        ));
+                    }
+                } else {
+                    None
+                };
+
                 let cls = LoxClass {
                     name: sym.clone(),
+                    superclass: superclass_id,
                     id: class_id,
                     methods,
                 };
@@ -1304,6 +1345,65 @@ mod tests {
                 err,
                 "TypeError: init should only return nil (perhaps implicitly), not Number"
             ),
+        }
+    }
+
+    #[test]
+    fn class_cannot_inherit_from_itself() {
+        let res = evaluate("class Oops < Oops {}");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => assert!(err.starts_with("A class cannot inerit from itself")),
+        }
+    }
+
+    #[test]
+    fn only_classes_can_be_superclasses() {
+        let res = evaluate("var x = 42; class Oops < x {}");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => assert!(err.starts_with("Only classes should appear as superclasses.")),
+        }
+    }
+
+    #[test]
+    fn method_ineritance_1() {
+        let res = evaluate(
+            "class A {\n\
+               f() {\n\
+                 return \"cat\";\n\
+               }\n\
+             }\n\
+             class B < A {}\n\
+             var b = B();\n\
+             print b.f();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "\'cat\'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn method_ineritance_2() {
+        let res = evaluate(
+            "class A {\n\
+               f() {\n\
+                 return \"cat\";\n\
+               }\n\
+             }\n\
+             class B < A {}\n\
+             class C < B {}\n\
+             var c = C();\n\
+             print c.f();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "\'cat\'"),
+            Err(err) => panic!(err),
         }
     }
 }
