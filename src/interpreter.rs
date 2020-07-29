@@ -36,11 +36,13 @@ impl Callable for NativeFunction {
 
 #[derive(Clone, Debug)]
 pub struct LoxFunction {
+    pub id: u64,
     pub name: expr::Symbol,
     pub parameters: Vec<expr::Symbol>,
     pub body: Vec<expr::Stmt>,
     pub closure: Environment,
     pub this_binding: Option<Box<Value>>,
+    pub superclass: Option<u64>,
     pub is_initializer: bool,
 }
 
@@ -69,6 +71,7 @@ impl Callable for LoxFunction {
 
         let saved_env = interpreter.env.clone();
         let saved_retval = interpreter.retval.clone();
+        let saved_enclosing_function = interpreter.enclosing_function;
 
         let mut env = self.closure.clone();
         env.venv.extend(args_env);
@@ -89,9 +92,11 @@ impl Callable for LoxFunction {
         let env = env;
 
         interpreter.env = env;
+        interpreter.enclosing_function = Some(self.id);
         interpreter.interpret(&self.body)?;
 
         let retval = interpreter.retval.clone();
+        interpreter.enclosing_function = saved_enclosing_function;
         interpreter.env = saved_env;
         interpreter.retval = saved_retval;
 
@@ -206,7 +211,7 @@ impl LoxInstance {
                 if let Some(cls) = interpreter.lox_classes.get(&self.class_id) {
                     if let Some((func_name, method_id)) = cls.find_method(attr, interpreter) {
                         return Ok(Value::LoxFunction(
-                            func_name.clone(),
+                            func_name,
                             method_id,
                             Some(Box::new(Value::LoxInstance(
                                 self.class_name.clone(),
@@ -214,10 +219,10 @@ impl LoxInstance {
                             ))),
                         ));
                     }
-                    return Err(format!(
+                    Err(format!(
                         "AttributeError: '{}' instance has no '{}' attribute.",
                         self.class_name.name, attr
-                    ));
+                    ))
                 } else {
                     panic!(
                         "Internal interpreter error! Could not find class with id {}",
@@ -416,6 +421,7 @@ pub struct Interpreter {
     pub globals: Environment,
     pub retval: Option<Value>,
     pub output: Vec<String>,
+    pub enclosing_function: Option<u64>,
 }
 
 impl Default for Interpreter {
@@ -455,6 +461,7 @@ impl Default for Interpreter {
             globals,
             retval: None,
             output: Vec::new(),
+            enclosing_function: None,
         }
     }
 }
@@ -500,26 +507,6 @@ impl Interpreter {
                 self.env
                     .define(sym.clone(), Some(Value::LoxClass(sym.clone(), class_id)));
 
-                let mut methods = HashMap::new();
-                for method in stmt_methods.iter() {
-                    let func_id = self.alloc_id();
-
-                    methods.insert(method.name.name.clone(), func_id);
-
-                    let is_initializer = method.name.name == INIT;
-
-                    let lox_function = LoxFunction {
-                        name: method.name.clone(),
-                        parameters: method.params.clone(),
-                        body: method.body.clone(),
-                        closure: self.env.clone(),
-                        this_binding: None,
-                        is_initializer,
-                    };
-
-                    self.lox_functions.insert(func_id, lox_function);
-                }
-
                 let superclass_id = if let Some(superclass_var) = maybe_superclass {
                     if superclass_var.name == sym.name {
                         return Err(format!(
@@ -541,6 +528,28 @@ impl Interpreter {
                 } else {
                     None
                 };
+
+                let mut methods = HashMap::new();
+                for method in stmt_methods.iter() {
+                    let func_id = self.alloc_id();
+
+                    methods.insert(method.name.name.clone(), func_id);
+
+                    let is_initializer = method.name.name == INIT;
+
+                    let lox_function = LoxFunction {
+                        id: func_id,
+                        name: method.name.clone(),
+                        parameters: method.params.clone(),
+                        body: method.body.clone(),
+                        closure: self.env.clone(),
+                        this_binding: None,
+                        superclass: superclass_id,
+                        is_initializer,
+                    };
+
+                    self.lox_functions.insert(func_id, lox_function);
+                }
 
                 let cls = LoxClass {
                     name: sym.clone(),
@@ -564,11 +573,13 @@ impl Interpreter {
                 );
 
                 let lox_function = LoxFunction {
+                    id: func_id,
                     name: name.clone(),
                     parameters: parameters.clone(),
                     body: body.clone(),
                     closure: self.env.clone(),
                     this_binding: None,
+                    superclass: None,
                     is_initializer: false,
                 };
 
@@ -690,7 +701,49 @@ impl Interpreter {
                     Ok(self.interpret_expr(right_expr)?)
                 }
             }
-            expr::Expr::Super(_, _) => unimplemented!(),
+            expr::Expr::Super(source_location, sym) => match self.enclosing_function {
+                Some(func_id) => match self.lox_functions.get(&func_id) {
+                    Some(func) => {
+                        match &func.superclass {
+                            Some(superclass_id) => {
+                                if let Some(superclass) = self.lox_classes.get(&superclass_id) {
+                                    if let Some((func_name, method_id)) = superclass.find_method(&sym.name, &self) {
+                                        if let Some(method) = self.lox_functions.get(&method_id) {
+                                            Ok(Value::LoxFunction(
+                                                func_name,
+                                                method.id,
+                                                func.this_binding.clone()))
+                                        }
+                                        else {
+                                            panic!("Internal interpreter error! Could not find method with id {}.",
+                                                   method_id)
+                                        }
+                                    }
+                                    else {
+                                        Err(format!("no superclass has method {} at line={}, col={}",
+                                                    sym.name, source_location.line, source_location.col))
+                                    }
+                                }
+                                else {
+                                    panic!("Internal interpreter error! Couldn't find class with id {}",
+                                           superclass_id)
+                                }
+                            }
+                            _ => {
+                                Err(format!("Super expression not enclosed in a method definition at line={}, col={}.",
+                                    source_location.line, source_location.col))
+                            }
+                        }}
+                    None => panic!(
+                        "Internal interpreter error! Couldn't find func with id {}.",
+                        func_id
+                    ),
+                },
+                None => Err(format!(
+                    "super expression not enclosed in a function at line={}, col={}.",
+                    source_location.line, source_location.col
+                )),
+            },
         }
     }
 
@@ -1404,6 +1457,58 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'cat\'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn illegal_super_expressions_1() {
+        let res = evaluate("super + 1");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => assert!(err.starts_with("Expected token Dot")),
+        }
+    }
+
+    #[test]
+    fn illegal_super_expressions_2() {
+        let res = evaluate("fun f() { return super.g(); }\nprint f();");
+
+        match res {
+            Ok(output) => panic!(output),
+            Err(err) => {
+                assert!(err.starts_with("Super expression not enclosed in a method definition"))
+            }
+        }
+    }
+
+    #[test]
+    fn test_super_1() {
+        let res = evaluate(
+            "class A {\n\
+               method() {\n\
+                 print \"A method\";\n\
+               }\n\
+             }\n\
+             \n\
+             class B < A {\n\
+               method() {\n\
+                 print \"B method\";\n\
+               }\n\
+               \n\
+               test() {\n\
+                 super.method();\n\
+               }\n\
+             }\n\
+             \n\
+             class C < B {}\n\
+             \n\
+             C().test();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "'A method'"),
             Err(err) => panic!(err),
         }
     }

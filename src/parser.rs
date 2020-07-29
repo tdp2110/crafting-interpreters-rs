@@ -311,7 +311,7 @@ impl Parser {
             None
         };
 
-        if let Some(_) = maybe_retval {
+        if maybe_retval.is_some() {
             self.consume(
                 scanner::TokenType::Semicolon,
                 "Expected ; after return value",
