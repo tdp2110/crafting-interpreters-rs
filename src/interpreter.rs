@@ -690,6 +690,7 @@ impl Interpreter {
                     Ok(self.interpret_expr(right_expr)?)
                 }
             }
+            expr::Expr::Super(_, _) => unimplemented!(),
         }
     }
 

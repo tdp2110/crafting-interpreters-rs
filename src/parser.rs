@@ -97,10 +97,10 @@ unary → ( "!" | "-" ) unary | call ;
 call → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments → expression ( "," expression )* ;
 
-primary → "true" | "false" | "nil"
-        | NUMBER | STRING
-        | "(" expression ")"
-        | IDENTIFIER ;
+primary → "true" | "false" | "nil" | "this"
+        | NUMBER | STRING | IDENTIFIER | "(" expression ")"
+        | "super" "." IDENTIFIER ;
+
 */
 impl Parser {
     pub fn parse(&mut self) -> Result<Vec<expr::Stmt>, String> {
@@ -628,6 +628,25 @@ impl Parser {
         }
         if self.matches(scanner::TokenType::Nil) {
             return Ok(expr::Expr::Literal(expr::Literal::Nil));
+        }
+        if self.matches(scanner::TokenType::Super) {
+            let super_tok = self.previous().clone();
+            self.consume(scanner::TokenType::Dot, "Expected '.' after 'super'.")?;
+            let method_tok = self.consume(
+                scanner::TokenType::Identifier,
+                "Expected superclass method name.",
+            )?;
+            return Ok(expr::Expr::Super(
+                expr::SourceLocation {
+                    line: super_tok.line,
+                    col: super_tok.col,
+                },
+                expr::Symbol {
+                    name: String::from_utf8(method_tok.lexeme.clone()).unwrap(),
+                    line: method_tok.line,
+                    col: method_tok.col,
+                },
+            ));
         }
         if self.matches(scanner::TokenType::Number) {
             match &self.previous().literal {

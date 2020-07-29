@@ -11,6 +11,7 @@ pub enum Expr {
     Assign(Symbol, Box<Expr>),
     Logical(Box<Expr>, LogicalOp, Box<Expr>),
     Set(Box<Expr>, Symbol, Box<Expr>),
+    Super(SourceLocation, Symbol),
 }
 
 #[derive(Debug, Clone)]
