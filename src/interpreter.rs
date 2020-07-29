@@ -389,7 +389,7 @@ impl Environment {
             LookupResult::UndefAndNotDeclared => match &self.enclosing {
                 Some(enclosing) => enclosing.get(sym),
                 None => Err(format!(
-                    "Use of undefined variable {} at line={},col-{}.\nNote: {} was never declared.",
+                    "Use of undefined variable {} at line={},col={}.\nNote: {} was never declared.",
                     &sym.name, sym.line, sym.col, &sym.name
                 )),
             },
@@ -1276,8 +1276,8 @@ mod tests {
         let res = evaluate(
             "class Cake {\
                taste() {\
-               var adjective = \"delicious\";\
-               print \"The \" + this.flavor + \" cake is \" + adjective + \"!\";\
+                 var adjective = \"delicious\";\
+                 print \"The \" + this.flavor + \" cake is \" + adjective + \"!\";\
                }\
              }\
              \
@@ -1311,6 +1311,28 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "LoxInstance(Thing)"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_method_this_binding_3() {
+        let res = evaluate(
+            "class Foo {\n
+               init(x) {\n\
+                 this.x = x;\n\
+               }\n\
+               getX() {\n\
+                 return this.x;\n\
+               }\n\
+             }\n\
+             \n\
+             var foo = Foo(42);
+             print foo.getX();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42"),
             Err(err) => panic!(err),
         }
     }
@@ -1499,6 +1521,37 @@ mod tests {
                \n\
                test() {\n\
                  super.method();\n\
+               }\n\
+             }\n\
+             \n\
+             class C < B {}\n\
+             \n\
+             C().test();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "'A method'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_super_2() {
+        let res = evaluate(
+            "class A {\n\
+               method() {\n\
+                 print \"A method\";\n\
+               }\n\
+             }\n\
+             \n\
+             class B < A {\n\
+               method() {\n\
+                 print \"B method\";\n\
+               }\n\
+               \n\
+               test() {\n\
+                 var method = super.method;\n\
+                 method();\n\
                }\n\
              }\n\
              \n\
