@@ -2,9 +2,9 @@ use std::env;
 use std::fs;
 
 mod expr;
-mod interpreter;
 mod parser;
 mod scanner;
+mod treewalk_interpreter;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -22,14 +22,14 @@ fn main() {
 
                 match stmts_maybe {
                     Ok(stmts) => {
-                        let interpret_result = interpreter::interpret(&stmts);
+                        let interpret_result = treewalk_interpreter::interpret(&stmts);
 
                         match interpret_result {
                             Ok(output) => {
                                 println!("{}", output);
                             }
                             Err(err) => {
-                                println!("Interpreter Error: {}", err);
+                                println!("Treewalk Interpreter Error: {}", err);
                                 std::process::exit(-1);
                             }
                         }

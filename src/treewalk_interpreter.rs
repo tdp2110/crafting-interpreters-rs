@@ -971,14 +971,14 @@ impl Interpreter {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter;
     use crate::parser;
     use crate::scanner;
+    use crate::treewalk_interpreter;
 
     fn evaluate(code: &str) -> Result<String, String> {
         let tokens = scanner::scan_tokens(code.to_string()).unwrap();
         let stmts = parser::parse(tokens)?;
-        interpreter::interpret(&stmts)
+        treewalk_interpreter::interpret(&stmts)
     }
 
     #[test]
