@@ -1588,4 +1588,32 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
+    #[test]
+    fn test_super_3() {
+        let res = evaluate(
+            "class A {\n\
+               f() {\n\
+                 return this.attr;
+               }\n\
+             }\n\
+             class B < A {\n\
+               init(attr) {\n\
+                 this.attr = attr;\n\
+               }\n\
+               f() {\n\
+               }\n\
+               g() {\n\
+                 super.f();\n\
+               }\n\
+             }\n\
+             var b = B(42);\n\
+             print b.g();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42"),
+            Err(err) => panic!(err),
+        }
+    }
 }
