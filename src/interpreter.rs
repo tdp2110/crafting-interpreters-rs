@@ -1445,7 +1445,7 @@ mod tests {
     }
 
     #[test]
-    fn method_ineritance_1() {
+    fn method_inheritance_1() {
         let res = evaluate(
             "class A {\n\
                f() {\n\
@@ -1464,7 +1464,7 @@ mod tests {
     }
 
     #[test]
-    fn method_ineritance_2() {
+    fn method_inheritance_2() {
         let res = evaluate(
             "class A {\n\
                f() {\n\
@@ -1484,7 +1484,7 @@ mod tests {
     }
 
     #[test]
-    fn method_ineritance_3() {
+    fn method_inheritance_3() {
         let res = evaluate(
             "class A {\n\
                f() {\n\
