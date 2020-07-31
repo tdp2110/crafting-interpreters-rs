@@ -77,7 +77,7 @@ impl Callable for LoxFunction {
         env.venv.extend(args_env);
 
         if let Some(this_val) = &self.this_binding {
-            // this is just used for lookup on name. source location is meaningless and unused
+            // this is just used for lookup on name. source location is meaningless and unused`
             let this_symbol = Interpreter::this_symbol(0, -1);
             env.venv.insert(
                 this_symbol.name,
@@ -382,7 +382,7 @@ impl Environment {
         match self.lookup(&sym) {
             LookupResult::Ok(val) => Ok(&val),
             LookupResult::UndefButDeclared(source_location) => Err(format!(
-                "Use of undefined variable {} at line={},col={}.\
+                "Use of undefined variable '{}' at line={},col={}.\
                 \nNote: {} was previously declared at line={},col={}, \
                 but was never defined.",
                 &sym.name, sym.line, sym.col, &sym.name, source_location.line, source_location.col
@@ -1498,6 +1498,27 @@ mod tests {
                }\n\
              }\n\
              var b = B(42);\n\
+             print b.f();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn method_inheritance_4() {
+        let res = evaluate(
+            "class A {\n\
+               f() {\n\
+                 return this.attr;
+               }\n\
+             }\n\
+             class B < A {\n\
+             }\n\
+             var b = B();\n\
+             b.attr = 12;
              print b.f();",
         );
 
