@@ -1,7 +1,7 @@
 #[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Literal),
-    This,
+    This(SourceLocation),
     Unary(UnaryOp, Box<Expr>),
     Binary(Box<Expr>, BinaryOp, Box<Expr>),
     Call(Box<Expr>, SourceLocation, Vec<Expr>),
@@ -14,7 +14,7 @@ pub enum Expr {
     Super(SourceLocation, Symbol),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct SourceLocation {
     pub line: usize,
     pub col: i64,

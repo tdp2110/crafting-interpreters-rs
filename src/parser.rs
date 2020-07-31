@@ -673,7 +673,11 @@ impl Parser {
             }
         }
         if self.matches(scanner::TokenType::This) {
-            return Ok(expr::Expr::This);
+            let prev = self.previous();
+            return Ok(expr::Expr::This(expr::SourceLocation {
+                line: prev.line,
+                col: prev.col,
+            }));
         }
         if self.matches(scanner::TokenType::Identifier) {
             match &self.previous().literal {
