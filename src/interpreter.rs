@@ -1484,6 +1484,29 @@ mod tests {
     }
 
     #[test]
+    fn method_ineritance_3() {
+        let res = evaluate(
+            "class A {\n\
+               f() {\n\
+                 return this.attr;
+               }\n\
+             }\n\
+             class B < A {\n\
+               init(attr) {\n\
+                 this.attr = attr;\n\
+               }\n\
+             }\n\
+             var b = B(42);\n\
+             print b.f();",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "42"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
     fn illegal_super_expressions_1() {
         let res = evaluate("super + 1");
 
