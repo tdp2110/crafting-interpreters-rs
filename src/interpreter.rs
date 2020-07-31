@@ -89,6 +89,19 @@ impl Callable for LoxFunction {
                     },
                 ),
             );
+        } else if let Ok(this_val) = interpreter.lookup(&Interpreter::this_symbol(0, -1)) {
+            // this is just used for lookup on name. source location is meaningless and unused`
+            let this_symbol = Interpreter::this_symbol(0, -1);
+            env.venv.insert(
+                this_symbol.name,
+                (
+                    Some(this_val.clone()),
+                    SourceLocation {
+                        line: this_symbol.line,
+                        col: this_symbol.col,
+                    },
+                ),
+            );
         }
         let env = env;
 
@@ -1518,7 +1531,7 @@ mod tests {
              class B < A {\n\
              }\n\
              var b = B();\n\
-             b.attr = 12;
+             b.attr = 42;
              print b.f();",
         );
 
@@ -1624,9 +1637,10 @@ mod tests {
                  this.attr = attr;\n\
                }\n\
                f() {\n\
+                 return 1337;
                }\n\
                g() {\n\
-                 super.f();\n\
+                 return super.f();\n\
                }\n\
              }\n\
              var b = B(42);\n\
