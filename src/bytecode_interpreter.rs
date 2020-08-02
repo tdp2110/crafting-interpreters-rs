@@ -6,36 +6,6 @@ pub enum Value {
     Number(f64),
 }
 
-fn negate(val: Value) -> Value {
-    match val {
-        Value::Number(num) => Value::Number(-num),
-    }
-}
-
-fn add(val1: Value, val2: Value) -> Value {
-    match (val1, val2) {
-        (Value::Number(num1), Value::Number(num2)) => Value::Number(num1 + num2),
-    }
-}
-
-fn multiply(val1: Value, val2: Value) -> Value {
-    match (val1, val2) {
-        (Value::Number(num1), Value::Number(num2)) => Value::Number(num1 * num2),
-    }
-}
-
-fn divide(val1: Value, val2: Value) -> Value {
-    match (val1, val2) {
-        (Value::Number(num1), Value::Number(num2)) => Value::Number(num1 * num2),
-    }
-}
-
-fn subtract(val1: Value, val2: Value) -> Value {
-    match (val1, val2) {
-        (Value::Number(num1), Value::Number(num2)) => Value::Number(num1 - num2),
-    }
-}
-
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -102,54 +72,52 @@ impl Default for Interpreter {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 #[allow(dead_code)]
-pub enum InterpreterResult {
-    Ok,
-    CompileError,
-    RuntimeError,
+pub enum InterpreterError {
+    Compile(String),
+    Runtime(String),
 }
 
 impl Interpreter {
-    pub fn interpret(&mut self, chunk: Chunk) -> InterpreterResult {
+    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), InterpreterError> {
         self.chunk = chunk;
         return self.run();
     }
 
-    fn run(&mut self) -> InterpreterResult {
+    fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
             match self.next_op() {
                 (Op::Return, _) => {
-                    println!("{:?}", self.stack.pop());
-                    return InterpreterResult::Ok;
+                    return Ok(());
                 }
                 (Op::Constant(idx), _) => {
                     let constant = self.read_constant(idx);
                     self.stack.push(constant);
                 }
                 (Op::Negate, _) => {
-                    let res = negate(self.pop_stack());
-                    self.stack.push(res)
+                    let to_negate = self.pop_stack();
+                    self.stack.push(Interpreter::negate(to_negate)?)
                 }
                 (Op::Add, _) => {
                     let left = self.pop_stack();
                     let right = self.pop_stack();
-                    self.stack.push(add(left, right))
+                    self.stack.push(Interpreter::add(left, right)?)
                 }
                 (Op::Subtract, _) => {
                     let left = self.pop_stack();
                     let right = self.pop_stack();
-                    self.stack.push(subtract(left, right))
+                    self.stack.push(Interpreter::subtract(left, right)?)
                 }
                 (Op::Multiply, _) => {
                     let left = self.pop_stack();
                     let right = self.pop_stack();
-                    self.stack.push(multiply(left, right))
+                    self.stack.push(Interpreter::multiply(left, right)?)
                 }
                 (Op::Divide, _) => {
                     let left = self.pop_stack();
                     let right = self.pop_stack();
-                    self.stack.push(divide(left, right))
+                    self.stack.push(Interpreter::divide(left, right)?)
                 }
             }
         }
@@ -170,6 +138,36 @@ impl Interpreter {
 
     fn read_constant(&self, idx: usize) -> Value {
         self.chunk.constants[idx]
+    }
+
+    fn negate(val: Value) -> Result<Value, InterpreterError> {
+        match val {
+            Value::Number(num) => Ok(Value::Number(-num)),
+        }
+    }
+
+    fn add(val1: Value, val2: Value) -> Result<Value, InterpreterError> {
+        match (val1, val2) {
+            (Value::Number(num1), Value::Number(num2)) => Ok(Value::Number(num1 + num2)),
+        }
+    }
+
+    fn multiply(val1: Value, val2: Value) -> Result<Value, InterpreterError> {
+        match (val1, val2) {
+            (Value::Number(num1), Value::Number(num2)) => Ok(Value::Number(num1 * num2)),
+        }
+    }
+
+    fn divide(val1: Value, val2: Value) -> Result<Value, InterpreterError> {
+        match (val1, val2) {
+            (Value::Number(num1), Value::Number(num2)) => Ok(Value::Number(num1 * num2)),
+        }
+    }
+
+    fn subtract(val1: Value, val2: Value) -> Result<Value, InterpreterError> {
+        match (val1, val2) {
+            (Value::Number(num1), Value::Number(num2)) => Ok(Value::Number(num1 - num2)),
+        }
     }
 }
 
@@ -193,6 +191,6 @@ mod tests {
 
         let res = Interpreter::default().interpret(code);
 
-        assert_eq!(res, InterpreterResult::Ok)
+        assert!(res.is_ok())
     }
 }
