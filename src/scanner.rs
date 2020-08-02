@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 #[allow(dead_code)]
@@ -59,13 +60,27 @@ pub enum Literal {
     Number(f64),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Token {
     pub ty: TokenType,
     pub lexeme: Vec<u8>,
     pub literal: Option<Literal>,
     pub line: usize,
     pub col: i64,
+}
+
+impl fmt::Debug for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Token {{ ty: {:?}, lexeme: \"{}\", literal: {:?}, line: {:?}, col: {:?}}}",
+            self.ty,
+            String::from_utf8(self.lexeme.clone()).unwrap(),
+            self.literal,
+            self.line,
+            self.col
+        )
+    }
 }
 
 pub fn scan_tokens(input: String) -> Result<Vec<Token>, String> {

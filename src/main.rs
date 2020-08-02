@@ -45,7 +45,7 @@ fn main() {
             Ok(input) => match scanner::scan_tokens(input) {
                 Ok(tokens) => {
                     if matches.is_present(SHOW_TOKENS_STR) {
-                        println!("tokens: {:?}", tokens);
+                        println!("tokens: {:#?}", tokens);
                         std::process::exit(0);
                     }
 
@@ -54,7 +54,7 @@ fn main() {
                     match stmts_maybe {
                         Ok(stmts) => {
                             if matches.is_present(SHOW_AST_STR) {
-                                println!("AST: {:?}", stmts);
+                                println!("AST: {:#?}", stmts);
                                 std::process::exit(0);
                             }
 
