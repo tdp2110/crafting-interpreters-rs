@@ -4,6 +4,7 @@ use clap::{App, Arg};
 
 use std::fs;
 
+mod bytecode_interpreter;
 mod expr;
 mod parser;
 mod scanner;
