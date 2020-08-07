@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::scanner;
+
 #[derive(Copy, Clone)]
 pub enum Value {
     Number(f64),
@@ -33,6 +35,54 @@ pub struct Lineno(usize);
 pub struct Chunk {
     code: Vec<(Op, Lineno)>,
     constants: Vec<Value>,
+}
+
+#[derive(Default)]
+pub struct Compiler {
+    tokens: Vec<scanner::Token>,
+    current_chunk: Chunk,
+    current: usize,
+}
+
+impl Compiler {
+    fn compile(&mut self, input: String) -> Result<Chunk, String> {
+        match scanner::scan_tokens(input) {
+            Ok(tokens) => {
+                self.tokens = tokens;
+                self.current_chunk = Chunk::default();
+                self.expression()?;
+                Ok(std::mem::replace(&mut self.current_chunk, Chunk::default()))
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn number(&mut self) -> Result<(), String> {
+        let current_tok = &self.tokens[self.current];
+        let lineno = current_tok.line;
+        match current_tok.literal {
+            Some(scanner::Literal::Number(n)) => {
+                self.emit_constant(n, lineno);
+                Ok(())
+            }
+            _ => Err(format!(
+                "Expected number at line={},col={}",
+                current_tok.line, current_tok.col
+            )),
+        }
+    }
+
+    fn emit_constant(&mut self, n: f64, lineno: usize) {
+        let const_idx = self.current_chunk.constants.len();
+        self.current_chunk.constants.push(Value::Number(n));
+        self.current_chunk
+            .code
+            .push((Op::Constant(const_idx), Lineno(lineno)));
+    }
+
+    fn expression(&mut self) -> Result<(), String> {
+        unimplemented!();
+    }
 }
 
 #[allow(dead_code)]
