@@ -4,11 +4,14 @@ use clap::{App, Arg};
 
 use std::fs;
 
+mod bytecode;
 mod bytecode_interpreter;
+mod compiler;
 mod expr;
 mod parser;
 mod scanner;
 mod treewalk_interpreter;
+mod value;
 
 static INPUT_STR: &str = "INPUT";
 static SHOW_TOKENS_STR: &str = "tokens";
