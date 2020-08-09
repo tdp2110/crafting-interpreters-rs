@@ -1,5 +1,4 @@
 use crate::bytecode;
-use crate::scanner;
 use crate::value;
 
 #[allow(dead_code)]
@@ -51,7 +50,7 @@ pub enum InterpreterError {
 impl Interpreter {
     pub fn interpret(&mut self, chunk: bytecode::Chunk) -> Result<(), InterpreterError> {
         self.chunk = chunk;
-        return self.run();
+        self.run()
     }
 
     fn run(&mut self) -> Result<(), InterpreterError> {

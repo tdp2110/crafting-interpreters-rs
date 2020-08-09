@@ -15,10 +15,7 @@ impl Compiler {
                 self.tokens = tokens;
                 self.current_chunk = bytecode::Chunk::default();
                 self.expression()?;
-                Ok(std::mem::replace(
-                    &mut self.current_chunk,
-                    bytecode::Chunk::default(),
-                ))
+                Ok(std::mem::take(&mut self.current_chunk))
             }
             Err(err) => Err(err),
         }
