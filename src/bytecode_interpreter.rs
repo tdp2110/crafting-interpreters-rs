@@ -37,6 +37,14 @@ pub struct Chunk {
     constants: Vec<Value>,
 }
 
+impl Chunk {
+    fn add_constant(&mut self, c: f64) -> usize {
+        let const_idx = self.constants.len();
+        self.constants.push(Value::Number(c));
+        const_idx
+    }
+}
+
 #[derive(Default)]
 pub struct Compiler {
     tokens: Vec<scanner::Token>,
@@ -45,7 +53,7 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    fn compile(&mut self, input: String) -> Result<Chunk, String> {
+    pub fn compile(&mut self, input: String) -> Result<Chunk, String> {
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
                 self.tokens = tokens;
@@ -53,6 +61,21 @@ impl Compiler {
                 self.expression()?;
                 Ok(std::mem::replace(&mut self.current_chunk, Chunk::default()))
             }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn expression(&mut self) -> Result<(), String> {
+        unimplemented!();
+    }
+
+    fn grouping(&mut self) -> Result<(), String> {
+        self.expression()?;
+        match self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ')' after expression.",
+        ) {
+            Ok(_) => Ok(()),
             Err(err) => Err(err),
         }
     }
@@ -72,16 +95,76 @@ impl Compiler {
         }
     }
 
-    fn emit_constant(&mut self, n: f64, lineno: usize) {
-        let const_idx = self.current_chunk.constants.len();
-        self.current_chunk.constants.push(Value::Number(n));
-        self.current_chunk
-            .code
-            .push((Op::Constant(const_idx), Lineno(lineno)));
+    fn unary(&mut self) -> Result<(), String> {
+        let operator = self.previous().clone();
+
+        self.expression()?;
+
+        match operator.ty {
+            scanner::TokenType::Minus => {
+                self.emit_op(Op::Negate, operator.line);
+                Ok(())
+            }
+            _ => Err(format!(
+                "Invalid token in unary op {:?} at line={},col={}",
+                operator.ty, operator.line, operator.col
+            )),
+        }
     }
 
-    fn expression(&mut self) -> Result<(), String> {
-        unimplemented!();
+    fn emit_constant(&mut self, n: f64, lineno: usize) {
+        let const_idx = self.current_chunk.add_constant(n);
+        self.emit_op(Op::Constant(const_idx), lineno);
+    }
+
+    fn emit_op(&mut self, op: Op, lineno: usize) {
+        self.current_chunk.code.push((op, Lineno(lineno)))
+    }
+
+    fn consume(
+        &mut self,
+        tok: scanner::TokenType,
+        on_err_str: &str,
+    ) -> Result<&scanner::Token, String> {
+        if self.check(tok) {
+            return Ok(self.advance());
+        }
+        Err(format!(
+            "Expected token {:?}, but found token {:?} at line={},col={}: {}",
+            tok,
+            self.peek().ty,
+            self.peek().line,
+            self.peek().col,
+            on_err_str
+        ))
+    }
+
+    fn check(&self, ty: scanner::TokenType) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
+        self.peek().ty == ty
+    }
+
+    fn advance(&mut self) -> &scanner::Token {
+        if !self.is_at_end() {
+            self.current += 1
+        }
+
+        self.previous()
+    }
+
+    fn previous(&self) -> &scanner::Token {
+        &self.tokens[self.current - 1]
+    }
+
+    fn is_at_end(&self) -> bool {
+        self.peek().ty == scanner::TokenType::Eof
+    }
+
+    fn peek(&self) -> &scanner::Token {
+        &self.tokens[self.current]
     }
 }
 
