@@ -145,6 +145,10 @@ impl Compiler {
                 self.emit_op(bytecode::Op::Negate, operator.line);
                 Ok(())
             }
+            scanner::TokenType::Bang => {
+                self.emit_op(bytecode::Op::Not, operator.line);
+                Ok(())
+            }
             _ => Err(format!(
                 "Invalid token in unary op {:?} at line={},col={}",
                 operator.ty, operator.line, operator.col
@@ -320,7 +324,7 @@ impl Compiler {
                 precedence: Precedence::Factor,
             },
             scanner::TokenType::Bang => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::Unary),
                 infix: None,
                 precedence: Precedence::None,
             },
