@@ -71,7 +71,7 @@ impl Compiler {
 
         match tok.literal {
             Some(scanner::Literal::Number(n)) => {
-                self.emit_constant(n, tok.line);
+                self.emit_number(n, tok.line);
                 Ok(())
             }
             _ => panic!(
@@ -129,7 +129,7 @@ impl Compiler {
         }
     }
 
-    fn emit_constant(&mut self, n: f64, lineno: usize) {
+    fn emit_number(&mut self, n: f64, lineno: usize) {
         let const_idx = self.current_chunk.add_constant(n);
         self.emit_op(bytecode::Op::Constant(const_idx), lineno);
     }
