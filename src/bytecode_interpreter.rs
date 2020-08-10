@@ -30,6 +30,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 enum Binop {
     Add,
     Sub,
@@ -216,33 +217,24 @@ impl Interpreter {
         binop: Binop,
         lineno: bytecode::Lineno,
     ) -> Result<(), InterpreterError> {
-        let top_stack = self.peek();
-        let maybe_left = Interpreter::extract_number(top_stack);
+        let val1 = self.peek_by(0).clone();
+        let val2 = self.peek_by(1).clone();
 
-        match maybe_left {
-            Some(left) => {
+        match (&val1, &val2) {
+            (value::Value::Number(n1), value::Value::Number(n2)) => {
                 self.pop_stack();
-                let top_stack = self.peek();
-                let maybe_right = Interpreter::extract_number(top_stack);
-                match maybe_right {
-                    Some(right) => {
-                        self.pop_stack();
-                        self.stack
-                            .push(value::Value::Number(Interpreter::apply_numeric_binop(
-                                left, right, binop,
-                            )));
-                        Ok(())
-                    }
-                    None => Err(InterpreterError::Runtime(format!(
-                        "invalid operand of type {:?} at line {}",
-                        value::type_of(top_stack),
-                        lineno.value
-                    ))),
-                }
+                self.pop_stack();
+                self.stack
+                    .push(value::Value::Number(Interpreter::apply_numeric_binop(
+                        *n1, *n2, binop,
+                    )));
+                Ok(())
             }
-            None => Err(InterpreterError::Runtime(format!(
-                "invalid operand of type {:?} at line {}",
-                value::type_of(top_stack),
+            _ => Err(InterpreterError::Runtime(format!(
+                "Expected numbers in {:?} expression. Found {:?} and {:?} (line={})",
+                binop,
+                value::type_of(&val1),
+                value::type_of(&val2),
                 lineno.value
             ))),
         }
