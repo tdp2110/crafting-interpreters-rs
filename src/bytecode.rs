@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::value;
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug)]
 pub struct Lineno {
     pub value: usize,
 }

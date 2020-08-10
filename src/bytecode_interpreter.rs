@@ -150,6 +150,7 @@ impl Interpreter {
 #[cfg(test)]
 mod tests {
     use crate::bytecode_interpreter::*;
+    use crate::compiler::*;
 
     #[test]
     fn test_interpret_handcoded_bytecode() {
@@ -172,5 +173,12 @@ mod tests {
         let res = Interpreter::default().interpret(code);
 
         assert!(res.is_ok())
+    }
+
+    #[test]
+    fn test_compiler_1() {
+        let code_or_err = Compiler::default().compile(String::from("-2*3 + (-4/2)"));
+
+        assert!(code_or_err.is_ok())
     }
 }
