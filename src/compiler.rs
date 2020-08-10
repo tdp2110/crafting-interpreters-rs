@@ -29,6 +29,7 @@ enum ParseFn {
     Unary,
     Binary,
     Number,
+    Literal,
 }
 
 struct ParseRule {
@@ -78,6 +79,28 @@ impl Compiler {
                 "Expected number at line={},col={}. current token {:?}",
                 tok.line, tok.col, tok
             ),
+        }
+    }
+
+    fn literal(&mut self) -> Result<(), String> {
+        let tok = self.previous().clone();
+
+        match tok.ty {
+            scanner::TokenType::Nil => {
+                self.emit_op(bytecode::Op::Nil, tok.line);
+                Ok(())
+            }
+            scanner::TokenType::True => {
+                self.emit_op(bytecode::Op::True, tok.line);
+                Ok(())
+            }
+            scanner::TokenType::False => {
+                self.emit_op(bytecode::Op::False, tok.line);
+                Ok(())
+            }
+            _ => {
+                panic!("shouldn't get in literal with tok = {:?}.", tok);
+            }
         }
     }
 
@@ -169,6 +192,7 @@ impl Compiler {
             ParseFn::Unary => self.unary(),
             ParseFn::Binary => self.binary(),
             ParseFn::Number => self.number(),
+            ParseFn::Literal => self.literal(),
         }
     }
 
@@ -366,7 +390,7 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::False => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::Literal),
                 infix: None,
                 precedence: Precedence::None,
             },
@@ -386,7 +410,7 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::Nil => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::Literal),
                 infix: None,
                 precedence: Precedence::None,
             },
@@ -416,7 +440,7 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::True => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::Literal),
                 infix: None,
                 precedence: Precedence::None,
             },

@@ -17,6 +17,9 @@ pub fn Lineno(value: usize) -> Lineno {
 pub enum Op {
     Return,
     Constant(usize),
+    Nil,
+    True,
+    False,
     Negate,
     Add,
     Subtract,

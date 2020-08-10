@@ -12,6 +12,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Constant(const_idx) => {
                 print!("OP_CONSTANT {:?}", chunk.constants[*const_idx])
             }
+            bytecode::Op::Nil => print!("OP_NIL"),
+            bytecode::Op::True => print!("OP_TRUE"),
+            bytecode::Op::False => print!("OP_FALSE"),
             bytecode::Op::Negate => print!("OP_NEGATE"),
             bytecode::Op::Add => print!("OP_ADD"),
             bytecode::Op::Subtract => print!("OP_SUBTRACT"),
@@ -69,6 +72,15 @@ impl Interpreter {
                 (bytecode::Op::Constant(idx), _) => {
                     let constant = self.read_constant(idx);
                     self.stack.push(constant);
+                }
+                (bytecode::Op::Nil, _) => {
+                    self.stack.push(value::Value::Nil);
+                }
+                (bytecode::Op::True, _) => {
+                    self.stack.push(value::Value::Bool(true));
+                }
+                (bytecode::Op::False, _) => {
+                    self.stack.push(value::Value::Bool(false));
                 }
                 (bytecode::Op::Negate, lineno) => {
                     let top_stack = self.peek();
