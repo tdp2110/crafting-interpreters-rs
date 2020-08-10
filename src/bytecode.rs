@@ -38,9 +38,17 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn add_constant(&mut self, c: f64) -> usize {
+    pub fn add_constant_number(&mut self, c: f64) -> usize {
+        self.add_constant(value::Value::Number(c))
+    }
+
+    pub fn add_constant_string(&mut self, s: String) -> usize {
+        self.add_constant(value::Value::String(s))
+    }
+
+    fn add_constant(&mut self, val: value::Value) -> usize {
         let const_idx = self.constants.len();
-        self.constants.push(value::Value::Number(c));
+        self.constants.push(val);
         const_idx
     }
 }

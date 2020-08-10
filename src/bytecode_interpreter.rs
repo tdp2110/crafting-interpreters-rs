@@ -74,7 +74,7 @@ impl Interpreter {
                     return Ok(());
                 }
                 (bytecode::Op::Constant(idx), _) => {
-                    let constant = self.read_constant(idx);
+                    let constant = self.read_constant(idx).clone();
                     self.stack.push(constant);
                 }
                 (bytecode::Op::Nil, _) => {
@@ -139,13 +139,13 @@ impl Interpreter {
                     let val1 = self.pop_stack();
                     let val2 = self.pop_stack();
                     self.stack
-                        .push(value::Value::Bool(Interpreter::values_equal(val1, val2)));
+                        .push(value::Value::Bool(Interpreter::values_equal(&val1, &val2)));
                 }
                 (bytecode::Op::Greater, lineno) => {
-                    let val1 = self.peek_by(0);
-                    let val2 = self.peek_by(1);
+                    let val1 = self.peek_by(0).clone();
+                    let val2 = self.peek_by(1).clone();
 
-                    match (val1, val2) {
+                    match (&val1, &val2) {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
@@ -153,15 +153,15 @@ impl Interpreter {
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Greater expression. Expected numbers, found {:?} and {:?} at line {}",
-                            value::type_of(val1), value::type_of(val2), lineno.value)))
+                            value::type_of(&val1), value::type_of(&val2), lineno.value)))
 
                     }
                 }
                 (bytecode::Op::Less, lineno) => {
-                    let val1 = self.peek_by(0);
-                    let val2 = self.peek_by(1);
+                    let val1 = self.peek_by(0).clone();
+                    let val2 = self.peek_by(1).clone();
 
-                    match (val1, val2) {
+                    match (&val1, &val2) {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
@@ -169,7 +169,7 @@ impl Interpreter {
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Less expression. Expected numbers, found {:?} and {:?} at line {}",
-                            value::type_of(val1), value::type_of(val2), lineno.value)))
+                            value::type_of(&val1), value::type_of(&val2), lineno.value)))
 
                     }
                 }
@@ -177,7 +177,7 @@ impl Interpreter {
         }
     }
 
-    fn values_equal(val1: value::Value, val2: value::Value) -> bool {
+    fn values_equal(val1: &value::Value, val2: &value::Value) -> bool {
         match (val1, val2) {
             (value::Value::Number(n1), value::Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
             (value::Value::Bool(b1), value::Value::Bool(b2)) => b1 == b2,
@@ -239,12 +239,12 @@ impl Interpreter {
         }
     }
 
-    fn peek(&self) -> value::Value {
+    fn peek(&self) -> &value::Value {
         self.peek_by(0)
     }
 
-    fn peek_by(&self, n: usize) -> value::Value {
-        self.stack[self.stack.len() - n - 1]
+    fn peek_by(&self, n: usize) -> &value::Value {
+        &self.stack[self.stack.len() - n - 1]
     }
 
     fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
@@ -253,20 +253,20 @@ impl Interpreter {
         res
     }
 
-    fn read_constant(&self, idx: usize) -> value::Value {
-        self.chunk.constants[idx]
+    fn read_constant(&self, idx: usize) -> &value::Value {
+        &self.chunk.constants[idx]
     }
 
-    fn as_number(val: value::Value) -> Option<f64> {
+    fn as_number(val: &value::Value) -> Option<f64> {
         match val {
-            value::Value::Number(f) => Some(f),
+            value::Value::Number(f) => Some(*f),
             _ => None,
         }
     }
 
-    fn as_bool(val: value::Value) -> Option<bool> {
+    fn as_bool(val: &value::Value) -> Option<bool> {
         match val {
-            value::Value::Bool(b) => Some(b),
+            value::Value::Bool(b) => Some(*b),
             _ => None,
         }
     }

@@ -30,6 +30,7 @@ enum ParseFn {
     Binary,
     Number,
     Literal,
+    String,
 }
 
 struct ParseRule {
@@ -101,6 +102,19 @@ impl Compiler {
             _ => {
                 panic!("shouldn't get in literal with tok = {:?}.", tok);
             }
+        }
+    }
+
+    fn string(&mut self) -> Result<(), String> {
+        let tok = self.previous().clone();
+
+        match tok.literal {
+            Some(scanner::Literal::Str(s)) => {
+                let const_idx = self.current_chunk.add_constant_string(s);
+                self.emit_op(bytecode::Op::Constant(const_idx), tok.line);
+                Ok(())
+            }
+            _ => panic!("expected literal when parsing string"),
         }
     }
 
@@ -184,7 +198,7 @@ impl Compiler {
     }
 
     fn emit_number(&mut self, n: f64, lineno: usize) {
-        let const_idx = self.current_chunk.add_constant(n);
+        let const_idx = self.current_chunk.add_constant_number(n);
         self.emit_op(bytecode::Op::Constant(const_idx), lineno);
     }
 
@@ -224,6 +238,7 @@ impl Compiler {
             ParseFn::Binary => self.binary(),
             ParseFn::Number => self.number(),
             ParseFn::Literal => self.literal(),
+            ParseFn::String => self.string(),
         }
     }
 
@@ -396,7 +411,7 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::String => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::String),
                 infix: None,
                 precedence: Precedence::None,
             },
