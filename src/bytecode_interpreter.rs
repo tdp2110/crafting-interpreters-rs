@@ -21,6 +21,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Multiply => print!("OP_MULTIPLY"),
             bytecode::Op::Divide => print!("OP_DIVIDE"),
             bytecode::Op::Not => print!("OP_NOT"),
+            bytecode::Op::Equal => print!("OP_NOT"),
+            bytecode::Op::Greater => print!("OP_GREATER"),
+            bytecode::Op::Less => print!("OP_LESS"),
         }
         println!("\t\tline {}", lineno.value);
     }
@@ -132,7 +135,54 @@ impl Interpreter {
                         }
                     }
                 }
+                (bytecode::Op::Equal, _) => {
+                    let val1 = self.pop_stack();
+                    let val2 = self.pop_stack();
+                    self.stack
+                        .push(value::Value::Bool(Interpreter::values_equal(val1, val2)));
+                }
+                (bytecode::Op::Greater, lineno) => {
+                    let val1 = self.peek_by(0);
+                    let val2 = self.peek_by(1);
+
+                    match (val1, val2) {
+                        (value::Value::Number(n1), value::Value::Number(n2)) => {
+                            self.pop_stack();
+                            self.pop_stack();
+                            self.stack.push(value::Value::Bool(n1 > n2));
+                        }
+                        _ => return Err(InterpreterError::Runtime(format!(
+                            "invalid operands in Greater expression. Expected numbers, found {:?} and {:?} at line {}",
+                            value::type_of(val1), value::type_of(val2), lineno.value)))
+
+                    }
+                }
+                (bytecode::Op::Less, lineno) => {
+                    let val1 = self.peek_by(0);
+                    let val2 = self.peek_by(1);
+
+                    match (val1, val2) {
+                        (value::Value::Number(n1), value::Value::Number(n2)) => {
+                            self.pop_stack();
+                            self.pop_stack();
+                            self.stack.push(value::Value::Bool(n1 < n2));
+                        }
+                        _ => return Err(InterpreterError::Runtime(format!(
+                            "invalid operands in Less expression. Expected numbers, found {:?} and {:?} at line {}",
+                            value::type_of(val1), value::type_of(val2), lineno.value)))
+
+                    }
+                }
             }
+        }
+    }
+
+    fn values_equal(val1: value::Value, val2: value::Value) -> bool {
+        match (val1, val2) {
+            (value::Value::Number(n1), value::Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
+            (value::Value::Bool(b1), value::Value::Bool(b2)) => b1 == b2,
+            (value::Value::Nil, value::Value::Nil) => true,
+            (_, _) => false,
         }
     }
 
@@ -190,10 +240,11 @@ impl Interpreter {
     }
 
     fn peek(&self) -> value::Value {
-        match self.stack.last() {
-            Some(val) => val.clone(),
-            None => panic!("attempted to peek on empty stack!"),
-        }
+        self.peek_by(0)
+    }
+
+    fn peek_by(&self, n: usize) -> value::Value {
+        self.stack[self.stack.len() - n - 1]
     }
 
     fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {

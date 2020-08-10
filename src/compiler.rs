@@ -128,6 +128,33 @@ impl Compiler {
                 self.emit_op(bytecode::Op::Divide, operator.line);
                 Ok(())
             }
+            scanner::TokenType::BangEqual => {
+                self.emit_op(bytecode::Op::Equal, operator.line);
+                self.emit_op(bytecode::Op::Not, operator.line);
+                Ok(())
+            }
+            scanner::TokenType::EqualEqual => {
+                self.emit_op(bytecode::Op::Equal, operator.line);
+                Ok(())
+            }
+            scanner::TokenType::Greater => {
+                self.emit_op(bytecode::Op::Greater, operator.line);
+                Ok(())
+            }
+            scanner::TokenType::GreaterEqual => {
+                self.emit_op(bytecode::Op::Less, operator.line);
+                self.emit_op(bytecode::Op::Not, operator.line);
+                Ok(())
+            }
+            scanner::TokenType::Less => {
+                self.emit_op(bytecode::Op::Less, operator.line);
+                Ok(())
+            }
+            scanner::TokenType::LessEqual => {
+                self.emit_op(bytecode::Op::Greater, operator.line);
+                self.emit_op(bytecode::Op::Not, operator.line);
+                Ok(())
+            }
             _ => Err(format!(
                 "Invalid token {:?} in binary expression at line={},col={}.",
                 operator.ty, operator.line, operator.col
@@ -330,8 +357,8 @@ impl Compiler {
             },
             scanner::TokenType::BangEqual => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Binary),
+                precedence: Precedence::Equality,
             },
             scanner::TokenType::Equal => ParseRule {
                 prefix: None,
@@ -340,28 +367,28 @@ impl Compiler {
             },
             scanner::TokenType::EqualEqual => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Binary),
+                precedence: Precedence::Equality,
             },
             scanner::TokenType::Greater => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Binary),
+                precedence: Precedence::Comparison,
             },
             scanner::TokenType::GreaterEqual => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Binary),
+                precedence: Precedence::Comparison,
             },
             scanner::TokenType::Less => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Binary),
+                precedence: Precedence::Comparison,
             },
             scanner::TokenType::LessEqual => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Binary),
+                precedence: Precedence::Comparison,
             },
             scanner::TokenType::Identifier => ParseRule {
                 prefix: None,

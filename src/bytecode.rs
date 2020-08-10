@@ -26,6 +26,9 @@ pub enum Op {
     Multiply,
     Divide,
     Not,
+    Equal,
+    Greater,
+    Less,
 }
 
 #[derive(Default)]
