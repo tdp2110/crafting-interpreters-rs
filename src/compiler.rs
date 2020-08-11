@@ -57,7 +57,56 @@ impl Compiler {
     }
 
     fn declaration(&mut self) -> Result<(), String> {
-        self.statement()
+        if self.matches(scanner::TokenType::Var) {
+            self.var_decl()
+        } else {
+            self.statement()
+        }
+    }
+
+    fn var_decl(&mut self) -> Result<(), String> {
+        let global_idx = self.parse_variable("Expected variable name.")?;
+
+        if self.matches(scanner::TokenType::Equal) {
+            self.expression()?;
+        } else {
+            let line = self.previous().line;
+            self.emit_op(bytecode::Op::Nil, line)
+        }
+
+        if let Err(err) = self.consume(
+            scanner::TokenType::Semicolon,
+            "Expected ';' after variable declaration",
+        ) {
+            return Err(err);
+        }
+
+        self.define_global(global_idx);
+        Ok(())
+    }
+
+    fn define_global(&mut self, global_idx: usize) {
+        let line = self.previous().line;
+        self.emit_op(bytecode::Op::DefineGlobal(global_idx), line);
+    }
+
+    fn parse_variable(&mut self, error_msg: &str) -> Result<usize, String> {
+        if let Err(err) = self.consume(scanner::TokenType::Identifier, error_msg) {
+            return Err(err);
+        }
+
+        if let Some(scanner::Literal::Identifier(name)) = &self.previous().literal.clone() {
+            Ok(self.identifier_constant(name.clone()))
+        } else {
+            panic!(
+                "expected identifier when parsing variable, found {:?}",
+                self.previous()
+            );
+        }
+    }
+
+    fn identifier_constant(&mut self, name: String) -> usize {
+        self.current_chunk.add_constant_string(name)
     }
 
     fn statement(&mut self) -> Result<(), String> {
@@ -71,22 +120,21 @@ impl Compiler {
 
     fn expression_statement(&mut self) -> Result<(), String> {
         self.expression()?;
-        match self.consume(
+        if let Err(err) = self.consume(
             scanner::TokenType::Semicolon,
             "Expected ';' after expression.",
         ) {
-            Ok(_) => {}
-            Err(err) => return Err(err),
+            return Err(err);
         }
-        self.emit_op(bytecode::Op::Pop, self.previous().clone().line);
+        let line = self.previous().line;
+        self.emit_op(bytecode::Op::Pop, line);
         Ok(())
     }
 
     fn print_statement(&mut self) -> Result<(), String> {
         self.expression()?;
-        match self.consume(scanner::TokenType::Semicolon, "Expected ';' after value.") {
-            Ok(_) => {}
-            Err(err) => return Err(err),
+        if let Err(err) = self.consume(scanner::TokenType::Semicolon, "Expected ';' after value.") {
+            return Err(err);
         }
         self.emit_op(bytecode::Op::Print, self.previous().clone().line);
         Ok(())
@@ -115,12 +163,13 @@ impl Compiler {
     fn grouping(&mut self) -> Result<(), String> {
         self.expression()?;
 
-        match self.consume(
+        if let Err(err) = self.consume(
             scanner::TokenType::RightParen,
             "Expected ')' after expression.",
         ) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(err),
+            Err(err)
+        } else {
+            Ok(())
         }
     }
 
@@ -259,7 +308,6 @@ impl Compiler {
     }
 
     fn emit_op(&mut self, op: bytecode::Op, lineno: usize) {
-        println!("emitting op {:?}", op);
         self.current_chunk.code.push((op, bytecode::Lineno(lineno)))
     }
 

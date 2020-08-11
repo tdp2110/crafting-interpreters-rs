@@ -31,6 +31,7 @@ pub enum Op {
     Less,
     Print,
     Pop,
+    DefineGlobal(usize),
 }
 
 #[derive(Default)]

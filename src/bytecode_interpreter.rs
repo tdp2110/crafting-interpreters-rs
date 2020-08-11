@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::bytecode;
 use crate::value;
 
@@ -26,6 +28,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Less => print!("OP_LESS"),
             bytecode::Op::Print => print!("OP_PRINT"),
             bytecode::Op::Pop => print!("OP_POP"),
+            bytecode::Op::DefineGlobal(global_idx) => {
+                print!("OP_DEFINE_GLOBAL {:?}", chunk.constants[*global_idx])
+            }
         }
         println!("\t\tline {}", lineno.value);
     }
@@ -45,6 +50,7 @@ pub struct Interpreter {
     ip: usize,
     stack: Vec<value::Value>,
     output: Vec<String>,
+    globals: HashMap<String, value::Value>,
 }
 
 impl Default for Interpreter {
@@ -54,6 +60,7 @@ impl Default for Interpreter {
             ip: 0,
             stack: Vec::new(),
             output: Vec::new(),
+            globals: HashMap::new(),
         };
         res.stack.reserve(256);
         res
@@ -209,6 +216,17 @@ impl Interpreter {
                 (bytecode::Op::Pop, _) => {
                     self.pop_stack();
                 }
+                (bytecode::Op::DefineGlobal(idx), _) => {
+                    if let value::Value::String(name) = self.read_constant(idx).clone() {
+                        self.globals.insert(name, self.peek().clone());
+                        self.pop_stack();
+                    } else {
+                        panic!(
+                            "expected string when defining global, found {:?}",
+                            value::type_of(self.read_constant(idx))
+                        );
+                    }
+                }
             }
         }
     }
@@ -348,9 +366,30 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
     #[test]
     fn test_compiler_2() {
         let code_or_err = Compiler::default().compile(String::from("print -2 * 3 + (-4 / 2);"));
+
+        match code_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_var_decl_1() {
+        let code_or_err = Compiler::default().compile(String::from("var x = 2;"));
+
+        match code_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_var_decl_implicit_nil() {
+        let code_or_err = Compiler::default().compile(String::from("var x;"));
 
         match code_or_err {
             Ok(_) => {}
