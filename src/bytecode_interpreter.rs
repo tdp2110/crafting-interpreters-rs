@@ -24,6 +24,8 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Equal => print!("OP_NOT"),
             bytecode::Op::Greater => print!("OP_GREATER"),
             bytecode::Op::Less => print!("OP_LESS"),
+            bytecode::Op::Print => print!("OP_PRINT"),
+            bytecode::Op::Pop => print!("OP_POP"),
         }
         println!("\t\tline {}", lineno.value);
     }
@@ -42,6 +44,7 @@ pub struct Interpreter {
     chunk: bytecode::Chunk,
     ip: usize,
     stack: Vec<value::Value>,
+    output: Vec<String>,
 }
 
 impl Default for Interpreter {
@@ -50,6 +53,7 @@ impl Default for Interpreter {
             chunk: Default::default(),
             ip: 0,
             stack: Vec::new(),
+            output: Vec::new(),
         };
         res.stack.reserve(256);
         res
@@ -198,8 +202,26 @@ impl Interpreter {
 
                     }
                 }
+                (bytecode::Op::Print, _) => {
+                    let to_print = self.peek().clone();
+                    self.print_val(&to_print);
+                }
+                (bytecode::Op::Pop, _) => {
+                    self.pop_stack();
+                }
             }
         }
+    }
+
+    fn print_val(&mut self, val: &value::Value) {
+        let output = match val {
+            value::Value::Number(n) => format!("{}", n),
+            value::Value::Bool(b) => format!("{}", b),
+            value::Value::String(s) => format!("{}", s),
+            value::Value::Nil => format!("nil"),
+        };
+        println!("{}", output);
+        self.output.push(output);
     }
 
     fn values_equal(val1: &value::Value, val2: &value::Value) -> bool {
@@ -319,8 +341,20 @@ mod tests {
 
     #[test]
     fn test_compiler_1() {
-        let code_or_err = Compiler::default().compile(String::from("-2*3 + (-4/2)"));
+        let code_or_err = Compiler::default().compile(String::from("print 42 * 12;"));
 
-        assert!(code_or_err.is_ok())
+        match code_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+    #[test]
+    fn test_compiler_2() {
+        let code_or_err = Compiler::default().compile(String::from("print -2 * 3 + (-4 / 2);"));
+
+        match code_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
     }
 }

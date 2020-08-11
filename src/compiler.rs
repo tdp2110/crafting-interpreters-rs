@@ -45,11 +45,67 @@ impl Compiler {
             Ok(tokens) => {
                 self.tokens = tokens;
                 self.current_chunk = bytecode::Chunk::default();
-                self.expression()?;
+
+                while !self.is_at_end() {
+                    self.declaration()?;
+                }
+
                 Ok(std::mem::take(&mut self.current_chunk))
             }
             Err(err) => Err(err),
         }
+    }
+
+    fn declaration(&mut self) -> Result<(), String> {
+        self.statement()
+    }
+
+    fn statement(&mut self) -> Result<(), String> {
+        if self.matches(scanner::TokenType::Print) {
+            self.print_statement()?;
+        } else {
+            self.expression_statement()?;
+        }
+        Ok(())
+    }
+
+    fn expression_statement(&mut self) -> Result<(), String> {
+        self.expression()?;
+        match self.consume(
+            scanner::TokenType::Semicolon,
+            "Expected ';' after expression.",
+        ) {
+            Ok(_) => {}
+            Err(err) => return Err(err),
+        }
+        self.emit_op(bytecode::Op::Pop, self.previous().clone().line);
+        Ok(())
+    }
+
+    fn print_statement(&mut self) -> Result<(), String> {
+        self.expression()?;
+        match self.consume(scanner::TokenType::Semicolon, "Expected ';' after value.") {
+            Ok(_) => {}
+            Err(err) => return Err(err),
+        }
+        self.emit_op(bytecode::Op::Print, self.previous().clone().line);
+        Ok(())
+    }
+
+    fn matches(&mut self, ty: scanner::TokenType) -> bool {
+        if self.check(ty) {
+            self.advance();
+            return true;
+        }
+        false
+    }
+
+    fn check(&self, ty: scanner::TokenType) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
+        self.peek().ty == ty
     }
 
     fn expression(&mut self) -> Result<(), String> {
@@ -203,23 +259,26 @@ impl Compiler {
     }
 
     fn emit_op(&mut self, op: bytecode::Op, lineno: usize) {
+        println!("emitting op {:?}", op);
         self.current_chunk.code.push((op, bytecode::Lineno(lineno)))
     }
 
     fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), String> {
         self.advance();
-        println!("parse_precedence {:?} {:?}", self.previous(), precedence);
 
         match Compiler::get_rule(self.previous().ty).prefix {
             Some(parse_fn) => self.apply_parse_fn(parse_fn)?,
-            None => return Err(self.error("Expected expression.")),
+            None => {
+                return Err(self.error("Expected expression."));
+            }
         }
 
-        while precedence <= Compiler::get_rule(self.current().ty).precedence {
+        while precedence <= Compiler::get_rule(self.current_tok().ty).precedence {
+            println!("{:?} {:?}", self.current_tok(), precedence);
             self.advance();
             match Compiler::get_rule(self.previous().ty).infix {
                 Some(parse_fn) => self.apply_parse_fn(parse_fn)?,
-                None => panic!("could not find infix rule to apply"),
+                None => panic!("could not find infix rule to apply tok = {:?}", self.peek()),
             }
         }
 
@@ -260,14 +319,6 @@ impl Compiler {
         ))
     }
 
-    fn check(&self, ty: scanner::TokenType) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-
-        self.peek().ty == ty
-    }
-
     fn advance(&mut self) -> &scanner::Token {
         if !self.is_at_end() {
             self.current += 1
@@ -276,7 +327,7 @@ impl Compiler {
         self.previous()
     }
 
-    fn current(&self) -> &scanner::Token {
+    fn current_tok(&self) -> &scanner::Token {
         &self.tokens[self.current]
     }
 
@@ -353,7 +404,7 @@ impl Compiler {
             scanner::TokenType::Semicolon => ParseRule {
                 prefix: None,
                 infix: None,
-                precedence: Precedence::Term,
+                precedence: Precedence::None,
             },
             scanner::TokenType::Slash => ParseRule {
                 prefix: None,
