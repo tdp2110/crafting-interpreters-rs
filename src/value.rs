@@ -1,6 +1,7 @@
 use std::fmt;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum Value {
     Number(f64),
     Bool(bool),
@@ -9,6 +10,7 @@ pub enum Value {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub enum Type {
     Number,
     Bool,

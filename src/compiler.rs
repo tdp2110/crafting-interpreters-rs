@@ -342,7 +342,6 @@ impl Compiler {
         }
 
         while precedence <= Compiler::get_rule(self.current_tok().ty).precedence {
-            println!("{:?} {:?}", self.current_tok(), precedence);
             self.advance();
             match Compiler::get_rule(self.previous().ty).infix {
                 Some(parse_fn) => self.apply_parse_fn(parse_fn)?,
