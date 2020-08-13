@@ -60,7 +60,16 @@ fn main() {
                     match code_or_err {
                         Ok(code) => {
                             bytecode_interpreter::disassemble_chunk(&code, input_file);
-                            std::process::exit(0);
+                            let res = bytecode_interpreter::Interpreter::default().interpret(code);
+                            match res {
+                                Ok(()) => {
+                                    std::process::exit(0);
+                                }
+                                Err(err) => {
+                                    println!("{:?}", err);
+                                    std::process::exit(1);
+                                }
+                            }
                         }
                         Err(err) => {
                             println!("{}", err);

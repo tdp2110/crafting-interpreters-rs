@@ -85,7 +85,13 @@ impl Interpreter {
 
     fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
-            match self.next_op() {
+            if self.ip >= self.chunk.code.len() {
+                return Ok(());
+            }
+
+            let op = self.next_op();
+
+            match op {
                 (bytecode::Op::Return, _) => {
                     return Ok(());
                 }
@@ -235,7 +241,6 @@ impl Interpreter {
                         match self.globals.get(name) {
                             Some(val) => {
                                 self.stack.push(val.clone());
-                                self.pop_stack();
                             }
                             None => {
                                 return Err(InterpreterError::Runtime(format!(
@@ -426,7 +431,18 @@ mod tests {
         let code_or_err = Compiler::default().compile(String::from("var x = 2; print x;"));
 
         match code_or_err {
-            Ok(_) => {}
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["2"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
             Err(err) => panic!(err),
         }
     }
