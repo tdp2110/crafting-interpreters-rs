@@ -1,11 +1,18 @@
 use crate::bytecode;
 use crate::scanner;
 
+struct Local {
+    name: scanner::Token,
+    depth: i64,
+}
+
 #[derive(Default)]
 pub struct Compiler {
     tokens: Vec<scanner::Token>,
     current_chunk: bytecode::Chunk,
     current: usize,
+    locals: Vec<Local>,
+    scope_depth: i64,
 }
 
 #[derive(Eq, PartialEq, PartialOrd, Copy, Clone, Debug)]
@@ -87,13 +94,70 @@ impl Compiler {
     }
 
     fn define_global(&mut self, global_idx: usize) {
+        if self.scope_depth > 0 {
+            return;
+        }
+
         let line = self.previous().line;
         self.emit_op(bytecode::Op::DefineGlobal(global_idx), line);
+    }
+
+    fn declare_variable(&mut self) -> Result<(), String> {
+        //global variables are implicitly declared
+        if self.scope_depth == 0 {
+            return Ok(());
+        }
+
+        let name = self.previous().clone();
+
+        if self.locals.iter().rev().any(|local| {
+            local.depth != -1
+                && local.depth == self.scope_depth
+                && Compiler::identifiers_equal(&local.name.literal, &name.literal)
+        }) {
+            return Err(format!(
+                "Redeclaration of variable {} in the same scope.",
+                String::from_utf8(name.lexeme).unwrap()
+            ));
+        }
+
+        self.add_local(name);
+        Ok(())
+    }
+
+    fn identifiers_equal(id1: &Option<scanner::Literal>, id2: &Option<scanner::Literal>) -> bool {
+        match (id1, id2) {
+            (
+                Some(scanner::Literal::Identifier(name1)),
+                Some(scanner::Literal::Identifier(name2)),
+            ) => name1 == name2,
+            _ => {
+                panic!(
+                    "expected identifiers in `identifiers_equal` but found {:?} and {:?}",
+                    id1, id2
+                );
+            }
+        }
+    }
+
+    fn add_local(&mut self, name: scanner::Token) {
+        self.locals.push(Local {
+            name,
+            depth: self.scope_depth,
+        });
     }
 
     fn parse_variable(&mut self, error_msg: &str) -> Result<usize, String> {
         if let Err(err) = self.consume(scanner::TokenType::Identifier, error_msg) {
             return Err(err);
+        }
+
+        if let Err(err) = self.declare_variable() {
+            return Err(err);
+        }
+
+        if self.scope_depth > 0 {
+            return Ok(0);
         }
 
         if let Some(scanner::Literal::Identifier(name)) = &self.previous().literal.clone() {
@@ -113,10 +177,34 @@ impl Compiler {
     fn statement(&mut self) -> Result<(), String> {
         if self.matches(scanner::TokenType::Print) {
             self.print_statement()?;
+        } else if self.matches(scanner::TokenType::LeftBrace) {
+            self.begin_scope();
+            self.block()?;
+            self.end_scope();
         } else {
             self.expression_statement()?;
         }
         Ok(())
+    }
+
+    fn block(&mut self) -> Result<(), String> {
+        while !self.check(scanner::TokenType::RightBrace) && !self.check(scanner::TokenType::Eof) {
+            self.declaration()?;
+        }
+
+        if let Err(err) = self.consume(scanner::TokenType::RightBrace, "Expected '}' after block") {
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
     }
 
     fn expression_statement(&mut self) -> Result<(), String> {

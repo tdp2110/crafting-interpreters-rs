@@ -588,4 +588,19 @@ mod tests {
             Err(err) => assert!(err.starts_with("Invalid assignment target")),
         }
     }
+
+    #[test]
+    fn test_redeclaration_of_locals_is_error() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var x = 2;\n\
+               var x = 3;\n\
+             }",
+        ));
+
+        match code_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => assert!(err.starts_with("Redeclaration of variable")),
+        }
+    }
 }
