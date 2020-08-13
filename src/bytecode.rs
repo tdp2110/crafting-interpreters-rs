@@ -33,6 +33,7 @@ pub enum Op {
     Pop,
     DefineGlobal(usize),
     GetGlobal(usize),
+    SetGlobal(usize),
 }
 
 #[derive(Default)]

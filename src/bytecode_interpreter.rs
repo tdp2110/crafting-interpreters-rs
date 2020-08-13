@@ -42,6 +42,10 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 "OP_GET_GLOBAL {:?} (idx={})",
                 chunk.constants[*global_idx], *global_idx
             ),
+            bytecode::Op::SetGlobal(global_idx) => format!(
+                "OP_GET_GLOBAL {:?} (idx={})",
+                chunk.constants[*global_idx], *global_idx
+            ),
         };
 
         println!(
@@ -153,7 +157,7 @@ impl Interpreter {
                             self.pop_stack();
                             self.pop_stack();
                             self.stack
-                                .push(value::Value::String(format!("{}{}", s1, s2)));
+                                .push(value::Value::String(format!("{}{}", s2, s1)));
                         }
                         _ => {
                             return Err(InterpreterError::Runtime(format!(
@@ -241,8 +245,8 @@ impl Interpreter {
                 }
                 (bytecode::Op::DefineGlobal(idx), _) => {
                     if let value::Value::String(name) = self.read_constant(idx).clone() {
-                        self.globals.insert(name, self.peek().clone());
-                        self.pop_stack();
+                        let val = self.pop_stack();
+                        self.globals.insert(name, val);
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
@@ -266,6 +270,24 @@ impl Interpreter {
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
+                            value::type_of(self.read_constant(idx))
+                        );
+                    }
+                }
+                (bytecode::Op::SetGlobal(idx), lineno) => {
+                    if let value::Value::String(name) = self.read_constant(idx).clone() {
+                        if self.globals.contains_key(&name) {
+                            let val = self.peek().clone();
+                            self.globals.insert(name, val);
+                        } else {
+                            return Err(InterpreterError::Runtime(format!(
+                                "Use of undefined variable {} in setitem expression at line {}.",
+                                name, lineno.value
+                            )));
+                        }
+                    } else {
+                        panic!(
+                            "expected string when setting global, found {:?}",
                             value::type_of(self.read_constant(idx))
                         );
                     }
@@ -524,6 +546,46 @@ mod tests {
                 }
             }
             Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setitem_1() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var breakfast = \"beignets\";\n\
+             var beverage = \"cafe au lait\";\n\
+             breakfast = \"beignets with \" + beverage;\n\
+             print breakfast;",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["beignets with cafe au lait"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setitem_illegal_target() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = 2;\n\
+             var y = 3;\n\
+             x * y = 5;",
+        ));
+
+        match code_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => assert!(err.starts_with("Invalid assignment target")),
         }
     }
 }
