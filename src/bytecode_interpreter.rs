@@ -295,7 +295,7 @@ impl Interpreter {
                 self.pop_stack();
                 self.stack
                     .push(value::Value::Number(Interpreter::apply_numeric_binop(
-                        *n1, *n2, binop,
+                        *n2, *n1, binop, // note the order!
                     )));
                 Ok(())
             }
@@ -463,6 +463,52 @@ mod tests {
 
         match code_or_err {
             Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_var_reading_4() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = 2;\n\
+             var y = 3;\n\
+             print x * y + 4;",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["10"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_div_by_zero() {
+        let code_or_err = Compiler::default().compile(String::from("print 1 / 0;"));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["inf"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
             Err(err) => panic!(err),
         }
     }
