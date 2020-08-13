@@ -31,6 +31,7 @@ enum ParseFn {
     Number,
     Literal,
     String,
+    Variable,
 }
 
 struct ParseRule {
@@ -210,6 +211,25 @@ impl Compiler {
         }
     }
 
+    fn variable(&mut self) -> Result<(), String> {
+        let tok = self.previous().clone();
+        self.named_variable(tok)
+    }
+
+    fn named_variable(&mut self, tok: scanner::Token) -> Result<(), String> {
+        if tok.ty != scanner::TokenType::Identifier {
+            return Err("Expected idenitifier.".to_string());
+        }
+
+        if let Some(scanner::Literal::Identifier(name)) = tok.literal.clone() {
+            let idx = self.identifier_constant(name.clone());
+            self.emit_op(bytecode::Op::GetGlobal(idx), tok.line);
+            Ok(())
+        } else {
+            panic!("expected identifier when parsing variable, found {:?}", tok);
+        }
+    }
+
     fn string(&mut self) -> Result<(), String> {
         let tok = self.previous().clone();
 
@@ -346,6 +366,7 @@ impl Compiler {
             ParseFn::Number => self.number(),
             ParseFn::Literal => self.literal(),
             ParseFn::String => self.string(),
+            ParseFn::Variable => self.variable(),
         }
     }
 
@@ -505,7 +526,7 @@ impl Compiler {
                 precedence: Precedence::Comparison,
             },
             scanner::TokenType::Identifier => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::Variable),
                 infix: None,
                 precedence: Precedence::None,
             },
