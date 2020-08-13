@@ -5,37 +5,51 @@ use crate::value;
 
 #[allow(dead_code)]
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
-    println!("== {} ==", name);
+    println!("============ {} ============", name);
 
+    println!("------------ constants -----------");
+    for (idx, constant) in chunk.constants.iter().enumerate() {
+        println!("{:<4} {:?}", idx, constant);
+    }
+
+    println!("\n------------ code -----------------");
     for (idx, (op, lineno)) in chunk.code.iter().enumerate() {
-        print!("{:04} ", idx);
-        match op {
-            bytecode::Op::Return => print!("OP_RETURN"),
-            bytecode::Op::Constant(const_idx) => {
-                print!("OP_CONSTANT {:?}", chunk.constants[*const_idx])
-            }
-            bytecode::Op::Nil => print!("OP_NIL"),
-            bytecode::Op::True => print!("OP_TRUE"),
-            bytecode::Op::False => print!("OP_FALSE"),
-            bytecode::Op::Negate => print!("OP_NEGATE"),
-            bytecode::Op::Add => print!("OP_ADD"),
-            bytecode::Op::Subtract => print!("OP_SUBTRACT"),
-            bytecode::Op::Multiply => print!("OP_MULTIPLY"),
-            bytecode::Op::Divide => print!("OP_DIVIDE"),
-            bytecode::Op::Not => print!("OP_NOT"),
-            bytecode::Op::Equal => print!("OP_NOT"),
-            bytecode::Op::Greater => print!("OP_GREATER"),
-            bytecode::Op::Less => print!("OP_LESS"),
-            bytecode::Op::Print => print!("OP_PRINT"),
-            bytecode::Op::Pop => print!("OP_POP"),
-            bytecode::Op::DefineGlobal(global_idx) => {
-                print!("OP_DEFINE_GLOBAL {:?}", chunk.constants[*global_idx])
-            }
-            bytecode::Op::GetGlobal(global_idx) => {
-                print!("OP_GET_GLOBAL {:?}", chunk.constants[*global_idx])
-            }
-        }
-        println!("\t\tline {}", lineno.value);
+        let formatted_op = match op {
+            bytecode::Op::Return => format!("OP_RETURN"),
+            bytecode::Op::Constant(const_idx) => format!(
+                "OP_CONSTANT {:?} (idx={})",
+                chunk.constants[*const_idx], *const_idx
+            ),
+            bytecode::Op::Nil => format!("OP_NIL"),
+            bytecode::Op::True => format!("OP_TRUE"),
+            bytecode::Op::False => format!("OP_FALSE"),
+            bytecode::Op::Negate => format!("OP_NEGATE"),
+            bytecode::Op::Add => format!("OP_ADD"),
+            bytecode::Op::Subtract => format!("OP_SUBTRACT"),
+            bytecode::Op::Multiply => format!("OP_MULTIPLY"),
+            bytecode::Op::Divide => format!("OP_DIVIDE"),
+            bytecode::Op::Not => format!("OP_NOT"),
+            bytecode::Op::Equal => format!("OP_NOT"),
+            bytecode::Op::Greater => format!("OP_GREATER"),
+            bytecode::Op::Less => format!("OP_LESS"),
+            bytecode::Op::Print => format!("OP_PRINT"),
+            bytecode::Op::Pop => format!("OP_POP"),
+            bytecode::Op::DefineGlobal(global_idx) => format!(
+                "OP_DEFINE_GLOBAL {:?} (idx={})",
+                chunk.constants[*global_idx], *global_idx
+            ),
+            bytecode::Op::GetGlobal(global_idx) => format!(
+                "OP_GET_GLOBAL {:?} (idx={})",
+                chunk.constants[*global_idx], *global_idx
+            ),
+        };
+
+        println!(
+            "{0: <04}   {1: <30} {2: <30}",
+            idx,
+            formatted_op,
+            format!("line {}", lineno.value)
+        );
     }
 }
 
