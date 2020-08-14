@@ -43,9 +43,11 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 chunk.constants[*global_idx], *global_idx
             ),
             bytecode::Op::SetGlobal(global_idx) => format!(
-                "OP_GET_GLOBAL {:?} (idx={})",
+                "OP_SET_GLOBAL {:?} (idx={})",
                 chunk.constants[*global_idx], *global_idx
             ),
+            bytecode::Op::GetLocal(idx) => format!("OP_GET_LOGAL idx={}", *idx),
+            bytecode::Op::SetLocal(idx) => format!("OP_SET_LOCAL idx={}", *idx),
         };
 
         println!(
@@ -292,6 +294,14 @@ impl Interpreter {
                         );
                     }
                 }
+                (bytecode::Op::GetLocal(idx), _) => {
+                    let val = self.stack[idx].clone();
+                    self.stack.push(val);
+                }
+                (bytecode::Op::SetLocal(idx), _) => {
+                    let val = self.peek();
+                    self.stack[idx] = val.clone();
+                }
             }
         }
     }
@@ -484,6 +494,27 @@ mod tests {
     }
 
     #[test]
+    fn test_var_reading_locals_1() {
+        let code_or_err = Compiler::default().compile(String::from("{var x = 2; print x;}"));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["2"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
     fn test_var_reading_2() {
         let code_or_err = Compiler::default().compile(String::from("var x; print x;"));
 
@@ -529,6 +560,33 @@ mod tests {
     }
 
     #[test]
+    fn test_var_reading_locals_2() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var x = 2;\n\
+               var y = 3;\n\
+               print x * y + 4;\n\
+             }\n",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["10"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
     fn test_div_by_zero() {
         let code_or_err = Compiler::default().compile(String::from("print 1 / 0;"));
 
@@ -550,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn test_setitem_1() {
+    fn test_setitem_globals() {
         let code_or_err = Compiler::default().compile(String::from(
             "var breakfast = \"beignets\";\n\
              var beverage = \"cafe au lait\";\n\
@@ -576,11 +634,55 @@ mod tests {
     }
 
     #[test]
-    fn test_setitem_illegal_target() {
+    fn test_setitem_locals() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var breakfast = \"beignets\";\n\
+               var beverage = \"cafe au lait\";\n\
+               breakfast = \"beignets with \" + beverage;\n\
+               print breakfast;\n\
+             }\n",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["beignets with cafe au lait"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setitem_illegal_target_globals() {
         let code_or_err = Compiler::default().compile(String::from(
             "var x = 2;\n\
              var y = 3;\n\
              x * y = 5;",
+        ));
+
+        match code_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => assert!(err.starts_with("Invalid assignment target")),
+        }
+    }
+
+    #[test]
+    fn test_setitem_illegal_target_locals() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var x = 2;\n\
+               var y = 3;\n\
+               x * y = 5;\n\
+             }\n",
         ));
 
         match code_or_err {

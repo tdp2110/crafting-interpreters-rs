@@ -205,6 +205,22 @@ impl Compiler {
 
     fn end_scope(&mut self) {
         self.scope_depth -= 1;
+
+        let mut pop_count = 0;
+        for local in self.locals.iter().rev() {
+            if local.depth > self.scope_depth {
+                pop_count += 1;
+            } else {
+                break;
+            }
+        }
+        let pop_count = pop_count;
+
+        let line = self.previous().line;
+        for _ in 0..pop_count {
+            self.emit_op(bytecode::Op::Pop, line);
+            self.locals.pop();
+        }
     }
 
     fn expression_statement(&mut self) -> Result<(), String> {
@@ -310,18 +326,38 @@ impl Compiler {
         }
 
         if let Some(scanner::Literal::Identifier(name)) = tok.literal.clone() {
-            let idx = self.identifier_constant(name.clone());
+            let get_op: bytecode::Op;
+            let set_op: bytecode::Op;
+
+            if let Some(idx) = self.resolve_local(&tok.literal) {
+                get_op = bytecode::Op::GetLocal(idx);
+                set_op = bytecode::Op::SetLocal(idx);
+            } else {
+                let idx = self.identifier_constant(name.clone());
+
+                get_op = bytecode::Op::GetGlobal(idx);
+                set_op = bytecode::Op::SetGlobal(idx);
+            }
 
             if can_assign && self.matches(scanner::TokenType::Equal) {
                 self.expression()?;
-                self.emit_op(bytecode::Op::SetGlobal(idx), tok.line);
+                self.emit_op(set_op, tok.line);
             } else {
-                self.emit_op(bytecode::Op::GetGlobal(idx), tok.line);
+                self.emit_op(get_op, tok.line);
             }
             Ok(())
         } else {
             panic!("expected identifier when parsing variable, found {:?}", tok);
         }
+    }
+
+    fn resolve_local(&self, name: &Option<scanner::Literal>) -> Option<usize> {
+        for (idx, local) in self.locals.iter().rev().enumerate() {
+            if Compiler::identifiers_equal(&local.name.literal, name) {
+                return Some(self.locals.len() - 1 - idx);
+            }
+        }
+        None
     }
 
     fn string(&mut self, _can_assign: bool) -> Result<(), String> {
