@@ -89,12 +89,17 @@ impl Compiler {
             return Err(err);
         }
 
-        self.define_global(global_idx);
+        self.define_variable(global_idx);
         Ok(())
     }
 
-    fn define_global(&mut self, global_idx: usize) {
+    fn define_variable(&mut self, global_idx: usize) {
         if self.scope_depth > 0 {
+            if let Some(last) = self.locals.last_mut() {
+                last.depth = self.scope_depth;
+            } else {
+                panic!("expected nonempty locals!");
+            }
             return;
         }
 
@@ -143,7 +148,7 @@ impl Compiler {
     fn add_local(&mut self, name: scanner::Token) {
         self.locals.push(Local {
             name,
-            depth: self.scope_depth,
+            depth: -1, // declare undefined
         });
     }
 
@@ -329,14 +334,20 @@ impl Compiler {
             let get_op: bytecode::Op;
             let set_op: bytecode::Op;
 
-            if let Some(idx) = self.resolve_local(&tok.literal) {
-                get_op = bytecode::Op::GetLocal(idx);
-                set_op = bytecode::Op::SetLocal(idx);
-            } else {
-                let idx = self.identifier_constant(name.clone());
+            match self.resolve_local(&tok.literal) {
+                Ok(Some(idx)) => {
+                    get_op = bytecode::Op::GetLocal(idx);
+                    set_op = bytecode::Op::SetLocal(idx);
+                }
+                Ok(None) => {
+                    let idx = self.identifier_constant(name.clone());
 
-                get_op = bytecode::Op::GetGlobal(idx);
-                set_op = bytecode::Op::SetGlobal(idx);
+                    get_op = bytecode::Op::GetGlobal(idx);
+                    set_op = bytecode::Op::SetGlobal(idx);
+                }
+                Err(err) => {
+                    return Err(err);
+                }
             }
 
             if can_assign && self.matches(scanner::TokenType::Equal) {
@@ -351,13 +362,16 @@ impl Compiler {
         }
     }
 
-    fn resolve_local(&self, name: &Option<scanner::Literal>) -> Option<usize> {
+    fn resolve_local(&self, name: &Option<scanner::Literal>) -> Result<Option<usize>, String> {
         for (idx, local) in self.locals.iter().rev().enumerate() {
             if Compiler::identifiers_equal(&local.name.literal, name) {
-                return Some(self.locals.len() - 1 - idx);
+                if local.depth == -1 {
+                    return Err(self.error("Cannot read local variable in its own initializer."));
+                }
+                return Ok(Some(self.locals.len() - 1 - idx));
             }
         }
-        None
+        Ok(None)
     }
 
     fn string(&mut self, _can_assign: bool) -> Result<(), String> {

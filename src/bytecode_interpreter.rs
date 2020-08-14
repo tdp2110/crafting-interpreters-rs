@@ -705,4 +705,23 @@ mod tests {
             Err(err) => assert!(err.starts_with("Redeclaration of variable")),
         }
     }
+
+    #[test]
+    fn test_read_in_own_initializer() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var a = \"outer\";\n\
+               {\n\
+                 var a = a;\n\
+               }\n\
+             }\n",
+        ));
+
+        match code_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => {
+                assert!(err.starts_with("Cannot read local variable in its own initializer."))
+            }
+        }
+    }
 }
