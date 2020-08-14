@@ -46,8 +46,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 "OP_SET_GLOBAL {:?} (idx={})",
                 chunk.constants[*global_idx], *global_idx
             ),
-            bytecode::Op::GetLocal(idx) => format!("OP_GET_LOGAL idx={}", *idx),
+            bytecode::Op::GetLocal(idx) => format!("OP_GET_LOCAL idx={}", *idx),
             bytecode::Op::SetLocal(idx) => format!("OP_SET_LOCAL idx={}", *idx),
+            bytecode::Op::JumpIfFalse(loc) => format!("OP_JUMP_IF_FALSE {}", *loc),
         };
 
         println!(
@@ -302,7 +303,21 @@ impl Interpreter {
                     let val = self.peek();
                     self.stack[idx] = val.clone();
                 }
+                (bytecode::Op::JumpIfFalse(offset), _) => {
+                    if Interpreter::is_falsey(&self.peek()) {
+                        self.ip += offset;
+                    }
+                }
             }
+        }
+    }
+
+    fn is_falsey(val: &value::Value) -> bool {
+        match val {
+            value::Value::Nil => false,
+            value::Value::Bool(b) => *b,
+            value::Value::Number(f) => *f == 0.0,
+            value::Value::String(s) => s.is_empty(),
         }
     }
 
@@ -722,6 +737,90 @@ mod tests {
             Err(err) => {
                 assert!(err.starts_with("Cannot read local variable in its own initializer."))
             }
+        }
+    }
+
+    #[test]
+    fn test_if_stmt() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = 0;\n\
+             var y = 1;\n\
+             if (x) {\n\
+               print x;\n\
+             }\n\
+             if (y) {\n\
+               print y;\n\
+             }",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["1"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_print_locals() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var x = 0;\n\
+               var y = 1;\n\
+               print x;\n\
+               print y;\n\
+             }",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["0", "1"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_print_globals() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = 0;\n\
+             var y = 1;\n\
+             print x;\n\
+             print y;\n",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["0", "1"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
         }
     }
 }

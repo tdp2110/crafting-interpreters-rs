@@ -182,6 +182,8 @@ impl Compiler {
     fn statement(&mut self) -> Result<(), String> {
         if self.matches(scanner::TokenType::Print) {
             self.print_statement()?;
+        } else if self.matches(scanner::TokenType::If) {
+            self.if_statement()?;
         } else if self.matches(scanner::TokenType::LeftBrace) {
             self.begin_scope();
             self.block()?;
@@ -190,6 +192,42 @@ impl Compiler {
             self.expression_statement()?;
         }
         Ok(())
+    }
+
+    fn if_statement(&mut self) -> Result<(), String> {
+        if let Err(err) = self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'if'.") {
+            return Err(err);
+        }
+        self.expression()?;
+        if let Err(err) = self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ')' after condition.",
+        ) {
+            return Err(err);
+        }
+
+        let then_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder value*/ 0));
+        self.statement()?;
+        self.patch_jump(then_jump);
+        Ok(())
+    }
+
+    fn patch_jump(&mut self, jump_location: usize) {
+        let true_jump = self.current_chunk.code.len() - jump_location - 1;
+        let (maybe_jump, lineno) = self.current_chunk.code[jump_location];
+        if let bytecode::Op::JumpIfFalse(_) = maybe_jump {
+            self.current_chunk.code[jump_location] = (bytecode::Op::JumpIfFalse(true_jump), lineno);
+        } else {
+            panic!(
+                "attempted to patch a jump but didn't find a jump! Found {:?}.",
+                maybe_jump
+            );
+        }
+    }
+
+    fn emit_jump(&mut self, op: bytecode::Op) -> usize {
+        self.emit_op(op, self.previous().line);
+        self.current_chunk.code.len() - 1
     }
 
     fn block(&mut self) -> Result<(), String> {
