@@ -49,6 +49,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::GetLocal(idx) => format!("OP_GET_LOCAL idx={}", *idx),
             bytecode::Op::SetLocal(idx) => format!("OP_SET_LOCAL idx={}", *idx),
             bytecode::Op::JumpIfFalse(loc) => format!("OP_JUMP_IF_FALSE {}", *loc),
+            bytecode::Op::Jump(loc) => format!("OP_JUMP {}", *loc),
         };
 
         println!(
@@ -307,6 +308,9 @@ impl Interpreter {
                     if Interpreter::is_falsey(&self.peek()) {
                         self.ip += offset;
                     }
+                }
+                (bytecode::Op::Jump(offset), _) => {
+                    self.ip += offset;
                 }
             }
         }
@@ -760,6 +764,62 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["1"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_if_then_else_1() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = 0;\n\
+             if (x) {\n\
+               print \"hello\";\n\
+             } else {\n\
+               print \"goodbye\";\n\
+             }",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["goodbye"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_if_then_else_2() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = 1;\n\
+             if (x) {\n\
+               print \"hello\";\n\
+             } else {\n\
+               print \"goodbye\";\n\
+             }",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["hello"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);

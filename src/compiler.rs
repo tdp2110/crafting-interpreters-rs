@@ -207,8 +207,17 @@ impl Compiler {
         }
 
         let then_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder value*/ 0));
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
         self.statement()?;
+        let else_jump = self.emit_jump(bytecode::Op::Jump(/*placeholder value*/ 0));
+
         self.patch_jump(then_jump);
+
+        if self.matches(scanner::TokenType::Else) {
+            self.statement()?;
+        }
+        self.patch_jump(else_jump);
+
         Ok(())
     }
 
@@ -217,6 +226,8 @@ impl Compiler {
         let (maybe_jump, lineno) = self.current_chunk.code[jump_location];
         if let bytecode::Op::JumpIfFalse(_) = maybe_jump {
             self.current_chunk.code[jump_location] = (bytecode::Op::JumpIfFalse(true_jump), lineno);
+        } else if let bytecode::Op::Jump(_) = maybe_jump {
+            self.current_chunk.code[jump_location] = (bytecode::Op::Jump(true_jump), lineno);
         } else {
             panic!(
                 "attempted to patch a jump but didn't find a jump! Found {:?}.",
