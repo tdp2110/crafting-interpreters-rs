@@ -40,6 +40,7 @@ enum ParseFn {
     String,
     Variable,
     And,
+    Or,
 }
 
 struct ParseRule {
@@ -495,10 +496,22 @@ impl Compiler {
         }
     }
 
-    fn and_(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn and(&mut self, _can_assign: bool) -> Result<(), String> {
         let end_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
         self.emit_op(bytecode::Op::Pop, self.previous().line);
         self.parse_precedence(Precedence::And)?;
+        self.patch_jump(end_jump);
+        Ok(())
+    }
+
+    fn or(&mut self, _can_assign: bool) -> Result<(), String> {
+        let else_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
+        let end_jump = self.emit_jump(bytecode::Op::Jump(/*placeholder*/ 0));
+
+        self.patch_jump(else_jump);
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
+
+        self.parse_precedence(Precedence::Or)?;
         self.patch_jump(end_jump);
         Ok(())
     }
@@ -574,7 +587,8 @@ impl Compiler {
             ParseFn::Literal => self.literal(can_assign),
             ParseFn::String => self.string(can_assign),
             ParseFn::Variable => self.variable(can_assign),
-            ParseFn::And => self.and_(can_assign),
+            ParseFn::And => self.and(can_assign),
+            ParseFn::Or => self.or(can_assign),
         }
     }
 
@@ -790,8 +804,8 @@ impl Compiler {
             },
             scanner::TokenType::Or => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Or),
+                precedence: Precedence::Or,
             },
             scanner::TokenType::Print => ParseRule {
                 prefix: None,
