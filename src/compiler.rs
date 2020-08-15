@@ -39,6 +39,7 @@ enum ParseFn {
     Literal,
     String,
     Variable,
+    And,
 }
 
 struct ParseRule {
@@ -494,6 +495,14 @@ impl Compiler {
         }
     }
 
+    fn and_(&mut self, _can_assign: bool) -> Result<(), String> {
+        let end_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
+        self.parse_precedence(Precedence::And)?;
+        self.patch_jump(end_jump);
+        Ok(())
+    }
+
     fn unary(&mut self, _can_assign: bool) -> Result<(), String> {
         let operator = self.previous().clone();
 
@@ -565,6 +574,7 @@ impl Compiler {
             ParseFn::Literal => self.literal(can_assign),
             ParseFn::String => self.string(can_assign),
             ParseFn::Variable => self.variable(can_assign),
+            ParseFn::And => self.and_(can_assign),
         }
     }
 
@@ -740,8 +750,8 @@ impl Compiler {
             },
             scanner::TokenType::And => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::And),
+                precedence: Precedence::And,
             },
             scanner::TokenType::Class => ParseRule {
                 prefix: None,

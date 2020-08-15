@@ -319,7 +319,7 @@ impl Interpreter {
     fn is_falsey(val: &value::Value) -> bool {
         match val {
             value::Value::Nil => false,
-            value::Value::Bool(b) => *b,
+            value::Value::Bool(b) => !*b,
             value::Value::Number(f) => *f == 0.0,
             value::Value::String(s) => s.is_empty(),
         }
@@ -874,6 +874,93 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["0", "1"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_and_1() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = false;\n\
+             var y = true;\n\
+             if (y and x) {\n\
+               print \"cat\";\n\
+             } else {\n\
+               print \"dog\";\n\
+             }\n",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["dog"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_and_2() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = false;\n\
+             var y = true;\n\
+             if (x and y) {\n\
+               print \"cat\";\n\
+             } else {\n\
+               print \"dog\";\n\
+             }\n",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["dog"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_and_3() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "var x = true;\n\
+             var y = true;\n\
+             if (y and x) {\n\
+               print \"cat\";\n\
+             } else {\n\
+               print \"dog\";\n\
+             }\n",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["cat"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
