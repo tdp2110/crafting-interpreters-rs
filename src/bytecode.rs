@@ -38,6 +38,7 @@ pub enum Op {
     SetLocal(usize),
     JumpIfFalse(usize),
     Jump(usize),
+    Loop(usize),
 }
 
 #[derive(Default)]

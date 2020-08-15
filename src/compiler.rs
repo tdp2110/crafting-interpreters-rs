@@ -186,6 +186,8 @@ impl Compiler {
             self.print_statement()?;
         } else if self.matches(scanner::TokenType::If) {
             self.if_statement()?;
+        } else if self.matches(scanner::TokenType::While) {
+            self.while_statement()?;
         } else if self.matches(scanner::TokenType::LeftBrace) {
             self.begin_scope();
             self.block()?;
@@ -194,6 +196,37 @@ impl Compiler {
             self.expression_statement()?;
         }
         Ok(())
+    }
+
+    fn while_statement(&mut self) -> Result<(), String> {
+        let loop_start = self.current_chunk.code.len();
+        if let Err(err) = self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'while'.")
+        {
+            return Err(err);
+        }
+        self.expression()?;
+        if let Err(err) = self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ')' after condition.",
+        ) {
+            return Err(err);
+        }
+
+        let exit_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
+
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
+        self.statement()?;
+
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
+        Ok(())
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) {
+        let offset = self.current_chunk.code.len() - loop_start + 2;
+        self.emit_op(bytecode::Op::Loop(offset), self.previous().line);
     }
 
     fn if_statement(&mut self) -> Result<(), String> {

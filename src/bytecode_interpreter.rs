@@ -49,7 +49,8 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::GetLocal(idx) => format!("OP_GET_LOCAL idx={}", *idx),
             bytecode::Op::SetLocal(idx) => format!("OP_SET_LOCAL idx={}", *idx),
             bytecode::Op::JumpIfFalse(loc) => format!("OP_JUMP_IF_FALSE {}", *loc),
-            bytecode::Op::Jump(loc) => format!("OP_JUMP {}", *loc),
+            bytecode::Op::Jump(offset) => format!("OP_JUMP {}", *offset),
+            bytecode::Op::Loop(offset) => format!("OP_LOOP {}", *offset),
         };
 
         println!(
@@ -216,7 +217,7 @@ impl Interpreter {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
-                            self.stack.push(value::Value::Bool(n1 > n2));
+                            self.stack.push(value::Value::Bool(n2 > n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Greater expression. Expected numbers, found {:?} and {:?} at line {}",
@@ -232,7 +233,7 @@ impl Interpreter {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
-                            self.stack.push(value::Value::Bool(n1 < n2));
+                            self.stack.push(value::Value::Bool(n2 < n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Less expression. Expected numbers, found {:?} and {:?} at line {}",
@@ -311,6 +312,9 @@ impl Interpreter {
                 }
                 (bytecode::Op::Jump(offset), _) => {
                     self.ip += offset;
+                }
+                (bytecode::Op::Loop(offset), _) => {
+                    self.ip -= offset;
                 }
             }
         }
@@ -1048,6 +1052,35 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["dog"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_while() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{var x = 0;\n\
+             var sum = 0;\n\
+             while (x < 100) {\n\
+               x = x + 1;\n\
+               sum = sum + x;\n\
+             }\n\
+             print sum;}",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["5050"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
