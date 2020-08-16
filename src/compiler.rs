@@ -115,11 +115,12 @@ impl Compiler {
 
         let name = self.previous().clone();
 
-        if self.locals.iter().rev().any(|local| {
+        let has_redeclaration = self.locals.iter().rev().any(|local| {
             local.depth != -1
                 && local.depth == self.scope_depth
                 && Compiler::identifiers_equal(&local.name.literal, &name.literal)
-        }) {
+        });
+        if has_redeclaration {
             return Err(format!(
                 "Redeclaration of variable {} in the same scope.",
                 String::from_utf8(name.lexeme).unwrap()
@@ -462,7 +463,7 @@ impl Compiler {
                     set_op = bytecode::Op::SetLocal(idx);
                 }
                 Ok(None) => {
-                    let idx = self.identifier_constant(name.clone());
+                    let idx = self.identifier_constant(name);
 
                     get_op = bytecode::Op::GetGlobal(idx);
                     set_op = bytecode::Op::SetGlobal(idx);

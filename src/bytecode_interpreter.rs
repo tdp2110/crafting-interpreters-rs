@@ -15,25 +15,25 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
     println!("\n------------ code -----------------");
     for (idx, (op, lineno)) in chunk.code.iter().enumerate() {
         let formatted_op = match op {
-            bytecode::Op::Return => format!("OP_RETURN"),
+            bytecode::Op::Return => "OP_RETURN".to_string(),
             bytecode::Op::Constant(const_idx) => format!(
                 "OP_CONSTANT {:?} (idx={})",
                 chunk.constants[*const_idx], *const_idx
             ),
-            bytecode::Op::Nil => format!("OP_NIL"),
-            bytecode::Op::True => format!("OP_TRUE"),
-            bytecode::Op::False => format!("OP_FALSE"),
-            bytecode::Op::Negate => format!("OP_NEGATE"),
-            bytecode::Op::Add => format!("OP_ADD"),
-            bytecode::Op::Subtract => format!("OP_SUBTRACT"),
-            bytecode::Op::Multiply => format!("OP_MULTIPLY"),
-            bytecode::Op::Divide => format!("OP_DIVIDE"),
-            bytecode::Op::Not => format!("OP_NOT"),
-            bytecode::Op::Equal => format!("OP_NOT"),
-            bytecode::Op::Greater => format!("OP_GREATER"),
-            bytecode::Op::Less => format!("OP_LESS"),
-            bytecode::Op::Print => format!("OP_PRINT"),
-            bytecode::Op::Pop => format!("OP_POP"),
+            bytecode::Op::Nil => "OP_NIL".to_string(),
+            bytecode::Op::True => "OP_TRUE".to_string(),
+            bytecode::Op::False => "OP_FALSE".to_string(),
+            bytecode::Op::Negate => "OP_NEGATE".to_string(),
+            bytecode::Op::Add => "OP_ADD".to_string(),
+            bytecode::Op::Subtract => "OP_SUBTRACT".to_string(),
+            bytecode::Op::Multiply => "OP_MULTIPLY".to_string(),
+            bytecode::Op::Divide => "OP_DIVIDE".to_string(),
+            bytecode::Op::Not => "OP_NOT".to_string(),
+            bytecode::Op::Equal => "OP_NOT".to_string(),
+            bytecode::Op::Greater => "OP_GREATER".to_string(),
+            bytecode::Op::Less => "OP_LESS".to_string(),
+            bytecode::Op::Print => "OP_PRINT".to_string(),
+            bytecode::Op::Pop => "OP_POP".to_string(),
             bytecode::Op::DefineGlobal(global_idx) => format!(
                 "OP_DEFINE_GLOBAL {:?} (idx={})",
                 chunk.constants[*global_idx], *global_idx
@@ -334,8 +334,8 @@ impl Interpreter {
         let output = match val {
             value::Value::Number(n) => format!("{}", n),
             value::Value::Bool(b) => format!("{}", b),
-            value::Value::String(s) => format!("{}", s),
-            value::Value::Nil => format!("nil"),
+            value::Value::String(s) => s.clone(),
+            value::Value::Nil => "nil".to_string(),
         };
         println!("{}", output);
         self.output.push(output);
