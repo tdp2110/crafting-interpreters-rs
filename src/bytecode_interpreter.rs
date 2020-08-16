@@ -217,6 +217,7 @@ impl Interpreter {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
+
                             self.stack.push(value::Value::Bool(n2 > n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
@@ -1081,6 +1082,35 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["5050"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_for() {
+        let code_or_err = Compiler::default().compile(String::from(
+            "{\n\
+               var fact = 1;\n\
+               for (var i = 1; i <= 10; i = i + 1) {\n\
+                 fact = fact * i;\n\
+               }\n\
+               print fact;\n\
+             }",
+        ));
+
+        match code_or_err {
+            Ok(code) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(code);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["3628800"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);

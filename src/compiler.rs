@@ -84,12 +84,10 @@ impl Compiler {
             self.emit_op(bytecode::Op::Nil, line)
         }
 
-        if let Err(err) = self.consume(
+        self.consume(
             scanner::TokenType::Semicolon,
             "Expected ';' after variable declaration",
-        ) {
-            return Err(err);
-        }
+        )?;
 
         self.define_variable(global_idx);
         Ok(())
@@ -155,13 +153,8 @@ impl Compiler {
     }
 
     fn parse_variable(&mut self, error_msg: &str) -> Result<usize, String> {
-        if let Err(err) = self.consume(scanner::TokenType::Identifier, error_msg) {
-            return Err(err);
-        }
-
-        if let Err(err) = self.declare_variable() {
-            return Err(err);
-        }
+        self.consume(scanner::TokenType::Identifier, error_msg)?;
+        self.declare_variable()?;
 
         if self.scope_depth > 0 {
             return Ok(0);
@@ -184,6 +177,8 @@ impl Compiler {
     fn statement(&mut self) -> Result<(), String> {
         if self.matches(scanner::TokenType::Print) {
             self.print_statement()?;
+        } else if self.matches(scanner::TokenType::For) {
+            self.for_statement()?;
         } else if self.matches(scanner::TokenType::If) {
             self.if_statement()?;
         } else if self.matches(scanner::TokenType::While) {
@@ -198,19 +193,70 @@ impl Compiler {
         Ok(())
     }
 
+    fn for_statement(&mut self) -> Result<(), String> {
+        self.begin_scope();
+        self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'for'.")?;
+        if self.matches(scanner::TokenType::Semicolon) {
+        } else if self.matches(scanner::TokenType::Var) {
+            self.var_decl()?;
+        } else {
+            self.expression_statement()?;
+        }
+
+        let mut loop_start = self.current_chunk.code.len();
+
+        // condition
+        let mut maybe_exit_jump = None;
+        if !self.matches(scanner::TokenType::Semicolon) {
+            self.expression()?;
+            self.consume(
+                scanner::TokenType::Semicolon,
+                "Expected ';' after loop condition",
+            )?;
+            maybe_exit_jump = Some(self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0)));
+            self.emit_op(bytecode::Op::Pop, self.previous().line);
+        }
+        let maybe_exit_jump = maybe_exit_jump;
+
+        // increment
+        if !self.matches(scanner::TokenType::RightParen) {
+            let body_jump = self.emit_jump(bytecode::Op::Jump(/*placeholder*/ 0));
+
+            let increment_start = self.current_chunk.code.len() + 1;
+            self.expression()?;
+            self.emit_op(bytecode::Op::Pop, self.previous().line);
+            self.consume(
+                scanner::TokenType::RightParen,
+                "Expected ')' after for clauses.",
+            )?;
+
+            self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+
+        self.statement()?;
+
+        self.emit_loop(loop_start);
+
+        if let Some(exit_jump) = maybe_exit_jump {
+            self.patch_jump(exit_jump);
+            self.emit_op(bytecode::Op::Pop, self.previous().line);
+        }
+
+        self.end_scope();
+
+        Ok(())
+    }
+
     fn while_statement(&mut self) -> Result<(), String> {
         let loop_start = self.current_chunk.code.len();
-        if let Err(err) = self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'while'.")
-        {
-            return Err(err);
-        }
+        self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'while'.")?;
         self.expression()?;
-        if let Err(err) = self.consume(
+        self.consume(
             scanner::TokenType::RightParen,
             "Expected ')' after condition.",
-        ) {
-            return Err(err);
-        }
+        )?;
 
         let exit_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
 
@@ -230,16 +276,12 @@ impl Compiler {
     }
 
     fn if_statement(&mut self) -> Result<(), String> {
-        if let Err(err) = self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'if'.") {
-            return Err(err);
-        }
+        self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'if'.")?;
         self.expression()?;
-        if let Err(err) = self.consume(
+        self.consume(
             scanner::TokenType::RightParen,
             "Expected ')' after condition.",
-        ) {
-            return Err(err);
-        }
+        )?;
 
         let then_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder value*/ 0));
         self.emit_op(bytecode::Op::Pop, self.previous().line);
@@ -314,12 +356,10 @@ impl Compiler {
 
     fn expression_statement(&mut self) -> Result<(), String> {
         self.expression()?;
-        if let Err(err) = self.consume(
+        self.consume(
             scanner::TokenType::Semicolon,
             "Expected ';' after expression.",
-        ) {
-            return Err(err);
-        }
+        )?;
         let line = self.previous().line;
         self.emit_op(bytecode::Op::Pop, line);
         Ok(())
@@ -327,9 +367,7 @@ impl Compiler {
 
     fn print_statement(&mut self) -> Result<(), String> {
         self.expression()?;
-        if let Err(err) = self.consume(scanner::TokenType::Semicolon, "Expected ';' after value.") {
-            return Err(err);
-        }
+        self.consume(scanner::TokenType::Semicolon, "Expected ';' after value.")?;
         self.emit_op(bytecode::Op::Print, self.previous().clone().line);
         Ok(())
     }
