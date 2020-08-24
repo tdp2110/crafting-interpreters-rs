@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_compiler_1() {
-        let code_or_err = Compiler::default().compile(String::from("print 42 * 12;"));
+        let code_or_err = Compiler::compile(String::from("print 42 * 12;"));
 
         match code_or_err {
             Ok(_) => {}
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_compiler_2() {
-        let code_or_err = Compiler::default().compile(String::from("print -2 * 3 + (-4 / 2);"));
+        let code_or_err = Compiler::compile(String::from("print -2 * 3 + (-4 / 2);"));
 
         match code_or_err {
             Ok(_) => {}
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_var_decl_1() {
-        let code_or_err = Compiler::default().compile(String::from("var x = 2;"));
+        let code_or_err = Compiler::compile(String::from("var x = 2;"));
 
         match code_or_err {
             Ok(_) => {}
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_var_decl_implicit_nil() {
-        let code_or_err = Compiler::default().compile(String::from("var x;"));
+        let code_or_err = Compiler::compile(String::from("var x;"));
 
         match code_or_err {
             Ok(_) => {}
@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_1() {
-        let code_or_err = Compiler::default().compile(String::from("var x = 2; print x;"));
+        let code_or_err = Compiler::compile(String::from("var x = 2; print x;"));
 
         match code_or_err {
             Ok(code) => {
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_locals_1() {
-        let code_or_err = Compiler::default().compile(String::from("{var x = 2; print x;}"));
+        let code_or_err = Compiler::compile(String::from("{var x = 2; print x;}"));
 
         match code_or_err {
             Ok(code) => {
@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_2() {
-        let code_or_err = Compiler::default().compile(String::from("var x; print x;"));
+        let code_or_err = Compiler::compile(String::from("var x; print x;"));
 
         match code_or_err {
             Ok(_) => {}
@@ -549,7 +549,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_3() {
-        let code_or_err = Compiler::default().compile(String::from("var x; print x * 2 + x;"));
+        let code_or_err = Compiler::compile(String::from("var x; print x * 2 + x;"));
 
         match code_or_err {
             Ok(_) => {}
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_4() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = 2;\n\
              var y = 3;\n\
              print x * y + 4;",
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_locals_2() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 2;\n\
                var y = 3;\n\
@@ -611,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_div_by_zero() {
-        let code_or_err = Compiler::default().compile(String::from("print 1 / 0;"));
+        let code_or_err = Compiler::compile(String::from("print 1 / 0;"));
 
         match code_or_err {
             Ok(code) => {
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn test_setitem_globals() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var breakfast = \"beignets\";\n\
              var beverage = \"cafe au lait\";\n\
              breakfast = \"beignets with \" + beverage;\n\
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_setitem_locals() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var breakfast = \"beignets\";\n\
                var beverage = \"cafe au lait\";\n\
@@ -686,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_setitem_illegal_target_globals() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = 2;\n\
              var y = 3;\n\
              x * y = 5;",
@@ -700,7 +700,7 @@ mod tests {
 
     #[test]
     fn test_setitem_illegal_target_locals() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 2;\n\
                var y = 3;\n\
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn test_redeclaration_of_locals_is_error() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 2;\n\
                var x = 3;\n\
@@ -731,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_read_in_own_initializer() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var a = \"outer\";\n\
                {\n\
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn test_if_stmt() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = 0;\n\
              var y = 1;\n\
              if (x) {\n\
@@ -780,7 +780,7 @@ mod tests {
 
     #[test]
     fn test_if_then_else_1() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = 0;\n\
              if (x) {\n\
                print \"hello\";\n\
@@ -808,7 +808,7 @@ mod tests {
 
     #[test]
     fn test_if_then_else_2() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = 1;\n\
              if (x) {\n\
                print \"hello\";\n\
@@ -836,7 +836,7 @@ mod tests {
 
     #[test]
     fn test_print_locals() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 0;\n\
                var y = 1;\n\
@@ -864,7 +864,7 @@ mod tests {
 
     #[test]
     fn test_print_globals() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = 0;\n\
              var y = 1;\n\
              print x;\n\
@@ -890,7 +890,7 @@ mod tests {
 
     #[test]
     fn test_and_1() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -919,7 +919,7 @@ mod tests {
 
     #[test]
     fn test_and_2() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (x and y) {\n\
@@ -948,7 +948,7 @@ mod tests {
 
     #[test]
     fn test_and_3() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = true;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -977,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_or_1() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (y or x) {\n\
@@ -1006,7 +1006,7 @@ mod tests {
 
     #[test]
     fn test_or_2() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (x or y) {\n\
@@ -1035,7 +1035,7 @@ mod tests {
 
     #[test]
     fn test_or_3() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = false;\n\
              if (y or x) {\n\
@@ -1064,7 +1064,7 @@ mod tests {
 
     #[test]
     fn test_while() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{var x = 0;\n\
              var sum = 0;\n\
              while (x < 100) {\n\
@@ -1093,7 +1093,7 @@ mod tests {
 
     #[test]
     fn test_for() {
-        let code_or_err = Compiler::default().compile(String::from(
+        let code_or_err = Compiler::compile(String::from(
             "{\n\
                var fact = 1;\n\
                for (var i = 1; i <= 10; i = i + 1) {\n\

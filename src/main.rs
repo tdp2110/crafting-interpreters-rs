@@ -54,7 +54,7 @@ fn main() {
         match maybe_input {
             Ok(input) => {
                 if matches.is_present(BYTECODE_STR) {
-                    let code_or_err = compiler::Compiler::default().compile(input);
+                    let code_or_err = compiler::Compiler::compile(input);
 
                     match code_or_err {
                         Ok(code) => {

@@ -71,17 +71,18 @@ struct ParseRule {
 }
 
 impl Compiler {
-    pub fn compile(&mut self, input: String) -> Result<bytecode::Chunk, String> {
+    pub fn compile(input: String) -> Result<bytecode::Chunk, String> {
+        let mut compiler = Compiler::default();
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
-                self.tokens = tokens;
-                self.function = bytecode::Function::default();
+                compiler.tokens = tokens;
+                compiler.function = bytecode::Function::default();
 
-                while !self.is_at_end() {
-                    self.declaration()?;
+                while !compiler.is_at_end() {
+                    compiler.declaration()?;
                 }
 
-                Ok(std::mem::take(&mut self.current_chunk()))
+                Ok(std::mem::take(&mut compiler.current_chunk()))
             }
             Err(err) => Err(err),
         }
