@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::bytecode;
-use crate::value;
 
 #[allow(dead_code)]
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
@@ -74,9 +73,9 @@ enum Binop {
 pub struct Interpreter {
     chunk: bytecode::Chunk,
     ip: usize,
-    stack: Vec<value::Value>,
+    stack: Vec<bytecode::Value>,
     output: Vec<String>,
-    globals: HashMap<String, value::Value>,
+    globals: HashMap<String, bytecode::Value>,
 }
 
 impl Default for Interpreter {
@@ -123,13 +122,13 @@ impl Interpreter {
                     self.stack.push(constant);
                 }
                 (bytecode::Op::Nil, _) => {
-                    self.stack.push(value::Value::Nil);
+                    self.stack.push(bytecode::Value::Nil);
                 }
                 (bytecode::Op::True, _) => {
-                    self.stack.push(value::Value::Bool(true));
+                    self.stack.push(bytecode::Value::Bool(true));
                 }
                 (bytecode::Op::False, _) => {
-                    self.stack.push(value::Value::Bool(false));
+                    self.stack.push(bytecode::Value::Bool(false));
                 }
                 (bytecode::Op::Negate, lineno) => {
                     let top_stack = self.peek();
@@ -138,12 +137,12 @@ impl Interpreter {
                     match maybe_number {
                         Some(to_negate) => {
                             self.pop_stack();
-                            self.stack.push(value::Value::Number(-to_negate));
+                            self.stack.push(bytecode::Value::Number(-to_negate));
                         }
                         None => {
                             return Err(InterpreterError::Runtime(format!(
                                 "invalid operand to unary op negate. Expected number, found {:?} at line {}",
-                                value::type_of(top_stack), lineno.value
+                                bytecode::type_of(top_stack), lineno.value
                             )))
                         }
                     }
@@ -153,23 +152,23 @@ impl Interpreter {
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (value::Value::Number(n1), value::Value::Number(n2)) => {
+                        (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
-                            self.stack.push(value::Value::Number(n1 + n2));
+                            self.stack.push(bytecode::Value::Number(n1 + n2));
                         }
-                        (value::Value::String(s1), value::Value::String(s2)) => {
+                        (bytecode::Value::String(s1), bytecode::Value::String(s2)) => {
                             self.pop_stack();
                             self.pop_stack();
                             self.stack
-                                .push(value::Value::String(format!("{}{}", s2, s1)));
+                                .push(bytecode::Value::String(format!("{}{}", s2, s1)));
                         }
                         _ => {
                             return Err(InterpreterError::Runtime(format!(
                                 "invalid operands of type {:?} and {:?} in add expression: \
                                  both operands must be number or string (line={})",
-                                value::type_of(&val1),
-                                value::type_of(&val2),
+                                bytecode::type_of(&val1),
+                                bytecode::type_of(&val2),
                                 lineno.value
                             )))
                         }
@@ -194,12 +193,12 @@ impl Interpreter {
                     match maybe_bool {
                         Some(b) => {
                             self.pop_stack();
-                            self.stack.push(value::Value::Bool(!b));
+                            self.stack.push(bytecode::Value::Bool(!b));
                         }
                         None => {
                             return Err(InterpreterError::Runtime(format!(
                                 "invalid operand in not expression. Expected boolean, found {:?} at line {}",
-                                value::type_of(top_stack), lineno.value)))
+                                bytecode::type_of(top_stack), lineno.value)))
                         }
                     }
                 }
@@ -207,22 +206,24 @@ impl Interpreter {
                     let val1 = self.pop_stack();
                     let val2 = self.pop_stack();
                     self.stack
-                        .push(value::Value::Bool(Interpreter::values_equal(&val1, &val2)));
+                        .push(bytecode::Value::Bool(Interpreter::values_equal(
+                            &val1, &val2,
+                        )));
                 }
                 (bytecode::Op::Greater, lineno) => {
                     let val1 = self.peek_by(0).clone();
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (value::Value::Number(n1), value::Value::Number(n2)) => {
+                        (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
 
-                            self.stack.push(value::Value::Bool(n2 > n1));
+                            self.stack.push(bytecode::Value::Bool(n2 > n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Greater expression. Expected numbers, found {:?} and {:?} at line {}",
-                            value::type_of(&val1), value::type_of(&val2), lineno.value)))
+                            bytecode::type_of(&val1), bytecode::type_of(&val2), lineno.value)))
 
                     }
                 }
@@ -231,14 +232,14 @@ impl Interpreter {
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (value::Value::Number(n1), value::Value::Number(n2)) => {
+                        (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
-                            self.stack.push(value::Value::Bool(n2 < n1));
+                            self.stack.push(bytecode::Value::Bool(n2 < n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Less expression. Expected numbers, found {:?} and {:?} at line {}",
-                            value::type_of(&val1), value::type_of(&val2), lineno.value)))
+                            bytecode::type_of(&val1), bytecode::type_of(&val2), lineno.value)))
 
                     }
                 }
@@ -250,18 +251,18 @@ impl Interpreter {
                     self.pop_stack();
                 }
                 (bytecode::Op::DefineGlobal(idx), _) => {
-                    if let value::Value::String(name) = self.read_constant(idx).clone() {
+                    if let bytecode::Value::String(name) = self.read_constant(idx).clone() {
                         let val = self.pop_stack();
                         self.globals.insert(name, val);
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
-                            value::type_of(self.read_constant(idx))
+                            bytecode::type_of(self.read_constant(idx))
                         );
                     }
                 }
                 (bytecode::Op::GetGlobal(idx), lineno) => {
-                    if let value::Value::String(name) = self.read_constant(idx) {
+                    if let bytecode::Value::String(name) = self.read_constant(idx) {
                         match self.globals.get(name) {
                             Some(val) => {
                                 self.stack.push(val.clone());
@@ -276,12 +277,12 @@ impl Interpreter {
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
-                            value::type_of(self.read_constant(idx))
+                            bytecode::type_of(self.read_constant(idx))
                         );
                     }
                 }
                 (bytecode::Op::SetGlobal(idx), lineno) => {
-                    if let value::Value::String(name) = self.read_constant(idx).clone() {
+                    if let bytecode::Value::String(name) = self.read_constant(idx).clone() {
                         if self.globals.contains_key(&name) {
                             let val = self.peek().clone();
                             self.globals.insert(name, val);
@@ -294,7 +295,7 @@ impl Interpreter {
                     } else {
                         panic!(
                             "expected string when setting global, found {:?}",
-                            value::type_of(self.read_constant(idx))
+                            bytecode::type_of(self.read_constant(idx))
                         );
                     }
                 }
@@ -321,32 +322,34 @@ impl Interpreter {
         }
     }
 
-    fn is_falsey(val: &value::Value) -> bool {
+    fn is_falsey(val: &bytecode::Value) -> bool {
         match val {
-            value::Value::Nil => false,
-            value::Value::Bool(b) => !*b,
-            value::Value::Number(f) => *f == 0.0,
-            value::Value::String(s) => s.is_empty(),
+            bytecode::Value::Nil => false,
+            bytecode::Value::Bool(b) => !*b,
+            bytecode::Value::Number(f) => *f == 0.0,
+            bytecode::Value::String(s) => s.is_empty(),
         }
     }
 
-    fn print_val(&mut self, val: &value::Value) {
+    fn print_val(&mut self, val: &bytecode::Value) {
         let output = match val {
-            value::Value::Number(n) => format!("{}", n),
-            value::Value::Bool(b) => format!("{}", b),
-            value::Value::String(s) => s.clone(),
-            value::Value::Nil => "nil".to_string(),
+            bytecode::Value::Number(n) => format!("{}", n),
+            bytecode::Value::Bool(b) => format!("{}", b),
+            bytecode::Value::String(s) => s.clone(),
+            bytecode::Value::Nil => "nil".to_string(),
         };
         println!("{}", output);
         self.output.push(output);
     }
 
-    fn values_equal(val1: &value::Value, val2: &value::Value) -> bool {
+    fn values_equal(val1: &bytecode::Value, val2: &bytecode::Value) -> bool {
         match (val1, val2) {
-            (value::Value::Number(n1), value::Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
-            (value::Value::Bool(b1), value::Value::Bool(b2)) => b1 == b2,
-            (value::Value::String(s1), value::Value::String(s2)) => s1 == s2,
-            (value::Value::Nil, value::Value::Nil) => true,
+            (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
+                (n1 - n2).abs() < f64::EPSILON
+            }
+            (bytecode::Value::Bool(b1), bytecode::Value::Bool(b2)) => b1 == b2,
+            (bytecode::Value::String(s1), bytecode::Value::String(s2)) => s1 == s2,
+            (bytecode::Value::Nil, bytecode::Value::Nil) => true,
             (_, _) => false,
         }
     }
@@ -360,11 +363,11 @@ impl Interpreter {
         let val2 = self.peek_by(1).clone();
 
         match (&val1, &val2) {
-            (value::Value::Number(n1), value::Value::Number(n2)) => {
+            (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
                 self.pop_stack();
                 self.pop_stack();
                 self.stack
-                    .push(value::Value::Number(Interpreter::apply_numeric_binop(
+                    .push(bytecode::Value::Number(Interpreter::apply_numeric_binop(
                         *n2, *n1, binop, // note the order!
                     )));
                 Ok(())
@@ -372,8 +375,8 @@ impl Interpreter {
             _ => Err(InterpreterError::Runtime(format!(
                 "Expected numbers in {:?} expression. Found {:?} and {:?} (line={})",
                 binop,
-                value::type_of(&val1),
-                value::type_of(&val2),
+                bytecode::type_of(&val1),
+                bytecode::type_of(&val2),
                 lineno.value
             ))),
         }
@@ -388,18 +391,18 @@ impl Interpreter {
         }
     }
 
-    fn pop_stack(&mut self) -> value::Value {
+    fn pop_stack(&mut self) -> bytecode::Value {
         match self.stack.pop() {
             Some(val) => val,
             None => panic!("attempted to pop empty stack!"),
         }
     }
 
-    fn peek(&self) -> &value::Value {
+    fn peek(&self) -> &bytecode::Value {
         self.peek_by(0)
     }
 
-    fn peek_by(&self, n: usize) -> &value::Value {
+    fn peek_by(&self, n: usize) -> &bytecode::Value {
         &self.stack[self.stack.len() - n - 1]
     }
 
@@ -409,20 +412,20 @@ impl Interpreter {
         res
     }
 
-    fn read_constant(&self, idx: usize) -> &value::Value {
+    fn read_constant(&self, idx: usize) -> &bytecode::Value {
         &self.chunk.constants[idx]
     }
 
-    fn extract_number(val: &value::Value) -> Option<f64> {
+    fn extract_number(val: &bytecode::Value) -> Option<f64> {
         match val {
-            value::Value::Number(f) => Some(*f),
+            bytecode::Value::Number(f) => Some(*f),
             _ => None,
         }
     }
 
-    fn extract_bool(val: &value::Value) -> Option<bool> {
+    fn extract_bool(val: &bytecode::Value) -> Option<bool> {
         match val {
-            value::Value::Bool(b) => Some(*b),
+            bytecode::Value::Bool(b) => Some(*b),
             _ => None,
         }
     }
@@ -445,9 +448,9 @@ mod tests {
                 (bytecode::Op::Return, bytecode::Lineno(42)),
             ],
             constants: vec![
-                value::Value::Number(1.2),
-                value::Value::Number(3.4),
-                value::Value::Number(5.6),
+                bytecode::Value::Number(1.2),
+                bytecode::Value::Number(3.4),
+                bytecode::Value::Number(5.6),
             ],
         };
 

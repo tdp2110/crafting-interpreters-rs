@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::value;
+use std::fmt;
 
 #[derive(Default, Copy, Clone, Debug)]
 pub struct Lineno {
@@ -41,22 +41,60 @@ pub enum Op {
     Loop(usize),
 }
 
+#[derive(Clone)]
+#[allow(dead_code)]
+pub enum Value {
+    Number(f64),
+    Bool(bool),
+    String(String),
+    Nil,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
+pub enum Type {
+    Number,
+    Bool,
+    String,
+    Nil,
+}
+
+pub fn type_of(value: &Value) -> Type {
+    match value {
+        Value::Number(_) => Type::Number,
+        Value::Bool(_) => Type::Bool,
+        Value::String(_) => Type::String,
+        Value::Nil => Type::Nil,
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::Number(num) => write!(f, "{}", num),
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::String(s) => write!(f, "{}", s),
+            Value::Nil => write!(f, "nil"),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Chunk {
     pub code: Vec<(Op, Lineno)>,
-    pub constants: Vec<value::Value>,
+    pub constants: Vec<Value>,
 }
 
 impl Chunk {
     pub fn add_constant_number(&mut self, c: f64) -> usize {
-        self.add_constant(value::Value::Number(c))
+        self.add_constant(Value::Number(c))
     }
 
     pub fn add_constant_string(&mut self, s: String) -> usize {
-        self.add_constant(value::Value::String(s))
+        self.add_constant(Value::String(s))
     }
 
-    fn add_constant(&mut self, val: value::Value) -> usize {
+    fn add_constant(&mut self, val: Value) -> usize {
         let const_idx = self.constants.len();
         self.constants.push(val);
         const_idx
