@@ -6,13 +6,34 @@ struct Local {
     depth: i64,
 }
 
-#[derive(Default)]
+#[derive(Debug)]
+#[allow(dead_code)]
+enum FunctionType {
+    Function,
+    Script,
+}
+
+#[allow(dead_code)]
 pub struct Compiler {
     tokens: Vec<scanner::Token>,
-    current_chunk: bytecode::Chunk,
+    function: bytecode::Function,
+    function_type: FunctionType,
     current: usize,
     locals: Vec<Local>,
     scope_depth: i64,
+}
+
+impl Default for Compiler {
+    fn default() -> Compiler {
+        Compiler {
+            tokens: Default::default(),
+            function: Default::default(),
+            function_type: FunctionType::Script,
+            current: 0,
+            locals: Default::default(),
+            scope_depth: 0,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, PartialOrd, Copy, Clone, Debug)]
@@ -54,13 +75,13 @@ impl Compiler {
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
                 self.tokens = tokens;
-                self.current_chunk = bytecode::Chunk::default();
+                self.function = bytecode::Function::default();
 
                 while !self.is_at_end() {
                     self.declaration()?;
                 }
 
-                Ok(std::mem::take(&mut self.current_chunk))
+                Ok(std::mem::take(&mut self.current_chunk()))
             }
             Err(err) => Err(err),
         }
@@ -172,7 +193,7 @@ impl Compiler {
     }
 
     fn identifier_constant(&mut self, name: String) -> usize {
-        self.current_chunk.add_constant_string(name)
+        self.current_chunk().add_constant_string(name)
     }
 
     fn statement(&mut self) -> Result<(), String> {
@@ -204,7 +225,7 @@ impl Compiler {
             self.expression_statement()?;
         }
 
-        let mut loop_start = self.current_chunk.code.len();
+        let mut loop_start = self.current_chunk().code.len();
 
         // condition
         let mut maybe_exit_jump = None;
@@ -223,7 +244,7 @@ impl Compiler {
         if !self.matches(scanner::TokenType::RightParen) {
             let body_jump = self.emit_jump(bytecode::Op::Jump(/*placeholder*/ 0));
 
-            let increment_start = self.current_chunk.code.len() + 1;
+            let increment_start = self.current_chunk().code.len() + 1;
             self.expression()?;
             self.emit_op(bytecode::Op::Pop, self.previous().line);
             self.consume(
@@ -251,7 +272,7 @@ impl Compiler {
     }
 
     fn while_statement(&mut self) -> Result<(), String> {
-        let loop_start = self.current_chunk.code.len();
+        let loop_start = self.current_chunk().code.len();
         self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'while'.")?;
         self.expression()?;
         self.consume(
@@ -272,7 +293,7 @@ impl Compiler {
     }
 
     fn emit_loop(&mut self, loop_start: usize) {
-        let offset = self.current_chunk.code.len() - loop_start + 2;
+        let offset = self.current_chunk().code.len() - loop_start + 2;
         self.emit_op(bytecode::Op::Loop(offset), self.previous().line);
     }
 
@@ -300,12 +321,13 @@ impl Compiler {
     }
 
     fn patch_jump(&mut self, jump_location: usize) {
-        let true_jump = self.current_chunk.code.len() - jump_location - 1;
-        let (maybe_jump, lineno) = self.current_chunk.code[jump_location];
+        let true_jump = self.current_chunk().code.len() - jump_location - 1;
+        let (maybe_jump, lineno) = self.current_chunk().code[jump_location];
         if let bytecode::Op::JumpIfFalse(_) = maybe_jump {
-            self.current_chunk.code[jump_location] = (bytecode::Op::JumpIfFalse(true_jump), lineno);
+            self.current_chunk().code[jump_location] =
+                (bytecode::Op::JumpIfFalse(true_jump), lineno);
         } else if let bytecode::Op::Jump(_) = maybe_jump {
-            self.current_chunk.code[jump_location] = (bytecode::Op::Jump(true_jump), lineno);
+            self.current_chunk().code[jump_location] = (bytecode::Op::Jump(true_jump), lineno);
         } else {
             panic!(
                 "attempted to patch a jump but didn't find a jump! Found {:?}.",
@@ -316,7 +338,7 @@ impl Compiler {
 
     fn emit_jump(&mut self, op: bytecode::Op) -> usize {
         self.emit_op(op, self.previous().line);
-        self.current_chunk.code.len() - 1
+        self.current_chunk().code.len() - 1
     }
 
     fn block(&mut self) -> Result<(), String> {
@@ -502,7 +524,7 @@ impl Compiler {
 
         match tok.literal {
             Some(scanner::Literal::Str(s)) => {
-                let const_idx = self.current_chunk.add_constant_string(s);
+                let const_idx = self.current_chunk().add_constant_string(s);
                 self.emit_op(bytecode::Op::Constant(const_idx), tok.line);
                 Ok(())
             }
@@ -610,12 +632,14 @@ impl Compiler {
     }
 
     fn emit_number(&mut self, n: f64, lineno: usize) {
-        let const_idx = self.current_chunk.add_constant_number(n);
+        let const_idx = self.current_chunk().add_constant_number(n);
         self.emit_op(bytecode::Op::Constant(const_idx), lineno);
     }
 
     fn emit_op(&mut self, op: bytecode::Op, lineno: usize) {
-        self.current_chunk.code.push((op, bytecode::Lineno(lineno)))
+        self.current_chunk()
+            .code
+            .push((op, bytecode::Lineno(lineno)))
     }
 
     fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), String> {
@@ -920,5 +944,9 @@ impl Compiler {
                 precedence: Precedence::None,
             },
         }
+    }
+
+    fn current_chunk(&mut self) -> &mut bytecode::Chunk {
+        &mut self.function.chunk
     }
 }
