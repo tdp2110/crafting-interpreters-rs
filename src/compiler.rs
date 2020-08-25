@@ -30,7 +30,16 @@ impl Default for Compiler {
             function: Default::default(),
             function_type: FunctionType::Script,
             current: 0,
-            locals: Default::default(),
+            locals: vec![Local {
+                name: scanner::Token {
+                    ty: scanner::TokenType::Identifier,
+                    lexeme: Default::default(),
+                    literal: Some(scanner::Literal::Identifier("".to_string())),
+                    line: 0,
+                    col: -1,
+                },
+                depth: 0,
+            }],
             scope_depth: 0,
         }
     }
@@ -71,7 +80,7 @@ struct ParseRule {
 }
 
 impl Compiler {
-    pub fn compile(input: String) -> Result<bytecode::Chunk, String> {
+    pub fn compile(input: String) -> Result<bytecode::Function, String> {
         let mut compiler = Compiler::default();
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
@@ -82,7 +91,7 @@ impl Compiler {
                     compiler.declaration()?;
                 }
 
-                Ok(std::mem::take(&mut compiler.current_chunk()))
+                Ok(std::mem::take(&mut compiler.function))
             }
             Err(err) => Err(err),
         }
@@ -514,7 +523,7 @@ impl Compiler {
                 if local.depth == -1 {
                     return Err(self.error("Cannot read local variable in its own initializer."));
                 }
-                return Ok(Some(self.locals.len() - 1 - idx));
+                return Ok(Some(self.locals.len() - 2 - idx));
             }
         }
         Ok(None)

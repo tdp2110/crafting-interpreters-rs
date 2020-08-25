@@ -54,12 +54,12 @@ fn main() {
         match maybe_input {
             Ok(input) => {
                 if matches.is_present(BYTECODE_STR) {
-                    let code_or_err = compiler::Compiler::compile(input);
+                    let func_or_err = compiler::Compiler::compile(input);
 
-                    match code_or_err {
-                        Ok(code) => {
-                            bytecode_interpreter::disassemble_chunk(&code, input_file);
-                            let res = bytecode_interpreter::Interpreter::default().interpret(code);
+                    match func_or_err {
+                        Ok(func) => {
+                            bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
+                            let res = bytecode_interpreter::Interpreter::default().interpret(func);
                             match res {
                                 Ok(()) => {
                                     std::process::exit(0);

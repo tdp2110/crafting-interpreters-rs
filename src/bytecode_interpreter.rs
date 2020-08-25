@@ -71,8 +71,7 @@ enum Binop {
 }
 
 pub struct Interpreter {
-    chunk: bytecode::Chunk,
-    ip: usize,
+    frames: Vec<CallFrame>,
     stack: Vec<bytecode::Value>,
     output: Vec<String>,
     globals: HashMap<String, bytecode::Value>,
@@ -81,13 +80,13 @@ pub struct Interpreter {
 impl Default for Interpreter {
     fn default() -> Interpreter {
         let mut res = Interpreter {
-            chunk: Default::default(),
-            ip: 0,
+            frames: Vec::new(),
             stack: Vec::new(),
             output: Vec::new(),
             globals: HashMap::new(),
         };
         res.stack.reserve(256);
+        res.frames.reserve(64);
         res
     }
 }
@@ -99,15 +98,48 @@ pub enum InterpreterError {
     Runtime(String),
 }
 
+#[derive(Default)]
+struct CallFrame {
+    function: bytecode::Function,
+    ip: usize,
+    slots_offset: usize,
+}
+
+impl CallFrame {
+    fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
+        let res = self.function.chunk.code[self.ip];
+        self.ip += 1;
+        res
+    }
+
+    fn read_constant(&self, idx: usize) -> &bytecode::Value {
+        &self.function.chunk.constants[idx]
+    }
+}
+
 impl Interpreter {
-    pub fn interpret(&mut self, chunk: bytecode::Chunk) -> Result<(), InterpreterError> {
-        self.chunk = chunk;
+    pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
+        self.stack.push(bytecode::Value::Function(func.clone()));
+        self.frames.push(CallFrame {
+            function: func,
+            ip: 0,
+            slots_offset: 1,
+        });
         self.run()
+    }
+
+    fn frame_mut(&mut self) -> &mut CallFrame {
+        let frames_len = self.frames.len();
+        &mut self.frames[frames_len - 1]
+    }
+
+    fn frame(&self) -> &CallFrame {
+        &self.frames[self.frames.len() - 1]
     }
 
     fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
-            if self.ip >= self.chunk.code.len() {
+            if self.frame().ip >= self.frame().function.chunk.code.len() {
                 return Ok(());
             }
 
@@ -300,23 +332,25 @@ impl Interpreter {
                     }
                 }
                 (bytecode::Op::GetLocal(idx), _) => {
-                    let val = self.stack[idx].clone();
+                    let slots_offset = self.frame().slots_offset;
+                    let val = self.stack[slots_offset + idx].clone();
                     self.stack.push(val);
                 }
                 (bytecode::Op::SetLocal(idx), _) => {
                     let val = self.peek();
-                    self.stack[idx] = val.clone();
+                    let slots_offset = self.frame().slots_offset;
+                    self.stack[slots_offset + idx] = val.clone();
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
                     if Interpreter::is_falsey(&self.peek()) {
-                        self.ip += offset;
+                        self.frame_mut().ip += offset;
                     }
                 }
                 (bytecode::Op::Jump(offset), _) => {
-                    self.ip += offset;
+                    self.frame_mut().ip += offset;
                 }
                 (bytecode::Op::Loop(offset), _) => {
-                    self.ip -= offset;
+                    self.frame_mut().ip -= offset;
                 }
             }
         }
@@ -403,13 +437,11 @@ impl Interpreter {
     }
 
     fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
-        let res = self.chunk.code[self.ip];
-        self.ip += 1;
-        res
+        self.frame_mut().next_op()
     }
 
     fn read_constant(&self, idx: usize) -> &bytecode::Value {
-        &self.chunk.constants[idx]
+        &self.frame().read_constant(idx)
     }
 
     fn extract_number(val: &bytecode::Value) -> Option<f64> {
@@ -433,33 +465,10 @@ mod tests {
     use crate::compiler::*;
 
     #[test]
-    fn test_interpret_handcoded_bytecode() {
-        let code = bytecode::Chunk {
-            code: vec![
-                (bytecode::Op::Constant(0), bytecode::Lineno(42)),
-                (bytecode::Op::Constant(1), bytecode::Lineno(42)),
-                (bytecode::Op::Add, bytecode::Lineno(42)),
-                (bytecode::Op::Constant(2), bytecode::Lineno(42)),
-                (bytecode::Op::Divide, bytecode::Lineno(42)),
-                (bytecode::Op::Return, bytecode::Lineno(42)),
-            ],
-            constants: vec![
-                bytecode::Value::Number(1.2),
-                bytecode::Value::Number(3.4),
-                bytecode::Value::Number(5.6),
-            ],
-        };
-
-        let res = Interpreter::default().interpret(code);
-
-        assert!(res.is_ok())
-    }
-
-    #[test]
     fn test_compiler_1() {
-        let code_or_err = Compiler::compile(String::from("print 42 * 12;"));
+        let func_or_err = Compiler::compile(String::from("print 42 * 12;"));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => {}
             Err(err) => panic!(err),
         }
@@ -467,9 +476,9 @@ mod tests {
 
     #[test]
     fn test_compiler_2() {
-        let code_or_err = Compiler::compile(String::from("print -2 * 3 + (-4 / 2);"));
+        let func_or_err = Compiler::compile(String::from("print -2 * 3 + (-4 / 2);"));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => {}
             Err(err) => panic!(err),
         }
@@ -477,9 +486,9 @@ mod tests {
 
     #[test]
     fn test_var_decl_1() {
-        let code_or_err = Compiler::compile(String::from("var x = 2;"));
+        let func_or_err = Compiler::compile(String::from("var x = 2;"));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => {}
             Err(err) => panic!(err),
         }
@@ -487,9 +496,9 @@ mod tests {
 
     #[test]
     fn test_var_decl_implicit_nil() {
-        let code_or_err = Compiler::compile(String::from("var x;"));
+        let func_or_err = Compiler::compile(String::from("var x;"));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => {}
             Err(err) => panic!(err),
         }
@@ -497,12 +506,12 @@ mod tests {
 
     #[test]
     fn test_var_reading_1() {
-        let code_or_err = Compiler::compile(String::from("var x = 2; print x;"));
+        let func_or_err = Compiler::compile(String::from("var x = 2; print x;"));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["2"]);
@@ -518,12 +527,12 @@ mod tests {
 
     #[test]
     fn test_var_reading_locals_1() {
-        let code_or_err = Compiler::compile(String::from("{var x = 2; print x;}"));
+        let func_or_err = Compiler::compile(String::from("{var x = 2; print x;}"));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["2"]);
@@ -539,9 +548,9 @@ mod tests {
 
     #[test]
     fn test_var_reading_2() {
-        let code_or_err = Compiler::compile(String::from("var x; print x;"));
+        let func_or_err = Compiler::compile(String::from("var x; print x;"));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => {}
             Err(err) => panic!(err),
         }
@@ -549,9 +558,9 @@ mod tests {
 
     #[test]
     fn test_var_reading_3() {
-        let code_or_err = Compiler::compile(String::from("var x; print x * 2 + x;"));
+        let func_or_err = Compiler::compile(String::from("var x; print x * 2 + x;"));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => {}
             Err(err) => panic!(err),
         }
@@ -559,16 +568,16 @@ mod tests {
 
     #[test]
     fn test_var_reading_4() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = 2;\n\
              var y = 3;\n\
              print x * y + 4;",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["10"]);
@@ -584,7 +593,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_locals_2() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 2;\n\
                var y = 3;\n\
@@ -592,10 +601,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["10"]);
@@ -611,12 +620,12 @@ mod tests {
 
     #[test]
     fn test_div_by_zero() {
-        let code_or_err = Compiler::compile(String::from("print 1 / 0;"));
+        let func_or_err = Compiler::compile(String::from("print 1 / 0;"));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["inf"]);
@@ -632,17 +641,17 @@ mod tests {
 
     #[test]
     fn test_setitem_globals() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var breakfast = \"beignets\";\n\
              var beverage = \"cafe au lait\";\n\
              breakfast = \"beignets with \" + beverage;\n\
              print breakfast;",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["beignets with cafe au lait"]);
@@ -658,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_setitem_locals() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var breakfast = \"beignets\";\n\
                var beverage = \"cafe au lait\";\n\
@@ -667,10 +676,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["beignets with cafe au lait"]);
@@ -686,13 +695,13 @@ mod tests {
 
     #[test]
     fn test_setitem_illegal_target_globals() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = 2;\n\
              var y = 3;\n\
              x * y = 5;",
         ));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => panic!("expected compile error"),
             Err(err) => assert!(err.starts_with("Invalid assignment target")),
         }
@@ -700,7 +709,7 @@ mod tests {
 
     #[test]
     fn test_setitem_illegal_target_locals() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 2;\n\
                var y = 3;\n\
@@ -708,7 +717,7 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => panic!("expected compile error"),
             Err(err) => assert!(err.starts_with("Invalid assignment target")),
         }
@@ -716,14 +725,14 @@ mod tests {
 
     #[test]
     fn test_redeclaration_of_locals_is_error() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 2;\n\
                var x = 3;\n\
              }",
         ));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => panic!("expected compile error"),
             Err(err) => assert!(err.starts_with("Redeclaration of variable")),
         }
@@ -731,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_read_in_own_initializer() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var a = \"outer\";\n\
                {\n\
@@ -740,7 +749,7 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
+        match func_or_err {
             Ok(_) => panic!("expected compile error"),
             Err(err) => {
                 assert!(err.starts_with("Cannot read local variable in its own initializer."))
@@ -750,7 +759,7 @@ mod tests {
 
     #[test]
     fn test_if_stmt() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = 0;\n\
              var y = 1;\n\
              if (x) {\n\
@@ -761,10 +770,10 @@ mod tests {
              }",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["1"]);
@@ -780,7 +789,7 @@ mod tests {
 
     #[test]
     fn test_if_then_else_1() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = 0;\n\
              if (x) {\n\
                print \"hello\";\n\
@@ -789,10 +798,10 @@ mod tests {
              }",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["goodbye"]);
@@ -808,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_if_then_else_2() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = 1;\n\
              if (x) {\n\
                print \"hello\";\n\
@@ -817,10 +826,10 @@ mod tests {
              }",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["hello"]);
@@ -836,7 +845,7 @@ mod tests {
 
     #[test]
     fn test_print_locals() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var x = 0;\n\
                var y = 1;\n\
@@ -845,10 +854,10 @@ mod tests {
              }",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["0", "1"]);
@@ -864,17 +873,17 @@ mod tests {
 
     #[test]
     fn test_print_globals() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = 0;\n\
              var y = 1;\n\
              print x;\n\
              print y;\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["0", "1"]);
@@ -890,7 +899,7 @@ mod tests {
 
     #[test]
     fn test_and_1() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -900,10 +909,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["dog"]);
@@ -919,7 +928,7 @@ mod tests {
 
     #[test]
     fn test_and_2() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (x and y) {\n\
@@ -929,10 +938,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["dog"]);
@@ -948,7 +957,7 @@ mod tests {
 
     #[test]
     fn test_and_3() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = true;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -958,10 +967,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["cat"]);
@@ -977,7 +986,7 @@ mod tests {
 
     #[test]
     fn test_or_1() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (y or x) {\n\
@@ -987,10 +996,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["cat"]);
@@ -1006,7 +1015,7 @@ mod tests {
 
     #[test]
     fn test_or_2() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = true;\n\
              if (x or y) {\n\
@@ -1016,10 +1025,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["cat"]);
@@ -1035,7 +1044,7 @@ mod tests {
 
     #[test]
     fn test_or_3() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "var x = false;\n\
              var y = false;\n\
              if (y or x) {\n\
@@ -1045,10 +1054,10 @@ mod tests {
              }\n",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["dog"]);
@@ -1064,7 +1073,7 @@ mod tests {
 
     #[test]
     fn test_while() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{var x = 0;\n\
              var sum = 0;\n\
              while (x < 100) {\n\
@@ -1074,10 +1083,10 @@ mod tests {
              print sum;}",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["5050"]);
@@ -1093,7 +1102,7 @@ mod tests {
 
     #[test]
     fn test_for() {
-        let code_or_err = Compiler::compile(String::from(
+        let func_or_err = Compiler::compile(String::from(
             "{\n\
                var fact = 1;\n\
                for (var i = 1; i <= 10; i = i + 1) {\n\
@@ -1103,10 +1112,10 @@ mod tests {
              }",
         ));
 
-        match code_or_err {
-            Ok(code) => {
+        match func_or_err {
+            Ok(func) => {
                 let mut interp = Interpreter::default();
-                let res = interp.interpret(code);
+                let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["3628800"]);
