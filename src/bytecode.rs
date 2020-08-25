@@ -106,7 +106,7 @@ impl Chunk {
         self.add_constant(Value::String(s))
     }
 
-    fn add_constant(&mut self, val: Value) -> usize {
+    pub fn add_constant(&mut self, val: Value) -> usize {
         let const_idx = self.constants.len();
         self.constants.push(val);
         const_idx

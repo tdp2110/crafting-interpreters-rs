@@ -1,6 +1,8 @@
 use crate::bytecode;
 use crate::scanner;
 
+use std::mem;
+
 struct Local {
     name: scanner::Token,
     depth: i64,
@@ -98,11 +100,64 @@ impl Compiler {
     }
 
     fn declaration(&mut self) -> Result<(), String> {
-        if self.matches(scanner::TokenType::Var) {
+        if self.matches(scanner::TokenType::Fun) {
+            self.fun_decl()
+        } else if self.matches(scanner::TokenType::Var) {
             self.var_decl()
         } else {
             self.statement()
         }
+    }
+
+    fn fun_decl(&mut self) -> Result<(), String> {
+        let global_idx = self.parse_variable("Expected function name.")?;
+        self.mark_initialized();
+        self.function(FunctionType::Function)?;
+        self.define_variable(global_idx);
+        Ok(())
+    }
+
+    fn function(&mut self, _function_type: FunctionType) -> Result<(), String> {
+        let mut compiler = Compiler::default();
+        mem::swap(&mut compiler.tokens, &mut self.tokens);
+        compiler.function = bytecode::Function::default();
+
+        compiler.begin_scope();
+        compiler.consume(
+            scanner::TokenType::LeftParen,
+            "Expected '(' after function name.",
+        )?;
+
+        if !self.check(scanner::TokenType::RightParen) {
+            loop {
+                compiler.function.arity += 1;
+                let param_const_idx = compiler.parse_variable("Expected parameter name")?;
+                compiler.define_variable(param_const_idx);
+
+                if !self.matches(scanner::TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+
+        compiler.consume(
+            scanner::TokenType::RightParen,
+            "Expected ')' after parameter list.",
+        )?;
+
+        compiler.consume(
+            scanner::TokenType::LeftBrace,
+            "Expected '{' before function body.",
+        )?;
+        compiler.block()?;
+
+        let function = std::mem::take(&mut compiler.function);
+        mem::swap(&mut compiler.tokens, &mut self.tokens);
+        let const_idx = self
+            .current_chunk()
+            .add_constant(bytecode::Value::Function(function));
+        self.emit_op(bytecode::Op::Constant(const_idx), self.previous().line);
+        Ok(())
     }
 
     fn var_decl(&mut self) -> Result<(), String> {
@@ -124,16 +179,23 @@ impl Compiler {
         Ok(())
     }
 
-    fn define_variable(&mut self, global_idx: usize) {
+    fn mark_initialized(&mut self) -> bool {
         if self.scope_depth > 0 {
             if let Some(last) = self.locals.last_mut() {
                 last.depth = self.scope_depth;
             } else {
                 panic!("expected nonempty locals!");
             }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn define_variable(&mut self, global_idx: usize) {
+        if self.mark_initialized() {
             return;
         }
-
         let line = self.previous().line;
         self.emit_op(bytecode::Op::DefineGlobal(global_idx), line);
     }
