@@ -1128,4 +1128,36 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
+    #[test]
+    fn test_functions_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun areWeHavingItYet() {\n\
+               print \"Yes we are!\";\n\
+             }\n\
+             \n\
+             print areWeHavingItYet;\n",
+        ));
+
+        match func_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_2() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun f(x, y) {\n\
+               print x + y;\n\
+             }\n\
+             \n\
+             print f;\n",
+        ));
+
+        match func_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
 }

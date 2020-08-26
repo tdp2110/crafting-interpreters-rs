@@ -119,8 +119,15 @@ impl Compiler {
 
     fn function(&mut self, _function_type: FunctionType) -> Result<(), String> {
         let mut compiler = Compiler::default();
-        mem::swap(&mut compiler.tokens, &mut self.tokens);
         compiler.function = bytecode::Function::default();
+        compiler.function.name =
+            if let Some(scanner::Literal::Identifier(funname)) = &self.previous().literal {
+                funname.clone()
+            } else {
+                panic!("expected identifier");
+            };
+        compiler.current = self.current;
+        mem::swap(&mut compiler.tokens, &mut self.tokens);
 
         compiler.begin_scope();
         compiler.consume(
@@ -128,13 +135,13 @@ impl Compiler {
             "Expected '(' after function name.",
         )?;
 
-        if !self.check(scanner::TokenType::RightParen) {
+        if !compiler.check(scanner::TokenType::RightParen) {
             loop {
                 compiler.function.arity += 1;
                 let param_const_idx = compiler.parse_variable("Expected parameter name")?;
                 compiler.define_variable(param_const_idx);
 
-                if !self.matches(scanner::TokenType::Comma) {
+                if !compiler.matches(scanner::TokenType::Comma) {
                     break;
                 }
             }
@@ -153,6 +160,7 @@ impl Compiler {
 
         let function = std::mem::take(&mut compiler.function);
         mem::swap(&mut compiler.tokens, &mut self.tokens);
+        self.current = compiler.current;
         let const_idx = self
             .current_chunk()
             .add_constant(bytecode::Value::Function(function));
