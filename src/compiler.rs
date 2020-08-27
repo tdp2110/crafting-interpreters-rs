@@ -73,6 +73,7 @@ enum ParseFn {
     Variable,
     And,
     Or,
+    Call,
 }
 
 struct ParseRule {
@@ -92,6 +93,8 @@ impl Compiler {
                 while !compiler.is_at_end() {
                     compiler.declaration()?;
                 }
+
+                compiler.emit_return();
 
                 Ok(std::mem::take(&mut compiler.function))
             }
@@ -283,6 +286,8 @@ impl Compiler {
             self.for_statement()?;
         } else if self.matches(scanner::TokenType::If) {
             self.if_statement()?;
+        } else if self.matches(scanner::TokenType::Return) {
+            self.return_statement()?;
         } else if self.matches(scanner::TokenType::While) {
             self.while_statement()?;
         } else if self.matches(scanner::TokenType::LeftBrace) {
@@ -291,6 +296,20 @@ impl Compiler {
             self.end_scope();
         } else {
             self.expression_statement()?;
+        }
+        Ok(())
+    }
+
+    fn return_statement(&mut self) -> Result<(), String> {
+        if self.matches(scanner::TokenType::Semicolon) {
+            self.emit_return();
+        } else {
+            self.expression()?;
+            self.consume(
+                scanner::TokenType::Semicolon,
+                "Expected ';' after return value.",
+            )?;
+            self.emit_op(bytecode::Op::Return, self.previous().line);
         }
         Ok(())
     }
@@ -690,6 +709,26 @@ impl Compiler {
         Ok(())
     }
 
+    fn call(&mut self, _can_assign: bool) -> Result<(), String> {
+        let arg_count = self.argument_list()?;
+        self.emit_op(bytecode::Op::Call(arg_count), self.previous().line);
+        Ok(())
+    }
+
+    fn argument_list(&mut self) -> Result<u8, String> {
+        let mut arg_count: u8 = 0;
+        if !self.check(scanner::TokenType::RightParen) {
+            loop {
+                self.expression()?;
+                arg_count += 1;
+                if !self.matches(scanner::TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        Ok(arg_count)
+    }
+
     fn unary(&mut self, _can_assign: bool) -> Result<(), String> {
         let operator = self.previous().clone();
 
@@ -720,6 +759,11 @@ impl Compiler {
         self.current_chunk()
             .code
             .push((op, bytecode::Lineno(lineno)))
+    }
+
+    fn emit_return(&mut self) {
+        self.emit_op(bytecode::Op::Nil, self.previous().line);
+        self.emit_op(bytecode::Op::Return, self.previous().line);
     }
 
     fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), String> {
@@ -765,6 +809,7 @@ impl Compiler {
             ParseFn::Variable => self.variable(can_assign),
             ParseFn::And => self.and(can_assign),
             ParseFn::Or => self.or(can_assign),
+            ParseFn::Call => self.call(can_assign),
         }
     }
 
@@ -830,7 +875,7 @@ impl Compiler {
         match operator {
             scanner::TokenType::LeftParen => ParseRule {
                 prefix: Some(ParseFn::Grouping),
-                infix: None,
+                infix: Some(ParseFn::Call),
                 precedence: Precedence::None,
             },
             scanner::TokenType::RightParen => ParseRule {

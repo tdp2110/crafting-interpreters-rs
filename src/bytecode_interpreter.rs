@@ -50,6 +50,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::JumpIfFalse(loc) => format!("OP_JUMP_IF_FALSE {}", *loc),
             bytecode::Op::Jump(offset) => format!("OP_JUMP {}", *offset),
             bytecode::Op::Loop(offset) => format!("OP_LOOP {}", *offset),
+            bytecode::Op::Call(arg_count) => format!("OP_CALL {}", *arg_count),
         };
 
         println!(
@@ -147,7 +148,14 @@ impl Interpreter {
 
             match op {
                 (bytecode::Op::Return, _) => {
-                    return Ok(());
+                    let result = self.pop_stack();
+                    self.frames.pop();
+                    if self.frames.is_empty() {
+                        self.pop_stack();
+                        return Ok(());
+                    }
+
+                    self.stack.push(result);
                 }
                 (bytecode::Op::Constant(idx), _) => {
                     let constant = self.read_constant(idx).clone();
@@ -352,8 +360,41 @@ impl Interpreter {
                 (bytecode::Op::Loop(offset), _) => {
                     self.frame_mut().ip -= offset;
                 }
+                (bytecode::Op::Call(arg_count), _) => {
+                    self.call_value(self.peek_by(arg_count.into()).clone(), arg_count)?;
+                    self.frames.pop();
+                }
             }
         }
+    }
+
+    fn call_value(
+        &mut self,
+        value: bytecode::Value,
+        arg_count: u8,
+    ) -> Result<(), InterpreterError> {
+        match value {
+            bytecode::Value::Function(func) => {
+                self.call(func, arg_count)?;
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn call(&mut self, func: bytecode::Function, arg_count: u8) -> Result<(), InterpreterError> {
+        if arg_count != func.arity {
+            return Err(InterpreterError::Runtime(format!(
+                "Expected {} arguments but found {}.",
+                func.arity, arg_count
+            )));
+        }
+
+        self.frames.push(CallFrame::default());
+        let mut frame = self.frames.last_mut().unwrap();
+        frame.function = func;
+        frame.slots_offset = self.stack.len() - usize::from(arg_count) - 1;
+        Ok(())
     }
 
     fn is_falsey(val: &bytecode::Value) -> bool {
@@ -1150,6 +1191,38 @@ mod tests {
         let func_or_err = Compiler::compile(String::from(
             "fun f(x, y) {\n\
                print x + y;\n\
+             }\n\
+             \n\
+             print f;\n",
+        ));
+
+        match func_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_3() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun f(x, y) {\n\
+               return x + y;\n\
+             }\n\
+             \n\
+             print f;\n",
+        ));
+
+        match func_or_err {
+            Ok(_) => {}
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_4() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun f() {\n\
+               return;\n\
              }\n\
              \n\
              print f;\n",
