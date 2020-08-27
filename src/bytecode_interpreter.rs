@@ -1233,4 +1233,14 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
+    #[test]
+    fn test_functions_5() {
+        let func_or_err = Compiler::compile(String::from("return 42;"));
+
+        match func_or_err {
+            Ok(_) => panic!(),
+            Err(err) => assert_eq!(err, "Cannot return from top-level code."),
+        }
+    }
 }

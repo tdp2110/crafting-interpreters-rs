@@ -8,7 +8,7 @@ struct Local {
     depth: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 #[allow(dead_code)]
 enum FunctionType {
     Function,
@@ -120,8 +120,9 @@ impl Compiler {
         Ok(())
     }
 
-    fn function(&mut self, _function_type: FunctionType) -> Result<(), String> {
+    fn function(&mut self, function_type: FunctionType) -> Result<(), String> {
         let mut compiler = Compiler::default();
+        compiler.function_type = function_type;
         compiler.function = bytecode::Function::default();
         compiler.function.name =
             if let Some(scanner::Literal::Identifier(funname)) = &self.previous().literal {
@@ -301,6 +302,10 @@ impl Compiler {
     }
 
     fn return_statement(&mut self) -> Result<(), String> {
+        if self.function_type == FunctionType::Script {
+            return Err("Cannot return from top-level code.".to_string());
+        }
+
         if self.matches(scanner::TokenType::Semicolon) {
             self.emit_return();
         } else {
