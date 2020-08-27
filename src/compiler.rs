@@ -731,6 +731,10 @@ impl Compiler {
                 }
             }
         }
+        self.consume(
+            scanner::TokenType::RightParen,
+            "Expected ')' after argument list.",
+        )?;
         Ok(arg_count)
     }
 
@@ -881,7 +885,7 @@ impl Compiler {
             scanner::TokenType::LeftParen => ParseRule {
                 prefix: Some(ParseFn::Grouping),
                 infix: Some(ParseFn::Call),
-                precedence: Precedence::None,
+                precedence: Precedence::Call,
             },
             scanner::TokenType::RightParen => ParseRule {
                 prefix: None,

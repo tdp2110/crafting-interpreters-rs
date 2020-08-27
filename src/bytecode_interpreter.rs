@@ -140,7 +140,7 @@ impl Interpreter {
 
     fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
-            if self.frame().ip >= self.frame().function.chunk.code.len() {
+            if self.frames.len() == 0 || self.frame().ip >= self.frame().function.chunk.code.len() {
                 return Ok(());
             }
 
@@ -378,7 +378,10 @@ impl Interpreter {
                 self.call(func, arg_count)?;
                 Ok(())
             }
-            _ => Ok(()),
+            _ => Err(InterpreterError::Runtime(format!(
+                "attempted to call non-callable value of type {:?}.",
+                bytecode::type_of(&value)
+            ))),
         }
     }
 
@@ -1225,7 +1228,7 @@ mod tests {
                return;\n\
              }\n\
              \n\
-             print f;\n",
+             print f();\n",
         ));
 
         match func_or_err {
@@ -1241,6 +1244,33 @@ mod tests {
         match func_or_err {
             Ok(_) => panic!(),
             Err(err) => assert_eq!(err, "Cannot return from top-level code."),
+        }
+    }
+
+    #[test]
+    fn test_functions_6() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun f(x, y) {\n\
+               return x + y;\n\
+             }\n\
+             \n\
+             print f(1,2);\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["3"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
         }
     }
 }
