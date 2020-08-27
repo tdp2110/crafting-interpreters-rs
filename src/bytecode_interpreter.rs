@@ -362,7 +362,6 @@ impl Interpreter {
                 }
                 (bytecode::Op::Call(arg_count), _) => {
                     self.call_value(self.peek_by(arg_count.into()).clone(), arg_count)?;
-                    self.frames.pop();
                 }
             }
         }
@@ -396,7 +395,7 @@ impl Interpreter {
         self.frames.push(CallFrame::default());
         let mut frame = self.frames.last_mut().unwrap();
         frame.function = func;
-        frame.slots_offset = self.stack.len() - usize::from(arg_count) - 1;
+        frame.slots_offset = self.stack.len() - usize::from(arg_count);
         Ok(())
     }
 
@@ -1264,6 +1263,37 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["3"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_7() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun g(x) {\n\
+               return 2 * x;\n\
+             }\n\
+             \n\
+             fun f(x, y) {\n\
+               return g(x) + y;\n\
+             }\n\
+             \n\
+             print f(1,2);\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["4"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
