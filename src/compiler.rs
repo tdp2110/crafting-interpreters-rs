@@ -161,6 +161,7 @@ impl Compiler {
             "Expected '{' before function body.",
         )?;
         compiler.block()?;
+        compiler.emit_return();
 
         let function = std::mem::take(&mut compiler.function);
         mem::swap(&mut compiler.tokens, &mut self.tokens);

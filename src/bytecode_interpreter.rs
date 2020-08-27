@@ -146,6 +146,8 @@ impl Interpreter {
 
             let op = self.next_op();
 
+            println!("{:?}", op);
+
             match op {
                 (bytecode::Op::Return, _) => {
                     let result = self.pop_stack();
@@ -1294,6 +1296,35 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["4"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_8() {
+        let func_or_err = Compiler::compile(String::from(
+            "var x = 2;\n\
+             fun f(x) {\n\
+               print 2 * x;\n\
+             }\n\
+             \n\
+             f(x);\n\
+             print x;\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["4", "2"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
