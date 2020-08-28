@@ -416,6 +416,7 @@ impl Compiler {
         let else_jump = self.emit_jump(bytecode::Op::Jump(/*placeholder value*/ 0));
 
         self.patch_jump(then_jump);
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
 
         if self.matches(scanner::TokenType::Else) {
             self.statement()?;

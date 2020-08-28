@@ -146,12 +146,18 @@ impl Interpreter {
 
             let op = self.next_op();
 
-            println!("{:?}", op);
-
             match op {
                 (bytecode::Op::Return, _) => {
                     let result = self.pop_stack();
+
+                    let num_to_pop = self.stack.len() - self.frame().slots_offset
+                        + usize::from(self.frame().function.arity);
                     self.frames.pop();
+
+                    for _ in 0..num_to_pop {
+                        self.pop_stack();
+                    }
+
                     if self.frames.is_empty() {
                         self.pop_stack();
                         return Ok(());
@@ -1325,6 +1331,73 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["4", "2"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_9() {
+        fn fact(n: i32) -> i32 {
+            if n <= 1 {
+                return 1;
+            }
+            return n * fact(n - 1);
+        };
+
+        let func_or_err = Compiler::compile(String::from(
+            "fun fact(n) {\n\
+               if (n <= 1) { return 1; }\n\
+               return n * fact(n - 1);\n\
+             }\n\
+             \n\
+             print fact(10);\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec![format!("{}", fact(10))]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_functions_10() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun isEven(n) {\n\
+               if (n = 0) { return true; }\n\
+               return isOdd(n - 1);\n\
+             }\n\
+             fun isOdd(n) {\n\
+               if (n = 1) { return true; }\n\
+               return isEven(n - 1);\n\
+             }\n\
+             \n\
+             print isEven(10);\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["true"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
