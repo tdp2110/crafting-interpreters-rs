@@ -97,8 +97,56 @@ impl Default for Interpreter {
                 func: clock,
             }),
         );
+        res.globals.insert(
+            String::from("exp"),
+            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                name: String::from("exp"),
+                func: exp,
+            }),
+        );
+        res.globals.insert(
+            String::from("sqrt"),
+            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                name: String::from("sqrt"),
+                func: sqrt,
+            }),
+        );
 
         res
+    }
+}
+
+fn exp(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
+    if args.len() != 1 {
+        return Err(format!(
+            "Invalid call: expected 1 args, received {}.",
+            args.len()
+        ));
+    }
+
+    match args[0] {
+        bytecode::Value::Number(num) => Ok(bytecode::Value::Number(num.exp())),
+        _ => Err(format!(
+            "Invalid call: expected number, got {:?}.",
+            bytecode::type_of(&args[0])
+        )),
+    }
+}
+
+fn sqrt(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
+    if args.len() != 1 {
+        return Err(format!(
+            "Invalid call: expected 1 args, received {}.",
+            args.len()
+        ));
+    }
+
+    match args[0] {
+        bytecode::Value::Number(num) => Ok(bytecode::Value::Number(num.sqrt())),
+        _ => Err(format!(
+            "Invalid call: expected number, got {:?}.",
+            bytecode::type_of(&args[0])
+        )),
     }
 }
 
