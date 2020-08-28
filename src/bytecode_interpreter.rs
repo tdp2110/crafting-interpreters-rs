@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::bytecode;
 
@@ -88,8 +89,31 @@ impl Default for Interpreter {
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
+
+        res.globals.insert(
+            String::from("clock"),
+            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                name: String::from("clock"),
+                func: clock,
+            }),
+        );
+
         res
     }
+}
+
+fn clock(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
+    if args.len() != 0 {
+        return Err(format!(
+            "Invalid call: expected 0 args, received {}.",
+            args.len()
+        ));
+    }
+
+    let start = SystemTime::now();
+    let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
+
+    Ok(bytecode::Value::Number(since_the_epoch.as_millis() as f64))
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -154,9 +178,7 @@ impl Interpreter {
                         + usize::from(self.frame().function.arity);
                     self.frames.pop();
 
-                    for _ in 0..num_to_pop {
-                        self.pop_stack();
-                    }
+                    self.pop_stack_n_times(num_to_pop);
 
                     if self.frames.is_empty() {
                         self.pop_stack();
@@ -377,17 +399,37 @@ impl Interpreter {
 
     fn call_value(
         &mut self,
-        value: bytecode::Value,
+        val_to_call: bytecode::Value,
         arg_count: u8,
     ) -> Result<(), InterpreterError> {
-        match value {
+        match val_to_call {
             bytecode::Value::Function(func) => {
                 self.call(func, arg_count)?;
                 Ok(())
             }
+            bytecode::Value::NativeFunction(native_func) => {
+                let mut args = Vec::new();
+                for _ in 0..arg_count {
+                    args.push(self.pop_stack()) // pop args
+                }
+                args.reverse();
+                let args = args;
+                self.pop_stack(); // native function value
+
+                match (native_func.func)(args) {
+                    Ok(result) => {
+                        self.stack.push(result);
+                        Ok(())
+                    }
+                    Err(err) => Err(InterpreterError::Runtime(format!(
+                        "When calling {}: {}.",
+                        native_func.name, err
+                    ))),
+                }
+            }
             _ => Err(InterpreterError::Runtime(format!(
                 "attempted to call non-callable value of type {:?}.",
-                bytecode::type_of(&value)
+                bytecode::type_of(&val_to_call)
             ))),
         }
     }
@@ -407,12 +449,19 @@ impl Interpreter {
         Ok(())
     }
 
+    fn pop_stack_n_times(&mut self, num_to_pop: usize) {
+        for _ in 0..num_to_pop {
+            self.pop_stack();
+        }
+    }
+
     fn is_falsey(val: &bytecode::Value) -> bool {
         match val {
             bytecode::Value::Nil => true,
             bytecode::Value::Bool(b) => !*b,
             bytecode::Value::Number(f) => *f == 0.0,
             bytecode::Value::Function(_) => false,
+            bytecode::Value::NativeFunction(_) => false,
             bytecode::Value::String(s) => s.is_empty(),
         }
     }
@@ -1398,6 +1447,39 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["true"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_native_functions() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun fib(n) {\n\
+               if (n < 2) return n;\n\
+               return fib(n - 2) + fib(n - 1);\n\
+             }\n\
+             \n\
+             var start = clock();\n\
+             print fib(5);\n\
+             print clock() - start;\n\
+             print 42;",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output.len(), 3);
+                        assert_eq!(interp.output[0], "5");
+                        assert_eq!(interp.output[2], "42");
                     }
                     Err(err) => {
                         panic!("{:?}", err);

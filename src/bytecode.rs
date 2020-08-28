@@ -51,12 +51,19 @@ pub struct Function {
 }
 
 #[derive(Clone)]
+pub struct NativeFunction {
+    pub name: String,
+    pub func: fn(Vec<Value>) -> Result<Value, String>,
+}
+
+#[derive(Clone)]
 #[allow(dead_code)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     String(String),
     Function(Function),
+    NativeFunction(NativeFunction),
     Nil,
 }
 
@@ -67,6 +74,7 @@ pub enum Type {
     Bool,
     String,
     Function,
+    NativeFunction,
     Nil,
 }
 
@@ -76,6 +84,7 @@ pub fn type_of(value: &Value) -> Type {
         Value::Bool(_) => Type::Bool,
         Value::String(_) => Type::String,
         Value::Function(_) => Type::Function,
+        Value::NativeFunction(_) => Type::NativeFunction,
         Value::Nil => Type::Nil,
     }
 }
@@ -87,6 +96,7 @@ impl fmt::Debug for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::String(s) => write!(f, "{}", s),
             Value::Function(func) => write!(f, "<fn {}>", func.name),
+            Value::NativeFunction(func) => write!(f, "<native fn {}>", func.name),
             Value::Nil => write!(f, "nil"),
         }
     }
