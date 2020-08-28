@@ -52,6 +52,7 @@ pub struct Function {
 
 #[derive(Clone)]
 pub struct NativeFunction {
+    pub arity: u8,
     pub name: String,
     pub func: fn(Vec<Value>) -> Result<Value, String>,
 }

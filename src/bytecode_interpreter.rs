@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::builtins;
 use crate::bytecode;
 
 #[allow(dead_code)]
@@ -93,75 +93,30 @@ impl Default for Interpreter {
         res.globals.insert(
             String::from("clock"),
             bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                arity: 0,
                 name: String::from("clock"),
-                func: clock,
+                func: builtins::clock,
             }),
         );
         res.globals.insert(
             String::from("exp"),
             bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                arity: 1,
                 name: String::from("exp"),
-                func: exp,
+                func: builtins::exp,
             }),
         );
         res.globals.insert(
             String::from("sqrt"),
             bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                arity: 1,
                 name: String::from("sqrt"),
-                func: sqrt,
+                func: builtins::sqrt,
             }),
         );
 
         res
     }
-}
-
-fn exp(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
-    if args.len() != 1 {
-        return Err(format!(
-            "Invalid call: expected 1 args, received {}.",
-            args.len()
-        ));
-    }
-
-    match args[0] {
-        bytecode::Value::Number(num) => Ok(bytecode::Value::Number(num.exp())),
-        _ => Err(format!(
-            "Invalid call: expected number, got {:?}.",
-            bytecode::type_of(&args[0])
-        )),
-    }
-}
-
-fn sqrt(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
-    if args.len() != 1 {
-        return Err(format!(
-            "Invalid call: expected 1 args, received {}.",
-            args.len()
-        ));
-    }
-
-    match args[0] {
-        bytecode::Value::Number(num) => Ok(bytecode::Value::Number(num.sqrt())),
-        _ => Err(format!(
-            "Invalid call: expected number, got {:?}.",
-            bytecode::type_of(&args[0])
-        )),
-    }
-}
-
-fn clock(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
-    if args.len() != 0 {
-        return Err(format!(
-            "Invalid call: expected 0 args, received {}.",
-            args.len()
-        ));
-    }
-
-    let start = SystemTime::now();
-    let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
-
-    Ok(bytecode::Value::Number(since_the_epoch.as_millis() as f64))
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -456,28 +411,44 @@ impl Interpreter {
                 Ok(())
             }
             bytecode::Value::NativeFunction(native_func) => {
-                let mut args = Vec::new();
-                for _ in 0..arg_count {
-                    args.push(self.pop_stack()) // pop args
-                }
-                args.reverse();
-                let args = args;
-                self.pop_stack(); // native function value
-
-                match (native_func.func)(args) {
-                    Ok(result) => {
-                        self.stack.push(result);
-                        Ok(())
-                    }
-                    Err(err) => Err(InterpreterError::Runtime(format!(
-                        "When calling {}: {}.",
-                        native_func.name, err
-                    ))),
-                }
+                self.native_call(native_func, arg_count)?;
+                Ok(())
             }
             _ => Err(InterpreterError::Runtime(format!(
                 "attempted to call non-callable value of type {:?}.",
                 bytecode::type_of(&val_to_call)
+            ))),
+        }
+    }
+
+    fn native_call(
+        &mut self,
+        native_func: bytecode::NativeFunction,
+        arg_count: u8,
+    ) -> Result<(), InterpreterError> {
+        if arg_count != native_func.arity {
+            return Err(InterpreterError::Runtime(format!(
+                "Expected {} arguments but found {}.",
+                native_func.arity, arg_count
+            )));
+        }
+
+        let mut args = Vec::new();
+        for _ in 0..arg_count {
+            args.push(self.pop_stack()) // pop args
+        }
+        args.reverse();
+        let args = args;
+        self.pop_stack(); // native function value
+
+        match (native_func.func)(args) {
+            Ok(result) => {
+                self.stack.push(result);
+                Ok(())
+            }
+            Err(err) => Err(InterpreterError::Runtime(format!(
+                "When calling {}: {}.",
+                native_func.name, err
             ))),
         }
     }
