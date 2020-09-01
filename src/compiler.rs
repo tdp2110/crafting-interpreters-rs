@@ -168,8 +168,8 @@ impl Compiler {
         self.current = compiler.current;
         let const_idx = self
             .current_chunk()
-            .add_constant(bytecode::Value::Function(function));
-        self.emit_op(bytecode::Op::Constant(const_idx), self.previous().line);
+            .add_constant(bytecode::Value::Function(bytecode::Closure { function }));
+        self.emit_op(bytecode::Op::Closure(const_idx), self.previous().line);
         Ok(())
     }
 

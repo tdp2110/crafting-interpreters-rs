@@ -17,6 +17,7 @@ pub fn Lineno(value: usize) -> Lineno {
 pub enum Op {
     Return,
     Constant(usize),
+    Closure(usize),
     Nil,
     True,
     False,
@@ -43,7 +44,11 @@ pub enum Op {
 }
 
 #[derive(Default, Clone)]
-#[allow(dead_code)]
+pub struct Closure {
+    pub function: Function,
+}
+
+#[derive(Default, Clone)]
 pub struct Function {
     pub arity: u8,
     pub chunk: Chunk,
@@ -63,7 +68,7 @@ pub enum Value {
     Number(f64),
     Bool(bool),
     String(String),
-    Function(Function),
+    Function(Closure),
     NativeFunction(NativeFunction),
     Nil,
 }
@@ -96,7 +101,7 @@ impl fmt::Debug for Value {
             Value::Number(num) => write!(f, "{}", num),
             Value::Bool(b) => write!(f, "{}", b),
             Value::String(s) => write!(f, "{}", s),
-            Value::Function(func) => write!(f, "<fn {}>", func.name),
+            Value::Function(closure) => write!(f, "<fn {}>", closure.function.name),
             Value::NativeFunction(func) => write!(f, "<native fn {}>", func.name),
             Value::Nil => write!(f, "nil"),
         }

@@ -2,6 +2,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::bytecode;
 
+/*
+Arity checking is done in the interpreter prior to calling a builtin function.
+*/
+
 pub fn exp(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
     match args[0] {
         bytecode::Value::Number(num) => Ok(bytecode::Value::Number(num.exp())),

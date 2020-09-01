@@ -52,6 +52,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Jump(offset) => format!("OP_JUMP {}", *offset),
             bytecode::Op::Loop(offset) => format!("OP_LOOP {}", *offset),
             bytecode::Op::Call(arg_count) => format!("OP_CALL {}", *arg_count),
+            bytecode::Op::Closure(idx) => {
+                format!("OP_CLOSURE {:?} (idx={})", chunk.constants[*idx], *idx)
+            }
         };
 
         println!(
@@ -128,28 +131,31 @@ pub enum InterpreterError {
 
 #[derive(Default)]
 struct CallFrame {
-    function: bytecode::Function,
+    closure: bytecode::Closure,
     ip: usize,
     slots_offset: usize,
 }
 
 impl CallFrame {
     fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
-        let res = self.function.chunk.code[self.ip];
+        let res = self.closure.function.chunk.code[self.ip];
         self.ip += 1;
         res
     }
 
     fn read_constant(&self, idx: usize) -> &bytecode::Value {
-        &self.function.chunk.constants[idx]
+        &self.closure.function.chunk.constants[idx]
     }
 }
 
 impl Interpreter {
     pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
-        self.stack.push(bytecode::Value::Function(func.clone()));
+        self.stack
+            .push(bytecode::Value::Function(bytecode::Closure {
+                function: func.clone(),
+            }));
         self.frames.push(CallFrame {
-            function: func,
+            closure: bytecode::Closure { function: func },
             ip: 0,
             slots_offset: 1,
         });
@@ -167,7 +173,9 @@ impl Interpreter {
 
     fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
-            if self.frames.len() == 0 || self.frame().ip >= self.frame().function.chunk.code.len() {
+            if self.frames.len() == 0
+                || self.frame().ip >= self.frame().closure.function.chunk.code.len()
+            {
                 return Ok(());
             }
 
@@ -178,7 +186,7 @@ impl Interpreter {
                     let result = self.pop_stack();
 
                     let num_to_pop = self.stack.len() - self.frame().slots_offset
-                        + usize::from(self.frame().function.arity);
+                        + usize::from(self.frame().closure.function.arity);
                     self.frames.pop();
 
                     self.pop_stack_n_times(num_to_pop);
@@ -189,6 +197,18 @@ impl Interpreter {
                     }
 
                     self.stack.push(result);
+                }
+                (bytecode::Op::Closure(idx), _) => {
+                    let constant = self.read_constant(idx).clone();
+
+                    if let bytecode::Value::Function(closure) = constant {
+                        self.stack.push(bytecode::Value::Function(closure));
+                    } else {
+                        panic!(
+                            "When interpreting bytecode::Op::Closure, expected function, found {:?}",
+                            bytecode::type_of(&constant)
+                        );
+                    }
                 }
                 (bytecode::Op::Constant(idx), _) => {
                     let constant = self.read_constant(idx).clone();
@@ -453,7 +473,8 @@ impl Interpreter {
         }
     }
 
-    fn call(&mut self, func: bytecode::Function, arg_count: u8) -> Result<(), InterpreterError> {
+    fn call(&mut self, closure: bytecode::Closure, arg_count: u8) -> Result<(), InterpreterError> {
+        let func = &closure.function;
         if arg_count != func.arity {
             return Err(InterpreterError::Runtime(format!(
                 "Expected {} arguments but found {}.",
@@ -463,7 +484,7 @@ impl Interpreter {
 
         self.frames.push(CallFrame::default());
         let mut frame = self.frames.last_mut().unwrap();
-        frame.function = func;
+        frame.closure = closure;
         frame.slots_offset = self.stack.len() - usize::from(arg_count);
         Ok(())
     }
