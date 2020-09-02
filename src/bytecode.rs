@@ -37,6 +37,8 @@ pub enum Op {
     SetGlobal(usize),
     GetLocal(usize),
     SetLocal(usize),
+    GetUpval(usize),
+    SetUpval(usize),
     JumpIfFalse(usize),
     Jump(usize),
     Loop(usize),

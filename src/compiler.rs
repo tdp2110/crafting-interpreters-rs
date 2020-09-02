@@ -82,6 +82,12 @@ struct ParseRule {
     precedence: Precedence,
 }
 
+enum Resolution {
+    Local(usize),
+    Global,
+    Upvalue(usize),
+}
+
 impl Compiler {
     pub fn compile(input: String) -> Result<bytecode::Function, String> {
         let mut compiler = Compiler::default();
@@ -245,8 +251,20 @@ impl Compiler {
             ) => name1 == name2,
             _ => {
                 panic!(
-                    "expected identifiers in `identifiers_equal` but found {:?} and {:?}",
+                    "expected identifier in `identifiers_equal` but found {:?} and {:?}.",
                     id1, id2
+                );
+            }
+        }
+    }
+
+    fn identifier_equal(id1: &Option<scanner::Literal>, name2: &String) -> bool {
+        match id1 {
+            Some(scanner::Literal::Identifier(name1)) => name1 == name2,
+            _ => {
+                panic!(
+                    "expected identifier in `identifier_equal` but found {:?}.",
+                    id1
                 );
             }
         }
@@ -585,16 +603,19 @@ impl Compiler {
             let get_op: bytecode::Op;
             let set_op: bytecode::Op;
 
-            match self.resolve_local(&tok.literal) {
-                Ok(Some(idx)) => {
+            match self.resolve_variable(&name) {
+                Ok(Resolution::Local(idx)) => {
                     get_op = bytecode::Op::GetLocal(idx);
                     set_op = bytecode::Op::SetLocal(idx);
                 }
-                Ok(None) => {
+                Ok(Resolution::Global) => {
                     let idx = self.identifier_constant(name);
-
                     get_op = bytecode::Op::GetGlobal(idx);
                     set_op = bytecode::Op::SetGlobal(idx);
+                }
+                Ok(Resolution::Upvalue(idx)) => {
+                    get_op = bytecode::Op::GetUpval(idx);
+                    set_op = bytecode::Op::SetUpval(idx);
                 }
                 Err(err) => {
                     return Err(err);
@@ -613,9 +634,26 @@ impl Compiler {
         }
     }
 
-    fn resolve_local(&self, name: &Option<scanner::Literal>) -> Result<Option<usize>, String> {
+    fn resolve_variable(&self, name: &String) -> Result<Resolution, String> {
+        if let Some(idx) = self.resolve_local(&name)? {
+            return Ok(Resolution::Local(idx));
+        }
+
+        if let Some(idx) = self.resolve_upval(&name) {
+            return Ok(Resolution::Upvalue(idx));
+        }
+
+        Ok(Resolution::Global)
+    }
+
+    fn resolve_upval(&self, _name: &String) -> Option<usize> {
+        // effectively unimplemented
+        None
+    }
+
+    fn resolve_local(&self, name: &String) -> Result<Option<usize>, String> {
         for (idx, local) in self.locals.iter().rev().enumerate() {
-            if Compiler::identifiers_equal(&local.name.literal, name) {
+            if Compiler::identifier_equal(&local.name.literal, name) {
                 if local.depth == -1 {
                     return Err(self.error("Cannot read local variable in its own initializer."));
                 }

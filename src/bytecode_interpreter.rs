@@ -48,6 +48,8 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             ),
             bytecode::Op::GetLocal(idx) => format!("OP_GET_LOCAL idx={}", *idx),
             bytecode::Op::SetLocal(idx) => format!("OP_SET_LOCAL idx={}", *idx),
+            bytecode::Op::GetUpval(idx) => format!("OP_GET_UPVAL idx={}", *idx),
+            bytecode::Op::SetUpval(idx) => format!("OP_SET_UPVAL idx={}", *idx),
             bytecode::Op::JumpIfFalse(loc) => format!("OP_JUMP_IF_FALSE {}", *loc),
             bytecode::Op::Jump(offset) => format!("OP_JUMP {}", *offset),
             bytecode::Op::Loop(offset) => format!("OP_LOOP {}", *offset),
@@ -401,6 +403,12 @@ impl Interpreter {
                     let val = self.peek();
                     let slots_offset = self.frame().slots_offset;
                     self.stack[slots_offset + idx] = val.clone();
+                }
+                (bytecode::Op::GetUpval(_), _) => {
+                    unimplemented!();
+                }
+                (bytecode::Op::SetUpval(_), _) => {
+                    unimplemented!();
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
                     if Interpreter::is_falsey(&self.peek()) {
