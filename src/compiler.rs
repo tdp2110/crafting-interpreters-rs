@@ -1,37 +1,47 @@
 use crate::bytecode;
 use crate::scanner;
 
-use std::mem;
-
 struct Local {
     name: scanner::Token,
     depth: i64,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-#[allow(dead_code)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum FunctionType {
     Function,
     Script,
 }
 
-#[allow(dead_code)]
 pub struct Compiler {
     tokens: Vec<scanner::Token>,
-    function: bytecode::Function,
-    function_type: FunctionType,
-    current: usize,
-    locals: Vec<Local>,
-    scope_depth: i64,
+    token_idx: usize,
+    levels: Vec<Level>,
+    level_idx: usize,
 }
 
 impl Default for Compiler {
     fn default() -> Compiler {
         Compiler {
             tokens: Default::default(),
+            token_idx: 0,
+            levels: vec![Default::default()],
+            level_idx: 0,
+        }
+    }
+}
+
+pub struct Level {
+    function: bytecode::Function,
+    function_type: FunctionType,
+    locals: Vec<Local>,
+    scope_depth: i64,
+}
+
+impl Default for Level {
+    fn default() -> Level {
+        Level {
             function: Default::default(),
             function_type: FunctionType::Script,
-            current: 0,
             locals: vec![Local {
                 name: scanner::Token {
                     ty: scanner::TokenType::Identifier,
@@ -94,7 +104,6 @@ impl Compiler {
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
                 compiler.tokens = tokens;
-                compiler.function = bytecode::Function::default();
 
                 while !compiler.is_at_end() {
                     compiler.declaration()?;
@@ -102,7 +111,7 @@ impl Compiler {
 
                 compiler.emit_return();
 
-                Ok(std::mem::take(&mut compiler.function))
+                Ok(std::mem::take(&mut compiler.current_level_mut().function))
             }
             Err(err) => Err(err),
         }
@@ -127,51 +136,49 @@ impl Compiler {
     }
 
     fn function(&mut self, function_type: FunctionType) -> Result<(), String> {
-        let mut compiler = Compiler::default();
-        compiler.function_type = function_type;
-        compiler.function = bytecode::Function::default();
-        compiler.function.name =
+        let mut level = Level::default();
+        level.function_type = function_type;
+        level.function = bytecode::Function::default();
+        level.function.name =
             if let Some(scanner::Literal::Identifier(funname)) = &self.previous().literal {
                 funname.clone()
             } else {
                 panic!("expected identifier");
             };
-        compiler.current = self.current;
-        mem::swap(&mut compiler.tokens, &mut self.tokens);
+        self.push_level(level);
 
-        compiler.begin_scope();
-        compiler.consume(
+        self.begin_scope();
+        self.consume(
             scanner::TokenType::LeftParen,
             "Expected '(' after function name.",
         )?;
 
-        if !compiler.check(scanner::TokenType::RightParen) {
+        if !self.check(scanner::TokenType::RightParen) {
             loop {
-                compiler.function.arity += 1;
-                let param_const_idx = compiler.parse_variable("Expected parameter name")?;
-                compiler.define_variable(param_const_idx);
+                self.current_function_mut().arity += 1;
+                let param_const_idx = self.parse_variable("Expected parameter name")?;
+                self.define_variable(param_const_idx);
 
-                if !compiler.matches(scanner::TokenType::Comma) {
+                if !self.matches(scanner::TokenType::Comma) {
                     break;
                 }
             }
         }
 
-        compiler.consume(
+        self.consume(
             scanner::TokenType::RightParen,
             "Expected ')' after parameter list.",
         )?;
 
-        compiler.consume(
+        self.consume(
             scanner::TokenType::LeftBrace,
             "Expected '{' before function body.",
         )?;
-        compiler.block()?;
-        compiler.emit_return();
+        self.block()?;
+        self.emit_return();
 
-        let function = std::mem::take(&mut compiler.function);
-        mem::swap(&mut compiler.tokens, &mut self.tokens);
-        self.current = compiler.current;
+        let function = std::mem::take(&mut self.current_level_mut().function);
+        self.pop_level();
         let const_idx = self
             .current_chunk()
             .add_constant(bytecode::Value::Function(bytecode::Closure { function }));
@@ -199,9 +206,10 @@ impl Compiler {
     }
 
     fn mark_initialized(&mut self) -> bool {
-        if self.scope_depth > 0 {
-            if let Some(last) = self.locals.last_mut() {
-                last.depth = self.scope_depth;
+        let scope_depth = self.scope_depth();
+        if scope_depth > 0 {
+            if let Some(last) = self.locals_mut().last_mut() {
+                last.depth = scope_depth;
             } else {
                 panic!("expected nonempty locals!");
             }
@@ -221,15 +229,15 @@ impl Compiler {
 
     fn declare_variable(&mut self) -> Result<(), String> {
         //global variables are implicitly declared
-        if self.scope_depth == 0 {
+        if self.scope_depth() == 0 {
             return Ok(());
         }
 
         let name = self.previous().clone();
 
-        let has_redeclaration = self.locals.iter().rev().any(|local| {
+        let has_redeclaration = self.locals().iter().rev().any(|local| {
             local.depth != -1
-                && local.depth == self.scope_depth
+                && local.depth == self.scope_depth()
                 && Compiler::identifiers_equal(&local.name.literal, &name.literal)
         });
         if has_redeclaration {
@@ -271,7 +279,7 @@ impl Compiler {
     }
 
     fn add_local(&mut self, name: scanner::Token) {
-        self.locals.push(Local {
+        self.locals_mut().push(Local {
             name,
             depth: -1, // declare undefined
         });
@@ -281,7 +289,7 @@ impl Compiler {
         self.consume(scanner::TokenType::Identifier, error_msg)?;
         self.declare_variable()?;
 
-        if self.scope_depth > 0 {
+        if self.scope_depth() > 0 {
             return Ok(0);
         }
 
@@ -321,7 +329,7 @@ impl Compiler {
     }
 
     fn return_statement(&mut self) -> Result<(), String> {
-        if self.function_type == FunctionType::Script {
+        if self.function_type() == FunctionType::Script {
             return Err("Cannot return from top-level code.".to_string());
         }
 
@@ -478,15 +486,15 @@ impl Compiler {
     }
 
     fn begin_scope(&mut self) {
-        self.scope_depth += 1;
+        self.current_level_mut().scope_depth += 1
     }
 
     fn end_scope(&mut self) {
-        self.scope_depth -= 1;
+        self.current_level_mut().scope_depth -= 1;
 
         let mut pop_count = 0;
-        for local in self.locals.iter().rev() {
-            if local.depth > self.scope_depth {
+        for local in self.locals().iter().rev() {
+            if local.depth > self.scope_depth() {
                 pop_count += 1;
             } else {
                 break;
@@ -497,7 +505,7 @@ impl Compiler {
         let line = self.previous().line;
         for _ in 0..pop_count {
             self.emit_op(bytecode::Op::Pop, line);
-            self.locals.pop();
+            self.locals_mut().pop();
         }
     }
 
@@ -652,12 +660,12 @@ impl Compiler {
     }
 
     fn resolve_local(&self, name: &String) -> Result<Option<usize>, String> {
-        for (idx, local) in self.locals.iter().rev().enumerate() {
+        for (idx, local) in self.locals().iter().rev().enumerate() {
             if Compiler::identifier_equal(&local.name.literal, name) {
                 if local.depth == -1 {
                     return Err(self.error("Cannot read local variable in its own initializer."));
                 }
-                return Ok(Some(self.locals.len() - 2 - idx));
+                return Ok(Some(self.locals().len() - 2 - idx));
             }
         }
         Ok(None)
@@ -827,7 +835,7 @@ impl Compiler {
             }
         }
 
-        while precedence <= Compiler::get_rule(self.current_tok().ty).precedence {
+        while precedence <= Compiler::get_rule(self.peek().ty).precedence {
             self.advance();
             match Compiler::get_rule(self.previous().ty).infix {
                 Some(parse_fn) => self.apply_parse_fn(parse_fn, can_assign)?,
@@ -882,18 +890,14 @@ impl Compiler {
 
     fn advance(&mut self) -> &scanner::Token {
         if !self.is_at_end() {
-            self.current += 1
+            self.token_idx += 1
         }
 
         self.previous()
     }
 
-    fn current_tok(&self) -> &scanner::Token {
-        &self.tokens[self.current]
-    }
-
     fn previous(&self) -> &scanner::Token {
-        &self.tokens[self.current - 1]
+        &self.tokens[self.token_idx - 1]
     }
 
     fn is_at_end(&self) -> bool {
@@ -901,7 +905,7 @@ impl Compiler {
     }
 
     fn peek(&self) -> &scanner::Token {
-        &self.tokens[self.current]
+        &self.tokens[self.token_idx]
     }
 
     fn next_precedence(precedence: Precedence) -> Precedence {
@@ -1121,6 +1125,44 @@ impl Compiler {
     }
 
     fn current_chunk(&mut self) -> &mut bytecode::Chunk {
-        &mut self.function.chunk
+        &mut self.current_level_mut().function.chunk
+    }
+
+    fn current_level(&self) -> &Level {
+        &self.levels[self.level_idx]
+    }
+
+    fn current_level_mut(&mut self) -> &mut Level {
+        &mut self.levels[self.level_idx]
+    }
+
+    fn push_level(&mut self, level: Level) {
+        self.levels.push(level);
+        self.level_idx += 1;
+    }
+
+    fn pop_level(&mut self) {
+        self.levels.pop();
+        self.level_idx -= 1;
+    }
+
+    fn current_function_mut(&mut self) -> &mut bytecode::Function {
+        &mut self.current_level_mut().function
+    }
+
+    fn function_type(&self) -> FunctionType {
+        self.current_level().function_type
+    }
+
+    fn scope_depth(&self) -> i64 {
+        self.current_level().scope_depth
+    }
+
+    fn locals(&self) -> &Vec<Local> {
+        &self.current_level().locals
+    }
+
+    fn locals_mut(&mut self) -> &mut Vec<Local> {
+        &mut self.current_level_mut().locals
     }
 }
