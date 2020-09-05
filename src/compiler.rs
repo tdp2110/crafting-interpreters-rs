@@ -12,6 +12,20 @@ enum FunctionType {
     Script,
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[allow(dead_code)]
+enum IsLocal {
+    True,
+    False,
+}
+
+#[derive(Eq, PartialEq)]
+#[allow(dead_code)]
+struct Upvalue {
+    local_idx: usize,
+    is_local: IsLocal,
+}
+
 pub struct Compiler {
     tokens: Vec<scanner::Token>,
     token_idx: usize,
@@ -35,6 +49,7 @@ pub struct Level {
     function_type: FunctionType,
     locals: Vec<Local>,
     scope_depth: i64,
+    upvals: Vec<Upvalue>,
 }
 
 impl Default for Level {
@@ -53,6 +68,7 @@ impl Default for Level {
                 depth: 0,
             }],
             scope_depth: 0,
+            upvals: Default::default(),
         }
     }
 }
@@ -642,30 +658,69 @@ impl Compiler {
         }
     }
 
-    fn resolve_variable(&self, name: &String) -> Result<Resolution, String> {
+    fn resolve_variable(&mut self, name: &String) -> Result<Resolution, String> {
         if let Some(idx) = self.resolve_local(&name)? {
             return Ok(Resolution::Local(idx));
         }
 
-        if let Some(idx) = self.resolve_upval(&name) {
+        if let Some(idx) = self.resolve_upval(&name)? {
             return Ok(Resolution::Upvalue(idx));
         }
 
         Ok(Resolution::Global)
     }
 
-    fn resolve_upval(&self, _name: &String) -> Option<usize> {
-        // effectively unimplemented
-        None
+    fn resolve_upval(&mut self, name: &String) -> Result<Option<usize>, String> {
+        if self.level_idx < 1 {
+            return Ok(None);
+        }
+
+        if let Some(local_idx) =
+            Compiler::resolve_local_static(&self.levels[self.level_idx - 1], name, self.previous())?
+        {
+            return Ok(Some(self.add_upval(local_idx, IsLocal::True)));
+        }
+
+        Ok(None)
+    }
+
+    fn add_upval(&mut self, local_idx: usize, is_local: IsLocal) -> usize {
+        let desired_upval = Upvalue {
+            local_idx,
+            is_local,
+        };
+
+        if let Some(res) = self
+            .current_level()
+            .upvals
+            .iter()
+            .position(|query_upval| *query_upval == desired_upval)
+        {
+            return res;
+        }
+
+        self.current_level_mut().upvals.push(desired_upval);
+        self.current_level().upvals.len()
     }
 
     fn resolve_local(&self, name: &String) -> Result<Option<usize>, String> {
-        for (idx, local) in self.locals().iter().rev().enumerate() {
+        Compiler::resolve_local_static(self.current_level(), name, self.previous())
+    }
+
+    fn resolve_local_static(
+        level: &Level,
+        name: &String,
+        prev_tok: &scanner::Token,
+    ) -> Result<Option<usize>, String> {
+        for (idx, local) in level.locals.iter().rev().enumerate() {
             if Compiler::identifier_equal(&local.name.literal, name) {
                 if local.depth == -1 {
-                    return Err(self.error("Cannot read local variable in its own initializer."));
+                    return Err(Compiler::error_at_tok(
+                        "Cannot read local variable in its own initializer.",
+                        prev_tok,
+                    ));
                 }
-                return Ok(Some(self.locals().len() - 2 - idx));
+                return Ok(Some(level.locals.len() - 2 - idx));
             }
         }
         Ok(None)
@@ -851,8 +906,11 @@ impl Compiler {
     }
 
     fn error(&self, what: &str) -> String {
-        let tok = self.previous();
-        format!("{} at line={},col={}.", what, tok.line, tok.col)
+        Compiler::error_at_tok(what, self.previous())
+    }
+
+    fn error_at_tok(what: &str, prev_tok: &scanner::Token) -> String {
+        format!("{} at line={},col={}.", what, prev_tok.line, prev_tok.col)
     }
 
     fn apply_parse_fn(&mut self, parse_fn: ParseFn, can_assign: bool) -> Result<(), String> {
