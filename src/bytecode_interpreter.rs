@@ -54,9 +54,10 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Jump(offset) => format!("OP_JUMP {}", *offset),
             bytecode::Op::Loop(offset) => format!("OP_LOOP {}", *offset),
             bytecode::Op::Call(arg_count) => format!("OP_CALL {}", *arg_count),
-            bytecode::Op::Closure(idx) => {
-                format!("OP_CLOSURE {:?} (idx={})", chunk.constants[*idx], *idx)
-            }
+            bytecode::Op::Closure(idx, upvals) => format!(
+                "OP_CLOSURE {:?} (idx={}, upvals={:?})",
+                chunk.constants[*idx], *idx, upvals
+            ),
         };
 
         println!(
@@ -140,7 +141,7 @@ struct CallFrame {
 
 impl CallFrame {
     fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
-        let res = self.closure.function.chunk.code[self.ip];
+        let res = self.closure.function.chunk.code[self.ip].clone();
         self.ip += 1;
         res
     }
@@ -200,7 +201,7 @@ impl Interpreter {
 
                     self.stack.push(result);
                 }
-                (bytecode::Op::Closure(idx), _) => {
+                (bytecode::Op::Closure(idx, _), _) => {
                     let constant = self.read_constant(idx).clone();
 
                     if let bytecode::Value::Function(closure) = constant {

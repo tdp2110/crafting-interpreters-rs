@@ -12,20 +12,6 @@ enum FunctionType {
     Script,
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-#[allow(dead_code)]
-enum IsLocal {
-    True,
-    False,
-}
-
-#[derive(Eq, PartialEq)]
-#[allow(dead_code)]
-struct Upvalue {
-    local_idx: usize,
-    is_local: IsLocal,
-}
-
 pub struct Compiler {
     tokens: Vec<scanner::Token>,
     token_idx: usize,
@@ -49,7 +35,7 @@ pub struct Level {
     function_type: FunctionType,
     locals: Vec<Local>,
     scope_depth: i64,
-    upvals: Vec<Upvalue>,
+    upvals: Vec<bytecode::Upvalue>,
 }
 
 impl Default for Level {
@@ -194,11 +180,16 @@ impl Compiler {
         self.emit_return();
 
         let function = std::mem::take(&mut self.current_level_mut().function);
+        let upvals = std::mem::take(&mut self.current_level_mut().upvals);
         self.pop_level();
         let const_idx = self
             .current_chunk()
             .add_constant(bytecode::Value::Function(bytecode::Closure { function }));
-        self.emit_op(bytecode::Op::Closure(const_idx), self.previous().line);
+        self.emit_op(
+            bytecode::Op::Closure(const_idx, upvals),
+            self.previous().line,
+        );
+
         Ok(())
     }
 
@@ -470,12 +461,12 @@ impl Compiler {
 
     fn patch_jump(&mut self, jump_location: usize) {
         let true_jump = self.current_chunk().code.len() - jump_location - 1;
-        let (maybe_jump, lineno) = self.current_chunk().code[jump_location];
+        let (maybe_jump, lineno) = &self.current_chunk().code[jump_location];
         if let bytecode::Op::JumpIfFalse(_) = maybe_jump {
             self.current_chunk().code[jump_location] =
-                (bytecode::Op::JumpIfFalse(true_jump), lineno);
+                (bytecode::Op::JumpIfFalse(true_jump), *lineno);
         } else if let bytecode::Op::Jump(_) = maybe_jump {
-            self.current_chunk().code[jump_location] = (bytecode::Op::Jump(true_jump), lineno);
+            self.current_chunk().code[jump_location] = (bytecode::Op::Jump(true_jump), *lineno);
         } else {
             panic!(
                 "attempted to patch a jump but didn't find a jump! Found {:?}.",
@@ -678,14 +669,22 @@ impl Compiler {
         if let Some(local_idx) =
             Compiler::resolve_local_static(&self.levels[self.level_idx - 1], name, self.previous())?
         {
-            return Ok(Some(self.add_upval(local_idx, IsLocal::True)));
+            return Ok(Some(self.add_upval(local_idx, bytecode::IsLocal::True)));
         }
+
+        self.level_idx -= 1;
+
+        if let Some(upval_idx) = self.resolve_upval(name)?.clone() {
+            self.level_idx += 1; // couldn't figure out how to satisfy borrow checker with scopeguard!
+            return Ok(Some(self.add_upval(upval_idx, bytecode::IsLocal::False)));
+        }
+        self.level_idx += 1;
 
         Ok(None)
     }
 
-    fn add_upval(&mut self, local_idx: usize, is_local: IsLocal) -> usize {
-        let desired_upval = Upvalue {
+    fn add_upval(&mut self, local_idx: usize, is_local: bytecode::IsLocal) -> usize {
+        let desired_upval = bytecode::Upvalue {
             local_idx,
             is_local,
         };

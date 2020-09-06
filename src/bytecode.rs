@@ -12,12 +12,25 @@ pub fn Lineno(value: usize) -> Lineno {
     Lineno { value }
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone)]
+pub enum IsLocal {
+    True,
+    False,
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone)]
+#[allow(dead_code)]
+pub struct Upvalue {
+    pub local_idx: usize,
+    pub is_local: IsLocal,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Op {
     Return,
     Constant(usize),
-    Closure(usize),
+    Closure(usize, Vec<Upvalue>),
     Nil,
     True,
     False,
