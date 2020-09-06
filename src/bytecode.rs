@@ -13,16 +13,9 @@ pub fn Lineno(value: usize) -> Lineno {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone)]
-pub enum IsLocal {
-    True,
-    False,
-}
-
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone)]
-#[allow(dead_code)]
-pub struct Upvalue {
-    pub local_idx: usize,
-    pub is_local: IsLocal,
+pub enum Upvalue {
+    Upvalue(/*upvalue idx*/ usize),
+    Local(/*stack idx*/ usize),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

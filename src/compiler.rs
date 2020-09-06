@@ -669,36 +669,31 @@ impl Compiler {
         if let Some(local_idx) =
             Compiler::resolve_local_static(&self.levels[self.level_idx - 1], name, self.previous())?
         {
-            return Ok(Some(self.add_upval(local_idx, bytecode::IsLocal::True)));
+            return Ok(Some(self.add_upval(bytecode::Upvalue::Local(local_idx))));
         }
 
         self.level_idx -= 1;
 
         if let Some(upval_idx) = self.resolve_upval(name)?.clone() {
             self.level_idx += 1; // couldn't figure out how to satisfy borrow checker with scopeguard!
-            return Ok(Some(self.add_upval(upval_idx, bytecode::IsLocal::False)));
+            return Ok(Some(self.add_upval(bytecode::Upvalue::Upvalue(upval_idx))));
         }
         self.level_idx += 1;
 
         Ok(None)
     }
 
-    fn add_upval(&mut self, local_idx: usize, is_local: bytecode::IsLocal) -> usize {
-        let desired_upval = bytecode::Upvalue {
-            local_idx,
-            is_local,
-        };
-
+    fn add_upval(&mut self, upvalue: bytecode::Upvalue) -> usize {
         if let Some(res) = self
             .current_level()
             .upvals
             .iter()
-            .position(|query_upval| *query_upval == desired_upval)
+            .position(|query_upval| *query_upval == upvalue)
         {
             return res;
         }
 
-        self.current_level_mut().upvals.push(desired_upval);
+        self.current_level_mut().upvals.push(upvalue);
         self.current_level().upvals.len()
     }
 
