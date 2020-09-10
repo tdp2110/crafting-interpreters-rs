@@ -5,7 +5,9 @@ use crate::bytecode;
 
 #[allow(dead_code)]
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
-    println!("============ {} ============", name);
+    if name.len() > 0 {
+        println!("============ {} ============", name);
+    }
 
     println!("------------ constants -----------");
     for (idx, constant) in chunk.constants.iter().enumerate() {
@@ -69,6 +71,20 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
     }
 }
 
+fn dis_builtin(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
+    // arity checking is done in the interpreter
+    match &args[0] {
+        bytecode::Value::Function(closure) => {
+            disassemble_chunk(&closure.function.chunk, "");
+            Ok(bytecode::Value::Nil)
+        }
+        _ => Err(format!(
+            "Invalid call: expected lox function, got {:?}.",
+            bytecode::type_of(&args[0])
+        )),
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Binop {
@@ -96,6 +112,14 @@ impl Default for Interpreter {
         res.stack.reserve(256);
         res.frames.reserve(64);
 
+        res.globals.insert(
+            String::from("dis"),
+            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+                arity: 1,
+                name: String::from("dis"),
+                func: dis_builtin,
+            }),
+        );
         res.globals.insert(
             String::from("clock"),
             bytecode::Value::NativeFunction(bytecode::NativeFunction {

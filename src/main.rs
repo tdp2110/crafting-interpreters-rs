@@ -16,6 +16,7 @@ mod treewalk_interpreter;
 static INPUT_STR: &str = "INPUT";
 static SHOW_TOKENS_STR: &str = "tokens";
 static SHOW_AST_STR: &str = "ast";
+static SHOW_BYTECODE_STR: &str = "show-bytecode";
 static BYTECODE_STR: &str = "bytecode";
 
 fn main() {
@@ -42,10 +43,16 @@ fn main() {
                 .help("show the AST"),
         )
         .arg(
-            Arg::with_name(BYTECODE_STR)
+            Arg::with_name(SHOW_BYTECODE_STR)
                 .long("--show-bytecode")
                 .takes_value(false)
                 .help("show the bytecode"),
+        )
+        .arg(
+            Arg::with_name(BYTECODE_STR)
+                .long("--bytecode")
+                .takes_value(false)
+                .help("run the bytecode interpreter"),
         )
         .get_matches();
 
@@ -54,12 +61,14 @@ fn main() {
 
         match maybe_input {
             Ok(input) => {
-                if matches.is_present(BYTECODE_STR) {
+                if matches.is_present(SHOW_BYTECODE_STR) || matches.is_present(BYTECODE_STR) {
                     let func_or_err = compiler::Compiler::compile(input);
 
                     match func_or_err {
                         Ok(func) => {
-                            bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
+                            if matches.is_present(SHOW_BYTECODE_STR) {
+                                bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
+                            }
                             let res = bytecode_interpreter::Interpreter::default().interpret(func);
                             match res {
                                 Ok(()) => {
