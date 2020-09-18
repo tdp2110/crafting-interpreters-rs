@@ -99,15 +99,17 @@ pub struct Interpreter {
     stack: Vec<bytecode::Value>,
     output: Vec<String>,
     globals: HashMap<String, bytecode::Value>,
+    upvalues: Vec<bytecode::Upvalue>,
 }
 
 impl Default for Interpreter {
     fn default() -> Interpreter {
         let mut res = Interpreter {
-            frames: Vec::new(),
-            stack: Vec::new(),
-            output: Vec::new(),
-            globals: HashMap::new(),
+            frames: Default::default(),
+            stack: Default::default(),
+            output: Default::default(),
+            globals: Default::default(),
+            upvalues: Default::default(),
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
@@ -180,9 +182,13 @@ impl Interpreter {
         self.stack
             .push(bytecode::Value::Function(bytecode::Closure {
                 function: func.clone(),
+                upvalues: Vec::new(),
             }));
         self.frames.push(CallFrame {
-            closure: bytecode::Closure { function: func },
+            closure: bytecode::Closure {
+                function: func,
+                upvalues: Vec::new(),
+            },
             ip: 0,
             slots_offset: 1,
         });
@@ -225,11 +231,30 @@ impl Interpreter {
 
                     self.stack.push(result);
                 }
-                (bytecode::Op::Closure(idx, _), _) => {
+                (bytecode::Op::Closure(idx, upvals), _) => {
                     let constant = self.read_constant(idx).clone();
 
                     if let bytecode::Value::Function(closure) = constant {
-                        self.stack.push(bytecode::Value::Function(closure));
+                        let upvalues = upvals
+                            .iter()
+                            .map(|upval| match upval {
+                                bytecode::UpvalueLoc::Upvalue(_idx) => {
+                                    unimplemented!();
+                                }
+                                bytecode::UpvalueLoc::Local(idx) => {
+                                    let index = self.frame().slots_offset + *idx;
+                                    let upval = bytecode::Upvalue::Open(index);
+                                    self.upvalues.push(upval.clone());
+                                    upval
+                                }
+                            })
+                            .collect();
+
+                        self.stack
+                            .push(bytecode::Value::Function(bytecode::Closure {
+                                function: closure.function,
+                                upvalues,
+                            }));
                     } else {
                         panic!(
                             "When interpreting bytecode::Op::Closure, expected function, found {:?}",

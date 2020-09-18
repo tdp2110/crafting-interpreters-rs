@@ -35,7 +35,7 @@ pub struct Level {
     function_type: FunctionType,
     locals: Vec<Local>,
     scope_depth: i64,
-    upvals: Vec<bytecode::Upvalue>,
+    upvals: Vec<bytecode::UpvalueLoc>,
 }
 
 impl Default for Level {
@@ -182,9 +182,12 @@ impl Compiler {
         let function = std::mem::take(&mut self.current_level_mut().function);
         let upvals = std::mem::take(&mut self.current_level_mut().upvals);
         self.pop_level();
-        let const_idx = self
-            .current_chunk()
-            .add_constant(bytecode::Value::Function(bytecode::Closure { function }));
+        let const_idx =
+            self.current_chunk()
+                .add_constant(bytecode::Value::Function(bytecode::Closure {
+                    function,
+                    upvalues: Vec::new(),
+                }));
         self.emit_op(
             bytecode::Op::Closure(const_idx, upvals),
             self.previous().line,
@@ -669,21 +672,23 @@ impl Compiler {
         if let Some(local_idx) =
             Compiler::resolve_local_static(&self.levels[self.level_idx - 1], name, self.previous())?
         {
-            return Ok(Some(self.add_upval(bytecode::Upvalue::Local(local_idx))));
+            return Ok(Some(self.add_upval(bytecode::UpvalueLoc::Local(local_idx))));
         }
 
         self.level_idx -= 1;
 
         if let Some(upval_idx) = self.resolve_upval(name)?.clone() {
             self.level_idx += 1; // couldn't figure out how to satisfy borrow checker with scopeguard!
-            return Ok(Some(self.add_upval(bytecode::Upvalue::Upvalue(upval_idx))));
+            return Ok(Some(
+                self.add_upval(bytecode::UpvalueLoc::Upvalue(upval_idx)),
+            ));
         }
         self.level_idx += 1;
 
         Ok(None)
     }
 
-    fn add_upval(&mut self, upvalue: bytecode::Upvalue) -> usize {
+    fn add_upval(&mut self, upvalue: bytecode::UpvalueLoc) -> usize {
         if let Some(res) = self
             .current_level()
             .upvals

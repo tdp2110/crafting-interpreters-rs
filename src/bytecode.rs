@@ -13,7 +13,7 @@ pub fn Lineno(value: usize) -> Lineno {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone)]
-pub enum Upvalue {
+pub enum UpvalueLoc {
     Upvalue(/*upvalue idx*/ usize),
     Local(/*stack idx*/ usize),
 }
@@ -23,7 +23,7 @@ pub enum Upvalue {
 pub enum Op {
     Return,
     Constant(usize),
-    Closure(usize, Vec<Upvalue>),
+    Closure(usize, Vec<UpvalueLoc>),
     Nil,
     True,
     False,
@@ -51,9 +51,17 @@ pub enum Op {
     Call(u8),
 }
 
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum Upvalue {
+    Open(usize),
+    Closed(Value),
+}
+
 #[derive(Default, Clone)]
 pub struct Closure {
     pub function: Function,
+    pub upvalues: Vec<Upvalue>,
 }
 
 #[derive(Default, Clone)]
@@ -71,7 +79,6 @@ pub struct NativeFunction {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub enum Value {
     Number(f64),
     Bool(bool),
