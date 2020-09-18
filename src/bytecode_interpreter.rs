@@ -1,7 +1,9 @@
-use std::collections::HashMap;
-
 use crate::builtins;
 use crate::bytecode;
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[allow(dead_code)]
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
@@ -99,7 +101,7 @@ pub struct Interpreter {
     stack: Vec<bytecode::Value>,
     output: Vec<String>,
     globals: HashMap<String, bytecode::Value>,
-    upvalues: Vec<bytecode::Upvalue>,
+    upvalues: Vec<Rc<RefCell<bytecode::Upvalue>>>,
 }
 
 impl Default for Interpreter {
@@ -238,12 +240,13 @@ impl Interpreter {
                         let upvalues = upvals
                             .iter()
                             .map(|upval| match upval {
-                                bytecode::UpvalueLoc::Upvalue(_idx) => {
-                                    unimplemented!();
+                                bytecode::UpvalueLoc::Upvalue(idx) => {
+                                    self.frame().closure.upvalues[*idx].clone()
                                 }
                                 bytecode::UpvalueLoc::Local(idx) => {
                                     let index = self.frame().slots_offset + *idx;
-                                    let upval = bytecode::Upvalue::Open(index);
+                                    let upval =
+                                        Rc::new(RefCell::new(bytecode::Upvalue::Open(index)));
                                     self.upvalues.push(upval.clone());
                                     upval
                                 }

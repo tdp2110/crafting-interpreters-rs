@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 
 #[derive(Default, Copy, Clone, Debug)]
 pub struct Lineno {
@@ -61,7 +63,7 @@ pub enum Upvalue {
 #[derive(Default, Clone)]
 pub struct Closure {
     pub function: Function,
-    pub upvalues: Vec<Upvalue>,
+    pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
 }
 
 #[derive(Default, Clone)]
