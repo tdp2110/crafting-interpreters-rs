@@ -459,14 +459,21 @@ impl Interpreter {
                 }
                 (bytecode::Op::GetUpval(idx), _) => {
                     let upvalue = &self.frame().closure.upvalues[idx];
-                    let val = match &*upvalue.borrow_mut() {
+                    let val = match &*upvalue.borrow() {
                         bytecode::Upvalue::Closed(value) => value.clone(),
                         bytecode::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
                     };
                     self.stack.push(val);
                 }
-                (bytecode::Op::SetUpval(_), _) => {
-                    unimplemented!();
+                (bytecode::Op::SetUpval(idx), _) => {
+                    let new_value = self.peek().clone();
+                    let upvalue = self.frame().closure.upvalues[idx].clone();
+                    match &mut *upvalue.borrow_mut() {
+                        bytecode::Upvalue::Closed(value) => *value = new_value,
+                        bytecode::Upvalue::Open(stack_index) => {
+                            self.stack[*stack_index] = new_value
+                        }
+                    };
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
                     if Interpreter::is_falsey(&self.peek()) {
