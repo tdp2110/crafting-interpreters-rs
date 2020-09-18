@@ -699,7 +699,7 @@ impl Compiler {
         }
 
         self.current_level_mut().upvals.push(upvalue);
-        self.current_level().upvals.len()
+        self.current_level().upvals.len() - 1
     }
 
     fn resolve_local(&self, name: &String) -> Result<Option<usize>, String> {

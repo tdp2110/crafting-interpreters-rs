@@ -458,7 +458,7 @@ impl Interpreter {
                     self.stack[slots_offset + idx] = val.clone();
                 }
                 (bytecode::Op::GetUpval(idx), _) => {
-                    let upvalue = &self.frame().closure.upvalues[idx];
+                    let upvalue = self.frame().closure.upvalues[idx].clone();
                     let val = match &*upvalue.borrow() {
                         bytecode::Upvalue::Closed(value) => value.clone(),
                         bytecode::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
@@ -1593,6 +1593,36 @@ mod tests {
                         assert_eq!(interp.output.len(), 3);
                         assert_eq!(interp.output[0], "5");
                         assert_eq!(interp.output[2], "42");
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_upvals_on_stack() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun outer() {\n\
+               var x = \"outside\";\n\
+               fun inner() {\n\
+                 print x;\n\
+               }\n\
+               inner();\n\
+             }\n\
+             outer();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["outside"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
