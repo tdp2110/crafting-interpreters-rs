@@ -457,8 +457,13 @@ impl Interpreter {
                     let slots_offset = self.frame().slots_offset;
                     self.stack[slots_offset + idx] = val.clone();
                 }
-                (bytecode::Op::GetUpval(_), _) => {
-                    unimplemented!();
+                (bytecode::Op::GetUpval(idx), _) => {
+                    let upvalue = &self.frame().closure.upvalues[idx];
+                    let val = match &*upvalue.borrow_mut() {
+                        bytecode::Upvalue::Closed(value) => value.clone(),
+                        bytecode::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
+                    };
+                    self.stack.push(val);
                 }
                 (bytecode::Op::SetUpval(_), _) => {
                     unimplemented!();
