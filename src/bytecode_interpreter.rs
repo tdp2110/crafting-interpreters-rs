@@ -1604,7 +1604,7 @@ mod tests {
     }
 
     #[test]
-    fn test_upvals_on_stack() {
+    fn test_get_upval_on_stack() {
         let func_or_err = Compiler::compile(String::from(
             "fun outer() {\n\
                var x = \"outside\";\n\
@@ -1623,6 +1623,37 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["outside"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_set_upval_on_stack() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun outer() {\n\
+               var x = \"before\";\n\
+               fun inner() {\n\
+                 x = \"assigned\";\n\
+               }\n\
+               inner();\n\
+               print x;\n\
+             }\n\
+             outer();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["assigned"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
