@@ -51,6 +51,7 @@ pub enum Op {
     Jump(usize),
     Loop(usize),
     Call(u8),
+    CloseUpvalue,
 }
 
 #[derive(Debug, Clone)]

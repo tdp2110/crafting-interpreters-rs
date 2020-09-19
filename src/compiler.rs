@@ -4,6 +4,7 @@ use crate::scanner;
 struct Local {
     name: scanner::Token,
     depth: i64,
+    is_captured: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -52,6 +53,7 @@ impl Default for Level {
                     col: -1,
                 },
                 depth: 0,
+                is_captured: false,
             }],
             scope_depth: 0,
             upvals: Default::default(),
@@ -292,6 +294,7 @@ impl Compiler {
         self.locals_mut().push(Local {
             name,
             depth: -1, // declare undefined
+            is_captured: false,
         });
     }
 
@@ -514,8 +517,12 @@ impl Compiler {
 
         let line = self.previous().line;
         for _ in 0..pop_count {
-            self.emit_op(bytecode::Op::Pop, line);
-            self.locals_mut().pop();
+            let local = self.locals_mut().pop().unwrap();
+            if local.is_captured {
+                self.emit_op(bytecode::Op::CloseUpvalue, line);
+            } else {
+                self.emit_op(bytecode::Op::Pop, line);
+            }
         }
     }
 
@@ -678,6 +685,7 @@ impl Compiler {
         self.level_idx -= 1;
 
         if let Some(upval_idx) = self.resolve_upval(name)?.clone() {
+            self.current_level_mut().locals[upval_idx].is_captured = true;
             self.level_idx += 1; // couldn't figure out how to satisfy borrow checker with scopeguard!
             return Ok(Some(
                 self.add_upval(bytecode::UpvalueLoc::Upvalue(upval_idx)),

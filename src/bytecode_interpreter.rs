@@ -62,6 +62,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 "OP_CLOSURE {:?} (idx={}, upvals={:?})",
                 chunk.constants[*idx], *idx, upvals
             ),
+            bytecode::Op::CloseUpvalue => format!("OP_CLOSE_UPVALUE"),
         };
 
         println!(
@@ -489,6 +490,7 @@ impl Interpreter {
                 (bytecode::Op::Call(arg_count), _) => {
                     self.call_value(self.peek_by(arg_count.into()).clone(), arg_count)?;
                 }
+                (bytecode::Op::CloseUpvalue, _) => unimplemented!(),
             }
         }
     }
