@@ -61,6 +61,15 @@ pub enum Upvalue {
     Closed(Value),
 }
 
+impl Upvalue {
+    pub fn is_open(&self) -> bool {
+        match self {
+            Upvalue::Open(_) => true,
+            Upvalue::Closed(_) => false,
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct Closure {
     pub function: Function,

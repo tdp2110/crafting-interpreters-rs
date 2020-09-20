@@ -494,9 +494,26 @@ impl Interpreter {
                 (bytecode::Op::Call(arg_count), _) => {
                     self.call_value(self.peek_by(arg_count.into()).clone(), arg_count)?;
                 }
-                (bytecode::Op::CloseUpvalue, _) => unimplemented!(),
+                (bytecode::Op::CloseUpvalue, _) => {
+                    let idx = self.stack.len() - 1;
+                    self.close_upvalues(idx);
+                    self.stack.pop();
+                }
             }
         }
+    }
+
+    fn close_upvalues(&mut self, index: usize) {
+        let value = &self.stack[index];
+        for upval in &self.upvalues {
+            if let bytecode::Upvalue::Open(idx) = *upval.borrow() {
+                if idx == index {
+                    upval.replace(bytecode::Upvalue::Closed(value.clone()));
+                }
+            }
+        }
+
+        self.upvalues.retain(|u| u.borrow().is_open());
     }
 
     fn find_open_uval(&self, index: usize) -> Option<Rc<RefCell<bytecode::Upvalue>>> {
