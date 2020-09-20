@@ -245,11 +245,15 @@ impl Interpreter {
                                     self.frame().closure.upvalues[*idx].clone()
                                 }
                                 bytecode::UpvalueLoc::Local(idx) => {
-                                    let index = self.frame().slots_offset + *idx;
-                                    let upval =
-                                        Rc::new(RefCell::new(bytecode::Upvalue::Open(index)));
-                                    self.upvalues.push(upval.clone());
-                                    upval
+                                    if let Some(upval) = self.find_open_uval(*idx) {
+                                        upval
+                                    } else {
+                                        let index = self.frame().slots_offset + *idx;
+                                        let upval =
+                                            Rc::new(RefCell::new(bytecode::Upvalue::Open(index)));
+                                        self.upvalues.push(upval.clone());
+                                        upval
+                                    }
                                 }
                             })
                             .collect();
@@ -493,6 +497,18 @@ impl Interpreter {
                 (bytecode::Op::CloseUpvalue, _) => unimplemented!(),
             }
         }
+    }
+
+    fn find_open_uval(&self, index: usize) -> Option<Rc<RefCell<bytecode::Upvalue>>> {
+        for upval in self.upvalues.iter().rev() {
+            if let bytecode::Upvalue::Open(idx) = *upval.borrow() {
+                if idx == index {
+                    return Some(upval.clone());
+                }
+            }
+        }
+
+        None
     }
 
     fn call_value(
