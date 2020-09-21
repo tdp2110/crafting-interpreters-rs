@@ -278,7 +278,7 @@ impl Compiler {
         }
     }
 
-    fn identifier_equal(id1: &Option<scanner::Literal>, name2: &String) -> bool {
+    fn identifier_equal(id1: &Option<scanner::Literal>, name2: &str) -> bool {
         match id1 {
             Some(scanner::Literal::Identifier(name1)) => name1 == name2,
             _ => {
@@ -659,7 +659,7 @@ impl Compiler {
         }
     }
 
-    fn resolve_variable(&mut self, name: &String) -> Result<Resolution, String> {
+    fn resolve_variable(&mut self, name: &str) -> Result<Resolution, String> {
         if let Some(idx) = self.resolve_local(&name)? {
             return Ok(Resolution::Local(idx));
         }
@@ -671,7 +671,7 @@ impl Compiler {
         Ok(Resolution::Global)
     }
 
-    fn resolve_upval(&mut self, name: &String) -> Result<Option<usize>, String> {
+    fn resolve_upval(&mut self, name: &str) -> Result<Option<usize>, String> {
         if self.level_idx < 1 {
             return Ok(None);
         }
@@ -684,7 +684,7 @@ impl Compiler {
 
         self.level_idx -= 1;
 
-        if let Some(upval_idx) = self.resolve_upval(name)?.clone() {
+        if let Some(upval_idx) = self.resolve_upval(name)? {
             self.current_level_mut().locals[upval_idx].is_captured = true;
             self.level_idx += 1; // couldn't figure out how to satisfy borrow checker with scopeguard!
             return Ok(Some(
@@ -710,13 +710,13 @@ impl Compiler {
         self.current_level().upvals.len() - 1
     }
 
-    fn resolve_local(&self, name: &String) -> Result<Option<usize>, String> {
+    fn resolve_local(&self, name: &str) -> Result<Option<usize>, String> {
         Compiler::resolve_local_static(self.current_level(), name, self.previous())
     }
 
     fn resolve_local_static(
         level: &Level,
-        name: &String,
+        name: &str,
         prev_tok: &scanner::Token,
     ) -> Result<Option<usize>, String> {
         for (idx, local) in level.locals.iter().rev().enumerate() {

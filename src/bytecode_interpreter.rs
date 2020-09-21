@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 #[allow(dead_code)]
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
-    if name.len() > 0 {
+    if !name.is_empty() {
         println!("============ {} ============", name);
     }
 
@@ -62,7 +62,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 "OP_CLOSURE {:?} (idx={}, upvals={:?})",
                 chunk.constants[*idx], *idx, upvals
             ),
-            bytecode::Op::CloseUpvalue => format!("OP_CLOSE_UPVALUE"),
+            bytecode::Op::CloseUpvalue => "OP_CLOSE_UPVALUE".to_string(),
         };
 
         println!(
@@ -209,7 +209,7 @@ impl Interpreter {
 
     fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
-            if self.frames.len() == 0
+            if self.frames.is_empty()
                 || self.frame().ip >= self.frame().closure.function.chunk.code.len()
             {
                 return Ok(());
