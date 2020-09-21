@@ -221,6 +221,10 @@ impl Interpreter {
                 (bytecode::Op::Return, _) => {
                     let result = self.pop_stack();
 
+                    for idx in self.frame().slots_offset..self.stack.len() {
+                        self.close_upvalues(idx);
+                    }
+
                     let num_to_pop = self.stack.len() - self.frame().slots_offset
                         + usize::from(self.frame().closure.function.arity);
                     self.frames.pop();
@@ -506,10 +510,8 @@ impl Interpreter {
     fn close_upvalues(&mut self, index: usize) {
         let value = &self.stack[index];
         for upval in &self.upvalues {
-            if let bytecode::Upvalue::Open(idx) = *upval.borrow() {
-                if idx == index {
-                    upval.replace(bytecode::Upvalue::Closed(value.clone()));
-                }
+            if upval.borrow().is_open_with_index(index) {
+                upval.replace(bytecode::Upvalue::Closed(value.clone()));
             }
         }
 
@@ -518,10 +520,8 @@ impl Interpreter {
 
     fn find_open_uval(&self, index: usize) -> Option<Rc<RefCell<bytecode::Upvalue>>> {
         for upval in self.upvalues.iter().rev() {
-            if let bytecode::Upvalue::Open(idx) = *upval.borrow() {
-                if idx == index {
-                    return Some(upval.clone());
-                }
+            if upval.borrow().is_open_with_index(index) {
+                return Some(upval.clone());
             }
         }
 
@@ -1689,6 +1689,39 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["assigned"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_closing_upvals_in_return() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun outer() {\n\
+               var x = \"outside\";\n\
+               fun inner() {\n\
+                 print x;\n\
+               }\n\
+               \n\
+               return inner;\n\
+            }\n\
+            \n\
+            var closure = outer();\n\
+            closure();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["outside"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);

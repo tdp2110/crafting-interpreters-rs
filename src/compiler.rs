@@ -1,6 +1,7 @@
 use crate::bytecode;
 use crate::scanner;
 
+#[derive(Debug)]
 struct Local {
     name: scanner::Token,
     depth: i64,
@@ -505,6 +506,8 @@ impl Compiler {
     fn end_scope(&mut self) {
         self.current_level_mut().scope_depth -= 1;
 
+        println!("ending scope");
+
         let mut pop_count = 0;
         for local in self.locals().iter().rev() {
             if local.depth > self.scope_depth() {
@@ -518,6 +521,9 @@ impl Compiler {
         let line = self.previous().line;
         for _ in 0..pop_count {
             let local = self.locals_mut().pop().unwrap();
+
+            println!("local {:?}", local);
+
             if local.is_captured {
                 self.emit_op(bytecode::Op::CloseUpvalue, line);
             } else {

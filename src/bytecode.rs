@@ -68,6 +68,13 @@ impl Upvalue {
             Upvalue::Closed(_) => false,
         }
     }
+
+    pub fn is_open_with_index(&self, index: usize) -> bool {
+        match self {
+            Upvalue::Open(idx) => index == *idx,
+            Upvalue::Closed(_) => false,
+        }
+    }
 }
 
 #[derive(Default, Clone)]
