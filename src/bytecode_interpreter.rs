@@ -1700,7 +1700,7 @@ mod tests {
     }
 
     #[test]
-    fn test_closing_upvals_in_return() {
+    fn test_closing_upvals_after_return() {
         let func_or_err = Compiler::compile(String::from(
             "fun outer() {\n\
                var x = \"outside\";\n\
@@ -1712,6 +1712,39 @@ mod tests {
             }\n\
             \n\
             var closure = outer();\n\
+            closure();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["outside"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_closing_upvals_after_scope() {
+        let func_or_err = Compiler::compile(String::from(
+            "var closure;\n\
+             {\n\
+               var x = \"outside\";\n\
+               fun inner() {\n\
+                 print x;\n\
+               }\n\
+               \n\
+               closure = inner;\n\
+            }\n\
+            \n\
             closure();",
         ));
 

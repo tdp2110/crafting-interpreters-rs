@@ -506,8 +506,6 @@ impl Compiler {
     fn end_scope(&mut self) {
         self.current_level_mut().scope_depth -= 1;
 
-        println!("ending scope");
-
         let mut pop_count = 0;
         for local in self.locals().iter().rev() {
             if local.depth > self.scope_depth() {
@@ -519,10 +517,9 @@ impl Compiler {
         let pop_count = pop_count;
 
         let line = self.previous().line;
+
         for _ in 0..pop_count {
             let local = self.locals_mut().pop().unwrap();
-
-            println!("local {:?}", local);
 
             if local.is_captured {
                 self.emit_op(bytecode::Op::CloseUpvalue, line);
@@ -682,16 +679,19 @@ impl Compiler {
             return Ok(None);
         }
 
+        let prev_level_idx = self.level_idx - 1;
+
         if let Some(local_idx) =
-            Compiler::resolve_local_static(&self.levels[self.level_idx - 1], name, self.previous())?
+            Compiler::resolve_local_static(&self.levels[prev_level_idx], name, self.previous())?
         {
+            self.levels[prev_level_idx].locals[local_idx + 1].is_captured = true;
+
             return Ok(Some(self.add_upval(bytecode::UpvalueLoc::Local(local_idx))));
         }
 
         self.level_idx -= 1;
 
         if let Some(upval_idx) = self.resolve_upval(name)? {
-            self.current_level_mut().locals[upval_idx].is_captured = true;
             self.level_idx += 1; // couldn't figure out how to satisfy borrow checker with scopeguard!
             return Ok(Some(
                 self.add_upval(bytecode::UpvalueLoc::Upvalue(upval_idx)),
