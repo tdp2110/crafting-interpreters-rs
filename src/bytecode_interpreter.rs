@@ -1,5 +1,6 @@
 use crate::builtins;
 use crate::bytecode;
+use crate::value;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -74,16 +75,16 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
     }
 }
 
-fn dis_builtin(args: Vec<bytecode::Value>) -> Result<bytecode::Value, String> {
+fn dis_builtin(args: Vec<value::Value>) -> Result<value::Value, String> {
     // arity checking is done in the interpreter
     match &args[0] {
-        bytecode::Value::Function(closure) => {
+        value::Value::Function(closure) => {
             disassemble_chunk(&closure.function.chunk, "");
-            Ok(bytecode::Value::Nil)
+            Ok(value::Value::Nil)
         }
         _ => Err(format!(
             "Invalid call: expected lox function, got {:?}.",
-            bytecode::type_of(&args[0])
+            value::type_of(&args[0])
         )),
     }
 }
@@ -99,10 +100,10 @@ enum Binop {
 
 pub struct Interpreter {
     frames: Vec<CallFrame>,
-    stack: Vec<bytecode::Value>,
+    stack: Vec<value::Value>,
     output: Vec<String>,
-    globals: HashMap<String, bytecode::Value>,
-    upvalues: Vec<Rc<RefCell<bytecode::Upvalue>>>,
+    globals: HashMap<String, value::Value>,
+    upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
 }
 
 impl Default for Interpreter {
@@ -119,7 +120,7 @@ impl Default for Interpreter {
 
         res.globals.insert(
             String::from("dis"),
-            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+            value::Value::NativeFunction(value::NativeFunction {
                 arity: 1,
                 name: String::from("dis"),
                 func: dis_builtin,
@@ -127,7 +128,7 @@ impl Default for Interpreter {
         );
         res.globals.insert(
             String::from("clock"),
-            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+            value::Value::NativeFunction(value::NativeFunction {
                 arity: 0,
                 name: String::from("clock"),
                 func: builtins::clock,
@@ -135,7 +136,7 @@ impl Default for Interpreter {
         );
         res.globals.insert(
             String::from("exp"),
-            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+            value::Value::NativeFunction(value::NativeFunction {
                 arity: 1,
                 name: String::from("exp"),
                 func: builtins::exp,
@@ -143,7 +144,7 @@ impl Default for Interpreter {
         );
         res.globals.insert(
             String::from("sqrt"),
-            bytecode::Value::NativeFunction(bytecode::NativeFunction {
+            value::Value::NativeFunction(value::NativeFunction {
                 arity: 1,
                 name: String::from("sqrt"),
                 func: builtins::sqrt,
@@ -163,7 +164,7 @@ pub enum InterpreterError {
 
 #[derive(Default)]
 struct CallFrame {
-    closure: bytecode::Closure,
+    closure: value::Closure,
     ip: usize,
     slots_offset: usize,
 }
@@ -175,20 +176,26 @@ impl CallFrame {
         res
     }
 
-    fn read_constant(&self, idx: usize) -> &bytecode::Value {
-        &self.closure.function.chunk.constants[idx]
+    fn read_constant(&self, idx: usize) -> value::Value {
+        match &self.closure.function.chunk.constants[idx] {
+            bytecode::Constant::Number(num) => value::Value::Number(*num),
+            bytecode::Constant::String(s) => value::Value::String(s.clone()),
+            bytecode::Constant::Function(f) => value::Value::Function(value::Closure {
+                function: f.function.clone(),
+                upvalues: Vec::new(),
+            }),
+        }
     }
 }
 
 impl Interpreter {
     pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
-        self.stack
-            .push(bytecode::Value::Function(bytecode::Closure {
-                function: func.clone(),
-                upvalues: Vec::new(),
-            }));
+        self.stack.push(value::Value::Function(value::Closure {
+            function: func.clone(),
+            upvalues: Vec::new(),
+        }));
         self.frames.push(CallFrame {
-            closure: bytecode::Closure {
+            closure: value::Closure {
                 function: func,
                 upvalues: Vec::new(),
             },
@@ -239,9 +246,9 @@ impl Interpreter {
                     self.stack.push(result);
                 }
                 (bytecode::Op::Closure(idx, upvals), _) => {
-                    let constant = self.read_constant(idx).clone();
+                    let constant = self.read_constant(idx);
 
-                    if let bytecode::Value::Function(closure) = constant {
+                    if let value::Value::Function(closure) = constant {
                         let upvalues = upvals
                             .iter()
                             .map(|upval| match upval {
@@ -254,7 +261,7 @@ impl Interpreter {
                                     } else {
                                         let index = self.frame().slots_offset + *idx;
                                         let upval =
-                                            Rc::new(RefCell::new(bytecode::Upvalue::Open(index)));
+                                            Rc::new(RefCell::new(value::Upvalue::Open(index)));
                                         self.upvalues.push(upval.clone());
                                         upval
                                     }
@@ -262,30 +269,29 @@ impl Interpreter {
                             })
                             .collect();
 
-                        self.stack
-                            .push(bytecode::Value::Function(bytecode::Closure {
-                                function: closure.function,
-                                upvalues,
-                            }));
+                        self.stack.push(value::Value::Function(value::Closure {
+                            function: closure.function,
+                            upvalues,
+                        }));
                     } else {
                         panic!(
                             "When interpreting bytecode::Op::Closure, expected function, found {:?}",
-                            bytecode::type_of(&constant)
+                            value::type_of(&constant)
                         );
                     }
                 }
                 (bytecode::Op::Constant(idx), _) => {
-                    let constant = self.read_constant(idx).clone();
+                    let constant = self.read_constant(idx);
                     self.stack.push(constant);
                 }
                 (bytecode::Op::Nil, _) => {
-                    self.stack.push(bytecode::Value::Nil);
+                    self.stack.push(value::Value::Nil);
                 }
                 (bytecode::Op::True, _) => {
-                    self.stack.push(bytecode::Value::Bool(true));
+                    self.stack.push(value::Value::Bool(true));
                 }
                 (bytecode::Op::False, _) => {
-                    self.stack.push(bytecode::Value::Bool(false));
+                    self.stack.push(value::Value::Bool(false));
                 }
                 (bytecode::Op::Negate, lineno) => {
                     let top_stack = self.peek();
@@ -294,12 +300,12 @@ impl Interpreter {
                     match maybe_number {
                         Some(to_negate) => {
                             self.pop_stack();
-                            self.stack.push(bytecode::Value::Number(-to_negate));
+                            self.stack.push(value::Value::Number(-to_negate));
                         }
                         None => {
                             return Err(InterpreterError::Runtime(format!(
                                 "invalid operand to unary op negate. Expected number, found {:?} at line {}",
-                                bytecode::type_of(top_stack), lineno.value
+                                value::type_of(top_stack), lineno.value
                             )))
                         }
                     }
@@ -309,23 +315,23 @@ impl Interpreter {
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
+                        (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
-                            self.stack.push(bytecode::Value::Number(n1 + n2));
+                            self.stack.push(value::Value::Number(n1 + n2));
                         }
-                        (bytecode::Value::String(s1), bytecode::Value::String(s2)) => {
+                        (value::Value::String(s1), value::Value::String(s2)) => {
                             self.pop_stack();
                             self.pop_stack();
                             self.stack
-                                .push(bytecode::Value::String(format!("{}{}", s2, s1)));
+                                .push(value::Value::String(format!("{}{}", s2, s1)));
                         }
                         _ => {
                             return Err(InterpreterError::Runtime(format!(
                                 "invalid operands of type {:?} and {:?} in add expression: \
                                  both operands must be number or string (line={})",
-                                bytecode::type_of(&val1),
-                                bytecode::type_of(&val2),
+                                value::type_of(&val1),
+                                value::type_of(&val2),
                                 lineno.value
                             )))
                         }
@@ -350,12 +356,12 @@ impl Interpreter {
                     match maybe_bool {
                         Some(b) => {
                             self.pop_stack();
-                            self.stack.push(bytecode::Value::Bool(!b));
+                            self.stack.push(value::Value::Bool(!b));
                         }
                         None => {
                             return Err(InterpreterError::Runtime(format!(
                                 "invalid operand in not expression. Expected boolean, found {:?} at line {}",
-                                bytecode::type_of(top_stack), lineno.value)))
+                                value::type_of(top_stack), lineno.value)))
                         }
                     }
                 }
@@ -363,24 +369,22 @@ impl Interpreter {
                     let val1 = self.pop_stack();
                     let val2 = self.pop_stack();
                     self.stack
-                        .push(bytecode::Value::Bool(Interpreter::values_equal(
-                            &val1, &val2,
-                        )));
+                        .push(value::Value::Bool(Interpreter::values_equal(&val1, &val2)));
                 }
                 (bytecode::Op::Greater, lineno) => {
                     let val1 = self.peek_by(0).clone();
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
+                        (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
 
-                            self.stack.push(bytecode::Value::Bool(n2 > n1));
+                            self.stack.push(value::Value::Bool(n2 > n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Greater expression. Expected numbers, found {:?} and {:?} at line {}",
-                            bytecode::type_of(&val1), bytecode::type_of(&val2), lineno.value)))
+                            value::type_of(&val1), value::type_of(&val2), lineno.value)))
 
                     }
                 }
@@ -389,14 +393,14 @@ impl Interpreter {
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
+                        (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
-                            self.stack.push(bytecode::Value::Bool(n2 < n1));
+                            self.stack.push(value::Value::Bool(n2 < n1));
                         }
                         _ => return Err(InterpreterError::Runtime(format!(
                             "invalid operands in Less expression. Expected numbers, found {:?} and {:?} at line {}",
-                            bytecode::type_of(&val1), bytecode::type_of(&val2), lineno.value)))
+                            value::type_of(&val1), value::type_of(&val2), lineno.value)))
 
                     }
                 }
@@ -408,19 +412,19 @@ impl Interpreter {
                     self.pop_stack();
                 }
                 (bytecode::Op::DefineGlobal(idx), _) => {
-                    if let bytecode::Value::String(name) = self.read_constant(idx).clone() {
+                    if let value::Value::String(name) = self.read_constant(idx) {
                         let val = self.pop_stack();
                         self.globals.insert(name, val);
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
-                            bytecode::type_of(self.read_constant(idx))
+                            value::type_of(&self.read_constant(idx))
                         );
                     }
                 }
                 (bytecode::Op::GetGlobal(idx), lineno) => {
-                    if let bytecode::Value::String(name) = self.read_constant(idx) {
-                        match self.globals.get(name) {
+                    if let value::Value::String(name) = self.read_constant(idx) {
+                        match self.globals.get(&name) {
                             Some(val) => {
                                 self.stack.push(val.clone());
                             }
@@ -434,12 +438,12 @@ impl Interpreter {
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
-                            bytecode::type_of(self.read_constant(idx))
+                            value::type_of(&self.read_constant(idx))
                         );
                     }
                 }
                 (bytecode::Op::SetGlobal(idx), lineno) => {
-                    if let bytecode::Value::String(name) = self.read_constant(idx).clone() {
+                    if let value::Value::String(name) = self.read_constant(idx) {
                         if self.globals.contains_key(&name) {
                             let val = self.peek().clone();
                             self.globals.insert(name, val);
@@ -452,7 +456,7 @@ impl Interpreter {
                     } else {
                         panic!(
                             "expected string when setting global, found {:?}",
-                            bytecode::type_of(self.read_constant(idx))
+                            value::type_of(&self.read_constant(idx))
                         );
                     }
                 }
@@ -469,8 +473,8 @@ impl Interpreter {
                 (bytecode::Op::GetUpval(idx), _) => {
                     let upvalue = self.frame().closure.upvalues[idx].clone();
                     let val = match &*upvalue.borrow() {
-                        bytecode::Upvalue::Closed(value) => value.clone(),
-                        bytecode::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
+                        value::Upvalue::Closed(value) => value.clone(),
+                        value::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
                     };
                     self.stack.push(val);
                 }
@@ -478,10 +482,8 @@ impl Interpreter {
                     let new_value = self.peek().clone();
                     let upvalue = self.frame().closure.upvalues[idx].clone();
                     match &mut *upvalue.borrow_mut() {
-                        bytecode::Upvalue::Closed(value) => *value = new_value,
-                        bytecode::Upvalue::Open(stack_index) => {
-                            self.stack[*stack_index] = new_value
-                        }
+                        value::Upvalue::Closed(value) => *value = new_value,
+                        value::Upvalue::Open(stack_index) => self.stack[*stack_index] = new_value,
                     };
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
@@ -511,14 +513,14 @@ impl Interpreter {
         let value = &self.stack[index];
         for upval in &self.upvalues {
             if upval.borrow().is_open_with_index(index) {
-                upval.replace(bytecode::Upvalue::Closed(value.clone()));
+                upval.replace(value::Upvalue::Closed(value.clone()));
             }
         }
 
         self.upvalues.retain(|u| u.borrow().is_open());
     }
 
-    fn find_open_uval(&self, index: usize) -> Option<Rc<RefCell<bytecode::Upvalue>>> {
+    fn find_open_uval(&self, index: usize) -> Option<Rc<RefCell<value::Upvalue>>> {
         for upval in self.upvalues.iter().rev() {
             if upval.borrow().is_open_with_index(index) {
                 return Some(upval.clone());
@@ -530,28 +532,28 @@ impl Interpreter {
 
     fn call_value(
         &mut self,
-        val_to_call: bytecode::Value,
+        val_to_call: value::Value,
         arg_count: u8,
     ) -> Result<(), InterpreterError> {
         match val_to_call {
-            bytecode::Value::Function(func) => {
+            value::Value::Function(func) => {
                 self.call(func, arg_count)?;
                 Ok(())
             }
-            bytecode::Value::NativeFunction(native_func) => {
+            value::Value::NativeFunction(native_func) => {
                 self.native_call(native_func, arg_count)?;
                 Ok(())
             }
             _ => Err(InterpreterError::Runtime(format!(
                 "attempted to call non-callable value of type {:?}.",
-                bytecode::type_of(&val_to_call)
+                value::type_of(&val_to_call)
             ))),
         }
     }
 
     fn native_call(
         &mut self,
-        native_func: bytecode::NativeFunction,
+        native_func: value::NativeFunction,
         arg_count: u8,
     ) -> Result<(), InterpreterError> {
         if arg_count != native_func.arity {
@@ -581,7 +583,7 @@ impl Interpreter {
         }
     }
 
-    fn call(&mut self, closure: bytecode::Closure, arg_count: u8) -> Result<(), InterpreterError> {
+    fn call(&mut self, closure: value::Closure, arg_count: u8) -> Result<(), InterpreterError> {
         let func = &closure.function;
         if arg_count != func.arity {
             return Err(InterpreterError::Runtime(format!(
@@ -603,31 +605,29 @@ impl Interpreter {
         }
     }
 
-    fn is_falsey(val: &bytecode::Value) -> bool {
+    fn is_falsey(val: &value::Value) -> bool {
         match val {
-            bytecode::Value::Nil => true,
-            bytecode::Value::Bool(b) => !*b,
-            bytecode::Value::Number(f) => *f == 0.0,
-            bytecode::Value::Function(_) => false,
-            bytecode::Value::NativeFunction(_) => false,
-            bytecode::Value::String(s) => s.is_empty(),
+            value::Value::Nil => true,
+            value::Value::Bool(b) => !*b,
+            value::Value::Number(f) => *f == 0.0,
+            value::Value::Function(_) => false,
+            value::Value::NativeFunction(_) => false,
+            value::Value::String(s) => s.is_empty(),
         }
     }
 
-    fn print_val(&mut self, val: &bytecode::Value) {
+    fn print_val(&mut self, val: &value::Value) {
         let output = format!("{:?}", val);
         println!("{}", output);
         self.output.push(output);
     }
 
-    fn values_equal(val1: &bytecode::Value, val2: &bytecode::Value) -> bool {
+    fn values_equal(val1: &value::Value, val2: &value::Value) -> bool {
         match (val1, val2) {
-            (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
-                (n1 - n2).abs() < f64::EPSILON
-            }
-            (bytecode::Value::Bool(b1), bytecode::Value::Bool(b2)) => b1 == b2,
-            (bytecode::Value::String(s1), bytecode::Value::String(s2)) => s1 == s2,
-            (bytecode::Value::Nil, bytecode::Value::Nil) => true,
+            (value::Value::Number(n1), value::Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
+            (value::Value::Bool(b1), value::Value::Bool(b2)) => b1 == b2,
+            (value::Value::String(s1), value::Value::String(s2)) => s1 == s2,
+            (value::Value::Nil, value::Value::Nil) => true,
             (_, _) => false,
         }
     }
@@ -641,11 +641,11 @@ impl Interpreter {
         let val2 = self.peek_by(1).clone();
 
         match (&val1, &val2) {
-            (bytecode::Value::Number(n1), bytecode::Value::Number(n2)) => {
+            (value::Value::Number(n1), value::Value::Number(n2)) => {
                 self.pop_stack();
                 self.pop_stack();
                 self.stack
-                    .push(bytecode::Value::Number(Interpreter::apply_numeric_binop(
+                    .push(value::Value::Number(Interpreter::apply_numeric_binop(
                         *n2, *n1, binop, // note the order!
                     )));
                 Ok(())
@@ -653,8 +653,8 @@ impl Interpreter {
             _ => Err(InterpreterError::Runtime(format!(
                 "Expected numbers in {:?} expression. Found {:?} and {:?} (line={})",
                 binop,
-                bytecode::type_of(&val1),
-                bytecode::type_of(&val2),
+                value::type_of(&val1),
+                value::type_of(&val2),
                 lineno.value
             ))),
         }
@@ -669,18 +669,18 @@ impl Interpreter {
         }
     }
 
-    fn pop_stack(&mut self) -> bytecode::Value {
+    fn pop_stack(&mut self) -> value::Value {
         match self.stack.pop() {
             Some(val) => val,
             None => panic!("attempted to pop empty stack!"),
         }
     }
 
-    fn peek(&self) -> &bytecode::Value {
+    fn peek(&self) -> &value::Value {
         self.peek_by(0)
     }
 
-    fn peek_by(&self, n: usize) -> &bytecode::Value {
+    fn peek_by(&self, n: usize) -> &value::Value {
         &self.stack[self.stack.len() - n - 1]
     }
 
@@ -688,20 +688,20 @@ impl Interpreter {
         self.frame_mut().next_op()
     }
 
-    fn read_constant(&self, idx: usize) -> &bytecode::Value {
-        &self.frame().read_constant(idx)
+    fn read_constant(&self, idx: usize) -> value::Value {
+        self.frame().read_constant(idx)
     }
 
-    fn extract_number(val: &bytecode::Value) -> Option<f64> {
+    fn extract_number(val: &value::Value) -> Option<f64> {
         match val {
-            bytecode::Value::Number(f) => Some(*f),
+            value::Value::Number(f) => Some(*f),
             _ => None,
         }
     }
 
-    fn extract_bool(val: &bytecode::Value) -> Option<bool> {
+    fn extract_bool(val: &value::Value) -> Option<bool> {
         match val {
-            bytecode::Value::Bool(b) => Some(*b),
+            value::Value::Bool(b) => Some(*b),
             _ => None,
         }
     }
