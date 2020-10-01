@@ -1,4 +1,4 @@
-pub type Id = u64;
+pub type Id = usize;
 
 #[derive(Copy, Clone)]
 pub struct GcString(pub Id);
