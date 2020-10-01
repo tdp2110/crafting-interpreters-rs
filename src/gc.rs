@@ -51,6 +51,7 @@ impl GCVal {
     }
 }
 
+#[derive(Default)]
 pub struct Heap {
     id_counter: gc_values::Id,
     values: HashMap<gc_values::Id, GCVal>,
@@ -80,11 +81,11 @@ impl Heap {
     }
 
     #[allow(dead_code)]
-    pub fn get_str(&self, s: gc_values::GcString) -> &String {
+    pub fn get_str(&self, s: &gc_values::GcString) -> &String {
         self.values.get(&s.0).unwrap().data.as_str().unwrap()
     }
     #[allow(dead_code)]
-    pub fn get_str_mut(&mut self, s: gc_values::GcString) -> &mut String {
+    pub fn get_str_mut(&mut self, s: &gc_values::GcString) -> &mut String {
         self.values
             .get_mut(&s.0)
             .unwrap()
@@ -93,11 +94,11 @@ impl Heap {
             .unwrap()
     }
     #[allow(dead_code)]
-    pub fn get_closure(&self, c: gc_values::GcClosure) -> &value::Closure {
+    pub fn get_closure(&self, c: &gc_values::GcClosure) -> &value::Closure {
         self.values.get(&c.0).unwrap().data.as_closure().unwrap()
     }
     #[allow(dead_code)]
-    pub fn get_closure_mut(&mut self, c: gc_values::GcClosure) -> &mut value::Closure {
+    pub fn get_closure_mut(&mut self, c: &gc_values::GcClosure) -> &mut value::Closure {
         self.values
             .get_mut(&c.0)
             .unwrap()

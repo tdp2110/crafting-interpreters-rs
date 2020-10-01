@@ -1,5 +1,7 @@
 use crate::builtins;
 use crate::bytecode;
+use crate::gc;
+use crate::gc_values;
 use crate::value;
 
 use std::cell::RefCell;
@@ -103,6 +105,7 @@ pub struct Interpreter {
     output: Vec<String>,
     globals: HashMap<String, value::Value>,
     upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
+    heap: gc::Heap,
 }
 
 impl Default for Interpreter {
@@ -113,6 +116,7 @@ impl Default for Interpreter {
             output: Default::default(),
             globals: Default::default(),
             upvalues: Default::default(),
+            heap: Default::default(),
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
@@ -175,15 +179,8 @@ impl CallFrame {
         res
     }
 
-    fn read_constant(&self, idx: usize) -> value::Value {
-        match &self.closure.function.chunk.constants[idx] {
-            bytecode::Constant::Number(num) => value::Value::Number(*num),
-            bytecode::Constant::String(s) => value::Value::String(s.clone()),
-            bytecode::Constant::Function(f) => value::Value::Function(value::Closure {
-                function: f.function.clone(),
-                upvalues: Vec::new(),
-            }),
-        }
+    fn read_constant(&self, idx: usize) -> bytecode::Constant {
+        self.closure.function.chunk.constants[idx].clone()
     }
 }
 
@@ -202,6 +199,17 @@ impl Interpreter {
             slots_offset: 1,
         });
         self.run()
+    }
+
+    pub fn format_val(&self, val: &value::Value) -> String {
+        match val {
+            value::Value::Number(num) => num.to_string(),
+            value::Value::Bool(b) => b.to_string(),
+            value::Value::String(s) => self.get_str(&s).clone(),
+            value::Value::Function(closure) => format!("<fn {}>", closure.function.name),
+            value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
+            value::Value::Nil => "nil".to_string(),
+        }
     }
 
     fn frame_mut(&mut self) -> &mut CallFrame {
@@ -323,7 +331,11 @@ impl Interpreter {
                             self.pop_stack();
                             self.pop_stack();
                             self.stack
-                                .push(value::Value::String(format!("{}{}", s2, s1)));
+                                .push(value::Value::String(self.heap.manage_str(format!(
+                                    "{}{}",
+                                    self.get_str(s2),
+                                    self.get_str(s1)
+                                ))));
                         }
                         _ => {
                             return Err(InterpreterError::Runtime(format!(
@@ -368,7 +380,7 @@ impl Interpreter {
                     let val1 = self.pop_stack();
                     let val2 = self.pop_stack();
                     self.stack
-                        .push(value::Value::Bool(Interpreter::values_equal(&val1, &val2)));
+                        .push(value::Value::Bool(self.values_equal(&val1, &val2)));
                 }
                 (bytecode::Op::Greater, lineno) => {
                     let val1 = self.peek_by(0).clone();
@@ -413,7 +425,7 @@ impl Interpreter {
                 (bytecode::Op::DefineGlobal(idx), _) => {
                     if let value::Value::String(name) = self.read_constant(idx) {
                         let val = self.pop_stack();
-                        self.globals.insert(name, val);
+                        self.globals.insert(self.get_str(&name).clone(), val);
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
@@ -423,14 +435,15 @@ impl Interpreter {
                 }
                 (bytecode::Op::GetGlobal(idx), lineno) => {
                     if let value::Value::String(name) = self.read_constant(idx) {
-                        match self.globals.get(&name) {
+                        match self.globals.get(self.get_str(&name)) {
                             Some(val) => {
                                 self.stack.push(val.clone());
                             }
                             None => {
                                 return Err(InterpreterError::Runtime(format!(
                                     "Undefined variable '{}' at line {}.",
-                                    name, lineno.value
+                                    self.get_str(&name),
+                                    lineno.value
                                 )));
                             }
                         }
@@ -443,13 +456,14 @@ impl Interpreter {
                 }
                 (bytecode::Op::SetGlobal(idx), lineno) => {
                     if let value::Value::String(name) = self.read_constant(idx) {
-                        if self.globals.contains_key(&name) {
+                        let name_str = self.get_str(&name).clone();
+                        if self.globals.contains_key(&name_str) {
                             let val = self.peek().clone();
-                            self.globals.insert(name, val);
+                            self.globals.insert(name_str, val);
                         } else {
                             return Err(InterpreterError::Runtime(format!(
                                 "Use of undefined variable {} in setitem expression at line {}.",
-                                name, lineno.value
+                                name_str, lineno.value
                             )));
                         }
                     } else {
@@ -486,7 +500,7 @@ impl Interpreter {
                     };
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
-                    if Interpreter::is_falsey(&self.peek()) {
+                    if self.is_falsey(&self.peek()) {
                         self.frame_mut().ip += offset;
                     }
                 }
@@ -604,28 +618,30 @@ impl Interpreter {
         }
     }
 
-    fn is_falsey(val: &value::Value) -> bool {
+    fn is_falsey(&self, val: &value::Value) -> bool {
         match val {
             value::Value::Nil => true,
             value::Value::Bool(b) => !*b,
             value::Value::Number(f) => *f == 0.0,
             value::Value::Function(_) => false,
             value::Value::NativeFunction(_) => false,
-            value::Value::String(s) => s.is_empty(),
+            value::Value::String(s) => self.get_str(&s).is_empty(),
         }
     }
 
     fn print_val(&mut self, val: &value::Value) {
-        let output = format!("{:?}", val);
+        let output = self.format_val(val);
         println!("{}", output);
         self.output.push(output);
     }
 
-    fn values_equal(val1: &value::Value, val2: &value::Value) -> bool {
+    fn values_equal(&self, val1: &value::Value, val2: &value::Value) -> bool {
         match (val1, val2) {
             (value::Value::Number(n1), value::Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
             (value::Value::Bool(b1), value::Value::Bool(b2)) => b1 == b2,
-            (value::Value::String(s1), value::Value::String(s2)) => s1 == s2,
+            (value::Value::String(s1), value::Value::String(s2)) => {
+                self.get_str(&s1) == self.get_str(&s2)
+            }
             (value::Value::Nil, value::Value::Nil) => true,
             (_, _) => false,
         }
@@ -687,8 +703,16 @@ impl Interpreter {
         self.frame_mut().next_op()
     }
 
-    fn read_constant(&self, idx: usize) -> value::Value {
-        self.frame().read_constant(idx)
+    fn read_constant(&mut self, idx: usize) -> value::Value {
+        let constant = self.frame().read_constant(idx);
+        match constant {
+            bytecode::Constant::Number(num) => value::Value::Number(num),
+            bytecode::Constant::String(s) => value::Value::String(self.heap.manage_str(s)),
+            bytecode::Constant::Function(f) => value::Value::Function(value::Closure {
+                function: f.function,
+                upvalues: Vec::new(),
+            }),
+        }
     }
 
     fn extract_number(val: &value::Value) -> Option<f64> {
@@ -703,6 +727,10 @@ impl Interpreter {
             value::Value::Bool(b) => Some(*b),
             _ => None,
         }
+    }
+
+    fn get_str(&self, s: &gc_values::GcString) -> &String {
+        self.heap.get_str(&s)
     }
 }
 

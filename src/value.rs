@@ -1,10 +1,10 @@
 use crate::bytecode;
+use crate::gc_values;
 
 use std::cell::RefCell;
-use std::fmt;
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[allow(dead_code)]
 pub enum Upvalue {
     Open(usize),
@@ -44,7 +44,7 @@ pub struct NativeFunction {
 pub enum Value {
     Number(f64),
     Bool(bool),
-    String(String),
+    String(gc_values::GcString),
     Function(Closure),
     NativeFunction(NativeFunction),
     Nil,
@@ -69,18 +69,5 @@ pub fn type_of(value: &Value) -> Type {
         Value::Function(_) => Type::Function,
         Value::NativeFunction(_) => Type::NativeFunction,
         Value::Nil => Type::Nil,
-    }
-}
-
-impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Value::Number(num) => write!(f, "{}", num),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::String(s) => write!(f, "{}", s),
-            Value::Function(closure) => write!(f, "<fn {}>", closure.function.name),
-            Value::NativeFunction(func) => write!(f, "<native fn {}>", func.name),
-            Value::Nil => write!(f, "nil"),
-        }
     }
 }
