@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[allow(dead_code)]
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
     if !name.is_empty() {
         println!("============ {} ============", name);
