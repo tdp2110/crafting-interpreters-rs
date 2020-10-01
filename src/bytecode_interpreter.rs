@@ -751,8 +751,61 @@ impl Interpreter {
     fn get_str(&self, str_handle: &gc_values::GcString) -> &String {
         self.heap.get_str(&str_handle)
     }
+
     fn get_closure(&self, closure_handle: &gc_values::GcClosure) -> &value::Closure {
         self.heap.get_closure(&closure_handle)
+    }
+
+    fn collect_garbage(&mut self) {
+        self.mark_roots();
+    }
+
+    fn mark_roots(&mut self) {
+        /*
+        TODO this is ugly!!!
+         */
+
+        let stack_vals_to_mark: Vec<value::Value> = self
+            .stack
+            .iter()
+            .map(|val| match val {
+                value::Value::String(_) => Some(val.clone()),
+                value::Value::Function(_) => Some(val.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+
+        for val in stack_vals_to_mark {
+            self.mark_value(&val);
+        }
+
+        let globals_to_mark: Vec<value::Value> = self
+            .globals
+            .values()
+            .map(|val| match val {
+                value::Value::String(_) => Some(val.clone()),
+                value::Value::Function(_) => Some(val.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+
+        for val in globals_to_mark {
+            self.mark_value(&val);
+        }
+    }
+
+    fn mark_value(&mut self, val: &value::Value) {
+        match val {
+            value::Value::String(str_handle) => {
+                self.heap.mark_str(str_handle);
+            }
+            value::Value::Function(closure_handle) => {
+                self.heap.mark_closure(closure_handle);
+            }
+            _ => {}
+        }
     }
 }
 
