@@ -1,4 +1,5 @@
 use crate::bytecode;
+use crate::gc;
 use crate::gc_values;
 
 use std::cell::RefCell;
@@ -37,7 +38,7 @@ pub struct Closure {
 pub struct NativeFunction {
     pub arity: u8,
     pub name: String,
-    pub func: fn(Vec<Value>) -> Result<Value, String>,
+    pub func: fn(&gc::Heap, Vec<Value>) -> Result<Value, String>,
 }
 
 #[derive(Clone)]
@@ -45,7 +46,7 @@ pub enum Value {
     Number(f64),
     Bool(bool),
     String(gc_values::GcString),
-    Function(Closure),
+    Function(gc_values::GcClosure),
     NativeFunction(NativeFunction),
     Nil,
 }

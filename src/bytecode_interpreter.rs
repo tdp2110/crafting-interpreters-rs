@@ -76,10 +76,11 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
     }
 }
 
-fn dis_builtin(args: Vec<value::Value>) -> Result<value::Value, String> {
+fn dis_builtin(heap: &gc::Heap, args: Vec<value::Value>) -> Result<value::Value, String> {
     // arity checking is done in the interpreter
     match &args[0] {
-        value::Value::Function(closure) => {
+        value::Value::Function(closure_handle) => {
+            let closure = heap.get_closure(closure_handle);
             disassemble_chunk(&closure.function.chunk, "");
             Ok(value::Value::Nil)
         }
@@ -186,10 +187,13 @@ impl CallFrame {
 
 impl Interpreter {
     pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
-        self.stack.push(value::Value::Function(value::Closure {
-            function: func.clone(),
-            upvalues: Vec::new(),
-        }));
+        self.stack
+            .push(value::Value::Function(self.heap.manage_closure(
+                value::Closure {
+                    function: func.clone(),
+                    upvalues: Vec::new(),
+                },
+            )));
         self.frames.push(CallFrame {
             closure: value::Closure {
                 function: func,
@@ -205,8 +209,10 @@ impl Interpreter {
         match val {
             value::Value::Number(num) => num.to_string(),
             value::Value::Bool(b) => b.to_string(),
-            value::Value::String(s) => self.get_str(&s).clone(),
-            value::Value::Function(closure) => format!("<fn {}>", closure.function.name),
+            value::Value::String(str_handle) => self.get_str(&str_handle).clone(),
+            value::Value::Function(closure_handle) => {
+                format!("<fn {}>", self.get_closure(&closure_handle).function.name)
+            }
             value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
             value::Value::Nil => "nil".to_string(),
         }
@@ -255,7 +261,8 @@ impl Interpreter {
                 (bytecode::Op::Closure(idx, upvals), _) => {
                     let constant = self.read_constant(idx);
 
-                    if let value::Value::Function(closure) = constant {
+                    if let value::Value::Function(closure_handle) = constant {
+                        let closure = self.get_closure(&closure_handle).clone();
                         let upvalues = upvals
                             .iter()
                             .map(|upval| match upval {
@@ -276,10 +283,13 @@ impl Interpreter {
                             })
                             .collect();
 
-                        self.stack.push(value::Value::Function(value::Closure {
-                            function: closure.function,
-                            upvalues,
-                        }));
+                        self.stack
+                            .push(value::Value::Function(self.heap.manage_closure(
+                                value::Closure {
+                                    function: closure.function,
+                                    upvalues,
+                                },
+                            )));
                     } else {
                         panic!(
                             "When interpreting bytecode::Op::Closure, expected function, found {:?}",
@@ -584,7 +594,9 @@ impl Interpreter {
         let args = args;
         self.pop_stack(); // native function value
 
-        match (native_func.func)(args) {
+        let res = (native_func.func)(&self.heap, args);
+
+        match res {
             Ok(result) => {
                 self.stack.push(result);
                 Ok(())
@@ -596,7 +608,12 @@ impl Interpreter {
         }
     }
 
-    fn call(&mut self, closure: value::Closure, arg_count: u8) -> Result<(), InterpreterError> {
+    fn call(
+        &mut self,
+        closure_handle: gc_values::GcClosure,
+        arg_count: u8,
+    ) -> Result<(), InterpreterError> {
+        let closure = self.get_closure(&closure_handle).clone();
         let func = &closure.function;
         if arg_count != func.arity {
             return Err(InterpreterError::Runtime(format!(
@@ -708,10 +725,12 @@ impl Interpreter {
         match constant {
             bytecode::Constant::Number(num) => value::Value::Number(num),
             bytecode::Constant::String(s) => value::Value::String(self.heap.manage_str(s)),
-            bytecode::Constant::Function(f) => value::Value::Function(value::Closure {
-                function: f.function,
-                upvalues: Vec::new(),
-            }),
+            bytecode::Constant::Function(f) => {
+                value::Value::Function(self.heap.manage_closure(value::Closure {
+                    function: f.function,
+                    upvalues: Vec::new(),
+                }))
+            }
         }
     }
 
@@ -729,8 +748,11 @@ impl Interpreter {
         }
     }
 
-    fn get_str(&self, s: &gc_values::GcString) -> &String {
-        self.heap.get_str(&s)
+    fn get_str(&self, str_handle: &gc_values::GcString) -> &String {
+        self.heap.get_str(&str_handle)
+    }
+    fn get_closure(&self, closure_handle: &gc_values::GcClosure) -> &value::Closure {
+        self.heap.get_closure(&closure_handle)
     }
 }
 
