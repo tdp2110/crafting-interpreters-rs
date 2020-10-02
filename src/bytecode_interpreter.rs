@@ -1,7 +1,6 @@
 use crate::builtins;
 use crate::bytecode;
 use crate::gc;
-use crate::gc_values;
 use crate::value;
 
 use std::cell::RefCell;
@@ -80,7 +79,7 @@ fn dis_builtin(heap: &gc::Heap, args: Vec<value::Value>) -> Result<value::Value,
     // arity checking is done in the interpreter
     match &args[0] {
         value::Value::Function(closure_handle) => {
-            let closure = heap.get_closure(closure_handle);
+            let closure = heap.get_closure(*closure_handle);
             disassemble_chunk(&closure.function.chunk, "");
             Ok(value::Value::Nil)
         }
@@ -209,9 +208,9 @@ impl Interpreter {
         match val {
             value::Value::Number(num) => num.to_string(),
             value::Value::Bool(b) => b.to_string(),
-            value::Value::String(str_handle) => self.get_str(&str_handle).clone(),
+            value::Value::String(str_handle) => self.get_str(*str_handle).clone(),
             value::Value::Function(closure_handle) => {
-                format!("<fn {}>", self.get_closure(&closure_handle).function.name)
+                format!("<fn {}>", self.get_closure(*closure_handle).function.name)
             }
             value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
             value::Value::Nil => "nil".to_string(),
@@ -262,7 +261,7 @@ impl Interpreter {
                     let constant = self.read_constant(idx);
 
                     if let value::Value::Function(closure_handle) = constant {
-                        let closure = self.get_closure(&closure_handle).clone();
+                        let closure = self.get_closure(closure_handle).clone();
                         let upvalues = upvals
                             .iter()
                             .map(|upval| match upval {
@@ -343,8 +342,8 @@ impl Interpreter {
                             self.stack
                                 .push(value::Value::String(self.heap.manage_str(format!(
                                     "{}{}",
-                                    self.get_str(s2),
-                                    self.get_str(s1)
+                                    self.get_str(*s2),
+                                    self.get_str(*s1)
                                 ))));
                         }
                         _ => {
@@ -433,9 +432,9 @@ impl Interpreter {
                     self.pop_stack();
                 }
                 (bytecode::Op::DefineGlobal(idx), _) => {
-                    if let value::Value::String(name) = self.read_constant(idx) {
+                    if let value::Value::String(name_id) = self.read_constant(idx) {
                         let val = self.pop_stack();
-                        self.globals.insert(self.get_str(&name).clone(), val);
+                        self.globals.insert(self.get_str(name_id).clone(), val);
                     } else {
                         panic!(
                             "expected string when defining global, found {:?}",
@@ -444,15 +443,15 @@ impl Interpreter {
                     }
                 }
                 (bytecode::Op::GetGlobal(idx), lineno) => {
-                    if let value::Value::String(name) = self.read_constant(idx) {
-                        match self.globals.get(self.get_str(&name)) {
+                    if let value::Value::String(name_id) = self.read_constant(idx) {
+                        match self.globals.get(self.get_str(name_id)) {
                             Some(val) => {
                                 self.stack.push(val.clone());
                             }
                             None => {
                                 return Err(InterpreterError::Runtime(format!(
                                     "Undefined variable '{}' at line {}.",
-                                    self.get_str(&name),
+                                    self.get_str(name_id),
                                     lineno.value
                                 )));
                             }
@@ -465,8 +464,8 @@ impl Interpreter {
                     }
                 }
                 (bytecode::Op::SetGlobal(idx), lineno) => {
-                    if let value::Value::String(name) = self.read_constant(idx) {
-                        let name_str = self.get_str(&name).clone();
+                    if let value::Value::String(name_id) = self.read_constant(idx) {
+                        let name_str = self.get_str(name_id).clone();
                         if self.globals.contains_key(&name_str) {
                             let val = self.peek().clone();
                             self.globals.insert(name_str, val);
@@ -608,12 +607,8 @@ impl Interpreter {
         }
     }
 
-    fn call(
-        &mut self,
-        closure_handle: gc_values::GcClosure,
-        arg_count: u8,
-    ) -> Result<(), InterpreterError> {
-        let closure = self.get_closure(&closure_handle).clone();
+    fn call(&mut self, closure_handle: usize, arg_count: u8) -> Result<(), InterpreterError> {
+        let closure = self.get_closure(closure_handle).clone();
         let func = &closure.function;
         if arg_count != func.arity {
             return Err(InterpreterError::Runtime(format!(
@@ -642,7 +637,7 @@ impl Interpreter {
             value::Value::Number(f) => *f == 0.0,
             value::Value::Function(_) => false,
             value::Value::NativeFunction(_) => false,
-            value::Value::String(s) => self.get_str(&s).is_empty(),
+            value::Value::String(s) => self.get_str(*s).is_empty(),
         }
     }
 
@@ -657,7 +652,7 @@ impl Interpreter {
             (value::Value::Number(n1), value::Value::Number(n2)) => (n1 - n2).abs() < f64::EPSILON,
             (value::Value::Bool(b1), value::Value::Bool(b2)) => b1 == b2,
             (value::Value::String(s1), value::Value::String(s2)) => {
-                self.get_str(&s1) == self.get_str(&s2)
+                self.get_str(*s1) == self.get_str(*s2)
             }
             (value::Value::Nil, value::Value::Nil) => true,
             (_, _) => false,
@@ -748,12 +743,12 @@ impl Interpreter {
         }
     }
 
-    fn get_str(&self, str_handle: &gc_values::GcString) -> &String {
-        self.heap.get_str(&str_handle)
+    fn get_str(&self, str_handle: usize) -> &String {
+        self.heap.get_str(str_handle)
     }
 
-    fn get_closure(&self, closure_handle: &gc_values::GcClosure) -> &value::Closure {
-        self.heap.get_closure(&closure_handle)
+    fn get_closure(&self, closure_handle: usize) -> &value::Closure {
+        self.heap.get_closure(closure_handle)
     }
 
     fn collect_garbage(&mut self) {
@@ -765,47 +760,39 @@ impl Interpreter {
         TODO this is ugly!!!
          */
 
-        let stack_vals_to_mark: Vec<value::Value> = self
+        let stack_vals_to_mark: Vec<usize> = self
             .stack
             .iter()
             .map(|val| match val {
-                value::Value::String(_) => Some(val.clone()),
-                value::Value::Function(_) => Some(val.clone()),
+                value::Value::String(id) => Some(*id),
+                value::Value::Function(id) => Some(*id),
                 _ => None,
             })
             .flatten()
             .collect();
 
         for val in stack_vals_to_mark {
-            self.mark_value(&val);
+            self.mark_value(val);
         }
 
-        let globals_to_mark: Vec<value::Value> = self
+        let globals_to_mark: Vec<usize> = self
             .globals
             .values()
             .map(|val| match val {
-                value::Value::String(_) => Some(val.clone()),
-                value::Value::Function(_) => Some(val.clone()),
+                value::Value::String(id) => Some(*id),
+                value::Value::Function(id) => Some(*id),
                 _ => None,
             })
             .flatten()
             .collect();
 
         for val in globals_to_mark {
-            self.mark_value(&val);
+            self.mark_value(val);
         }
     }
 
-    fn mark_value(&mut self, val: &value::Value) {
-        match val {
-            value::Value::String(str_handle) => {
-                self.heap.mark_str(str_handle);
-            }
-            value::Value::Function(closure_handle) => {
-                self.heap.mark_closure(closure_handle);
-            }
-            _ => {}
-        }
+    fn mark_value(&mut self, handle: usize) {
+        self.heap.mark(handle);
     }
 }
 

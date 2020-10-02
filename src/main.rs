@@ -10,7 +10,6 @@ mod bytecode_interpreter;
 mod compiler;
 mod expr;
 mod gc;
-mod gc_values;
 mod parser;
 mod scanner;
 mod treewalk_interpreter;

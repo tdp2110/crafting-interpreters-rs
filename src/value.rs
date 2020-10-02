@@ -1,6 +1,5 @@
 use crate::bytecode;
 use crate::gc;
-use crate::gc_values;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -45,8 +44,8 @@ pub struct NativeFunction {
 pub enum Value {
     Number(f64),
     Bool(bool),
-    String(gc_values::GcString),
-    Function(gc_values::GcClosure),
+    String(usize),
+    Function(usize),
     NativeFunction(NativeFunction),
     Nil,
 }

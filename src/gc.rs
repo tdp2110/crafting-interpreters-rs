@@ -1,4 +1,3 @@
-use crate::gc_values;
 use crate::value;
 
 enum GCData {
@@ -41,29 +40,29 @@ pub struct Heap {
 }
 
 impl Heap {
-    pub fn manage_str(&mut self, s: String) -> gc_values::GcString {
+    pub fn manage_str(&mut self, s: String) -> usize {
         self.values.push(GCVal::from(GCData::String(s)));
-        gc_values::GcString(self.values.len() - 1)
+        self.values.len() - 1
     }
 
-    pub fn manage_closure(&mut self, c: value::Closure) -> gc_values::GcClosure {
+    pub fn manage_closure(&mut self, c: value::Closure) -> usize {
         self.values.push(GCVal::from(GCData::Closure(c)));
-        gc_values::GcClosure(self.values.len() - 1)
+        self.values.len() - 1
     }
 
-    pub fn get_str(&self, s: &gc_values::GcString) -> &String {
-        self.values[s.0].data.as_str().unwrap()
+    pub fn get_str(&self, id: usize) -> &String {
+        self.values[id].data.as_str().unwrap()
     }
 
-    pub fn get_closure(&self, c: &gc_values::GcClosure) -> &value::Closure {
-        self.values[c.0].data.as_closure().unwrap()
+    pub fn get_closure(&self, id: usize) -> &value::Closure {
+        self.values[id].data.as_closure().unwrap()
     }
 
-    pub fn mark_str(&mut self, s: &gc_values::GcString) {
-        self.values[s.0].is_marked = true;
+    pub fn mark(&mut self, id: usize) {
+        self.values[id].is_marked = true;
     }
 
-    pub fn mark_closure(&mut self, s: &gc_values::GcClosure) {
-        self.values[s.0].is_marked = true;
+    pub fn mark_closure(&mut self, id: usize) {
+        self.values[id].is_marked = true;
     }
 }
