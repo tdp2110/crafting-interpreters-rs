@@ -106,6 +106,7 @@ pub struct Interpreter {
     globals: HashMap<String, value::Value>,
     upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
     heap: gc::Heap,
+    gray_stack: Vec<usize>,
 }
 
 impl Default for Interpreter {
@@ -117,6 +118,7 @@ impl Default for Interpreter {
             globals: Default::default(),
             upvalues: Default::default(),
             heap: Default::default(),
+            gray_stack: Default::default(),
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
@@ -232,6 +234,10 @@ impl Interpreter {
                 || self.frame().ip >= self.frame().closure.function.chunk.code.len()
             {
                 return Ok(());
+            }
+
+            if self.heap.should_collect() {
+                self.collect_garbage();
             }
 
             let op = self.next_op();
@@ -752,7 +758,28 @@ impl Interpreter {
     }
 
     fn collect_garbage(&mut self) {
+        self.heap.unmark();
         self.mark_roots();
+        self.trace_references();
+        self.heap.sweep();
+    }
+
+    fn trace_references(&mut self) {
+        loop {
+            let maybe_val = self.gray_stack.pop();
+            match maybe_val {
+                Some(val) => self.blacken_object(val),
+                None => break,
+            }
+        }
+    }
+
+    fn blacken_object(&mut self, val: usize) {
+        let children_to_walk = self.heap.children(val);
+        for child_val in children_to_walk {
+            self.heap.mark(child_val);
+            self.blacken_object(child_val);
+        }
     }
 
     fn mark_roots(&mut self) {
@@ -792,7 +819,11 @@ impl Interpreter {
     }
 
     fn mark_value(&mut self, handle: usize) {
-        self.heap.mark(handle);
+        let is_marked = self.heap.is_marked(handle);
+        if !is_marked {
+            self.heap.mark(handle);
+        }
+        self.gray_stack.push(handle)
     }
 }
 
