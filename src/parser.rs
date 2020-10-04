@@ -166,11 +166,11 @@ impl Parser {
             "Expected } after class body",
         )?;
 
-        Ok(expr::Stmt::ClassDecl(
-            class_symbol,
-            superclass_maybe,
+        Ok(expr::Stmt::ClassDecl(expr::ClassDecl {
+            name: class_symbol,
+            superclass: superclass_maybe,
             methods,
-        ))
+        }))
     }
 
     fn fun_decl(&mut self, kind: &str) -> Result<expr::FunDecl, String> {
