@@ -5,6 +5,7 @@ use std::collections::HashMap;
 enum GCData {
     String(String),
     Closure(value::Closure),
+    Class(value::Class),
 }
 
 impl GCData {
@@ -17,6 +18,12 @@ impl GCData {
     fn as_closure(&self) -> Option<&value::Closure> {
         match &self {
             GCData::Closure(c) => Some(c),
+            _ => None,
+        }
+    }
+    fn as_class(&self) -> Option<&value::Class> {
+        match &self {
+            GCData::Class(c) => Some(c),
             _ => None,
         }
     }
@@ -75,6 +82,12 @@ impl Heap {
         id
     }
 
+    pub fn manage_class(&mut self, c: value::Class) -> usize {
+        let id = self.generate_id();
+        self.values.insert(id, GCVal::from(GCData::Class(c)));
+        id
+    }
+
     fn generate_id(&mut self) -> usize {
         self.id_counter += 1;
         loop {
@@ -91,6 +104,10 @@ impl Heap {
 
     pub fn get_closure(&self, id: usize) -> &value::Closure {
         self.values.get(&id).unwrap().data.as_closure().unwrap()
+    }
+
+    pub fn get_class(&self, id: usize) -> &value::Class {
+        self.values.get(&id).unwrap().data.as_class().unwrap()
     }
 
     pub fn unmark(&mut self) {
@@ -111,7 +128,12 @@ impl Heap {
         match &self.values.get(&id).unwrap().data {
             GCData::String(_) => Vec::new(),
             GCData::Closure(closure) => self.closure_children(closure),
+            GCData::Class(class) => self.class_children(class),
         }
+    }
+
+    pub fn class_children(&self, _class: &value::Class) -> Vec<usize> {
+        Vec::new()
     }
 
     pub fn closure_children(&self, closure: &value::Closure) -> Vec<usize> {

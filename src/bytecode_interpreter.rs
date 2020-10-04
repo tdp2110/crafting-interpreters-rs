@@ -214,6 +214,9 @@ impl Interpreter {
             value::Value::Function(closure_handle) => {
                 format!("<fn {}>", self.get_closure(*closure_handle).function.name)
             }
+            value::Value::Class(class_handle) => {
+                format!("<class {}", self.get_class(*class_handle).name)
+            }
             value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
             value::Value::Nil => "nil".to_string(),
         }
@@ -643,6 +646,7 @@ impl Interpreter {
             value::Value::Number(f) => *f == 0.0,
             value::Value::Function(_) => false,
             value::Value::NativeFunction(_) => false,
+            value::Value::Class(_) => false,
             value::Value::String(s) => self.get_str(*s).is_empty(),
         }
     }
@@ -755,6 +759,10 @@ impl Interpreter {
 
     fn get_closure(&self, closure_handle: usize) -> &value::Closure {
         self.heap.get_closure(closure_handle)
+    }
+
+    fn get_class(&self, class_handle: usize) -> &value::Class {
+        self.heap.get_class(class_handle)
     }
 
     fn collect_garbage(&mut self) {

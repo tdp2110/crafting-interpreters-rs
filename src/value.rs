@@ -41,11 +41,17 @@ pub struct NativeFunction {
 }
 
 #[derive(Clone)]
+pub struct Class {
+    pub name: String,
+}
+
+#[derive(Clone)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     String(usize),
     Function(usize),
+    Class(usize),
     NativeFunction(NativeFunction),
     Nil,
 }
@@ -58,6 +64,7 @@ pub enum Type {
     String,
     Function,
     NativeFunction,
+    Class,
     Nil,
 }
 
@@ -68,6 +75,7 @@ pub fn type_of(value: &Value) -> Type {
         Value::String(_) => Type::String,
         Value::Function(_) => Type::Function,
         Value::NativeFunction(_) => Type::NativeFunction,
+        Value::Class(_) => Type::Class,
         Value::Nil => Type::Nil,
     }
 }
