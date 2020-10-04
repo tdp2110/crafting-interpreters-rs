@@ -123,13 +123,33 @@ impl Compiler {
     }
 
     fn declaration(&mut self) -> Result<(), String> {
-        if self.matches(scanner::TokenType::Fun) {
+        if self.matches(scanner::TokenType::Class) {
+            self.class_decl()
+        } else if self.matches(scanner::TokenType::Fun) {
             self.fun_decl()
         } else if self.matches(scanner::TokenType::Var) {
             self.var_decl()
         } else {
             self.statement()
         }
+    }
+
+    fn class_decl(&mut self) -> Result<(), String> {
+        self.consume(scanner::TokenType::Identifier, "Expected class name.")?;
+        let class_name = String::from_utf8(self.previous().clone().lexeme).unwrap();
+        let name_constant = self.identifier_constant(class_name);
+        let line = self.previous().line;
+        self.emit_op(bytecode::Op::Class(name_constant), line);
+        self.define_variable(name_constant);
+        self.consume(
+            scanner::TokenType::LeftBrace,
+            "Expected '{' before class body.",
+        )?;
+        self.consume(
+            scanner::TokenType::RightBrace,
+            "Expected '}' after class body.",
+        )?;
+        Ok(())
     }
 
     fn fun_decl(&mut self) -> Result<(), String> {

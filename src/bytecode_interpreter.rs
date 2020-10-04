@@ -64,6 +64,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 chunk.constants[*idx], *idx, upvals
             ),
             bytecode::Op::CloseUpvalue => "OP_CLOSE_UPVALUE".to_string(),
+            bytecode::Op::Class(idx) => format!("OP_CLASS {}", idx),
         };
 
         println!(
@@ -212,10 +213,10 @@ impl Interpreter {
             value::Value::Bool(b) => b.to_string(),
             value::Value::String(str_handle) => self.get_str(*str_handle).clone(),
             value::Value::Function(closure_handle) => {
-                format!("<fn {}>", self.get_closure(*closure_handle).function.name)
+                format!("<fn '{}'>", self.get_closure(*closure_handle).function.name)
             }
             value::Value::Class(class_handle) => {
-                format!("<class {}", self.get_class(*class_handle).name)
+                format!("<class '{}'>", self.get_class(*class_handle).name)
             }
             value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
             value::Value::Nil => "nil".to_string(),
@@ -535,6 +536,19 @@ impl Interpreter {
                     let idx = self.stack.len() - 1;
                     self.close_upvalues(idx);
                     self.stack.pop();
+                }
+                (bytecode::Op::Class(idx), _) => {
+                    if let value::Value::String(name_id) = self.read_constant(idx) {
+                        let name = self.get_str(name_id).clone();
+                        self.stack.push(value::Value::Class(
+                            self.heap.manage_class(value::Class { name }),
+                        ));
+                    } else {
+                        panic!(
+                            "expected string when defining class, found {:?}",
+                            value::type_of(&self.read_constant(idx))
+                        );
+                    }
                 }
             }
         }
@@ -1888,6 +1902,30 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["outside"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_classes_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Brioche {}\n\
+             print Brioche;\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["<class 'Brioche'>"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
