@@ -76,6 +76,7 @@ impl Heap {
     }
 
     fn generate_id(&mut self) -> usize {
+        self.id_counter += 1;
         loop {
             if !self.values.contains_key(&self.id_counter) {
                 return self.id_counter;
@@ -107,15 +108,30 @@ impl Heap {
     }
 
     pub fn children(&self, id: usize) -> Vec<usize> {
-        let val = &self.values.get(&id).unwrap();
-
-        if val.is_marked {
-            return Vec::new();
-        }
-
-        match self.values.get(&id).unwrap().data {
+        match &self.values.get(&id).unwrap().data {
             GCData::String(_) => Vec::new(),
-            GCData::Closure(_) => Vec::new(),
+            GCData::Closure(closure) => self.closure_children(closure),
+        }
+    }
+
+    pub fn closure_children(&self, closure: &value::Closure) -> Vec<usize> {
+        let res: Vec<usize> = closure
+            .upvalues
+            .iter()
+            .map(|upval| match &*upval.borrow() {
+                value::Upvalue::Open(_) => None,
+                value::Upvalue::Closed(value) => self.extract_id(&value),
+            })
+            .flatten()
+            .collect();
+        res
+    }
+
+    pub fn extract_id(&self, val: &value::Value) -> Option<usize> {
+        match val {
+            value::Value::String(id) => Some(*id),
+            value::Value::Function(id) => Some(*id),
+            _ => None,
         }
     }
 

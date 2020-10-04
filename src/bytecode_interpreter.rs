@@ -236,11 +236,11 @@ impl Interpreter {
                 return Ok(());
             }
 
+            let op = self.next_op();
+
             if self.heap.should_collect() {
                 self.collect_garbage();
             }
-
-            let op = self.next_op();
 
             match op {
                 (bytecode::Op::Return, _) => {
@@ -777,16 +777,14 @@ impl Interpreter {
     fn blacken_object(&mut self, val: usize) {
         let children_to_walk = self.heap.children(val);
         for child_val in children_to_walk {
-            self.heap.mark(child_val);
-            self.blacken_object(child_val);
+            if !self.heap.is_marked(child_val) {
+                self.heap.mark(child_val);
+                self.blacken_object(child_val);
+            }
         }
     }
 
     fn mark_roots(&mut self) {
-        /*
-        TODO this is ugly!!!
-         */
-
         let stack_vals_to_mark: Vec<usize> = self
             .stack
             .iter()
@@ -798,9 +796,12 @@ impl Interpreter {
             .flatten()
             .collect();
 
-        for val in stack_vals_to_mark {
-            self.mark_value(val);
-        }
+        let frame_closure_children: Vec<usize> = self
+            .frames
+            .iter()
+            .map(|frame| self.heap.closure_children(&frame.closure))
+            .flatten()
+            .collect();
 
         let globals_to_mark: Vec<usize> = self
             .globals
@@ -813,8 +814,12 @@ impl Interpreter {
             .flatten()
             .collect();
 
-        for val in globals_to_mark {
-            self.mark_value(val);
+        for val in stack_vals_to_mark
+            .iter()
+            .chain(frame_closure_children.iter())
+            .chain(globals_to_mark.iter())
+        {
+            self.mark_value(*val);
         }
     }
 
