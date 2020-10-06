@@ -6,6 +6,7 @@ enum GCData {
     String(String),
     Closure(value::Closure),
     Class(value::Class),
+    Instance(value::Instance),
 }
 
 impl GCData {
@@ -24,6 +25,12 @@ impl GCData {
     fn as_class(&self) -> Option<&value::Class> {
         match &self {
             GCData::Class(c) => Some(c),
+            _ => None,
+        }
+    }
+    fn as_instance(&self) -> Option<&value::Instance> {
+        match &self {
+            GCData::Instance(inst) => Some(inst),
             _ => None,
         }
     }
@@ -88,6 +95,12 @@ impl Heap {
         id
     }
 
+    pub fn manage_instance(&mut self, inst: value::Instance) -> usize {
+        let id = self.generate_id();
+        self.values.insert(id, GCVal::from(GCData::Instance(inst)));
+        id
+    }
+
     fn generate_id(&mut self) -> usize {
         self.id_counter += 1;
         loop {
@@ -110,6 +123,10 @@ impl Heap {
         self.values.get(&id).unwrap().data.as_class().unwrap()
     }
 
+    pub fn get_instance(&self, id: usize) -> &value::Instance {
+        self.values.get(&id).unwrap().data.as_instance().unwrap()
+    }
+
     pub fn unmark(&mut self) {
         for val in self.values.values_mut() {
             val.is_marked = false;
@@ -129,11 +146,25 @@ impl Heap {
             GCData::String(_) => Vec::new(),
             GCData::Closure(closure) => self.closure_children(closure),
             GCData::Class(class) => self.class_children(class),
+            GCData::Instance(instance) => self.instance_children(instance),
         }
     }
 
     pub fn class_children(&self, _class: &value::Class) -> Vec<usize> {
         Vec::new()
+    }
+
+    pub fn instance_children(&self, instance: &value::Instance) -> Vec<usize> {
+        let mut res = Vec::new();
+        res.push(instance.class_id);
+
+        for field in instance.fields.values() {
+            if let Some(id) = self.extract_id(field) {
+                res.push(id)
+            }
+        }
+
+        res
     }
 
     pub fn closure_children(&self, closure: &value::Closure) -> Vec<usize> {

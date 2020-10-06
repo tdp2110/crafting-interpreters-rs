@@ -2,6 +2,7 @@ use crate::bytecode;
 use crate::gc;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -46,11 +47,18 @@ pub struct Class {
 }
 
 #[derive(Clone)]
+pub struct Instance {
+    pub class_id: usize,
+    pub fields: HashMap<String, Value>,
+}
+
+#[derive(Clone)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     String(usize),
     Function(usize),
+    Instance(usize),
     Class(usize),
     NativeFunction(NativeFunction),
     Nil,
@@ -65,6 +73,7 @@ pub enum Type {
     Function,
     NativeFunction,
     Class,
+    Instance,
     Nil,
 }
 
@@ -76,6 +85,7 @@ pub fn type_of(value: &Value) -> Type {
         Value::Function(_) => Type::Function,
         Value::NativeFunction(_) => Type::NativeFunction,
         Value::Class(_) => Type::Class,
+        Value::Instance(_) => Type::Instance,
         Value::Nil => Type::Nil,
     }
 }

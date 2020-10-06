@@ -218,6 +218,11 @@ impl Interpreter {
             value::Value::Class(class_handle) => {
                 format!("<class '{}'>", self.get_class(*class_handle).name)
             }
+            value::Value::Instance(instance_handle) => {
+                let instance = self.get_instance(*instance_handle);
+                let class = self.get_class(instance.class_id);
+                format!("<{} instance>", class.name)
+            }
             value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
             value::Value::Nil => "nil".to_string(),
         }
@@ -661,6 +666,7 @@ impl Interpreter {
             value::Value::Function(_) => false,
             value::Value::NativeFunction(_) => false,
             value::Value::Class(_) => false,
+            value::Value::Instance(_) => false,
             value::Value::String(s) => self.get_str(*s).is_empty(),
         }
     }
@@ -777,6 +783,10 @@ impl Interpreter {
 
     fn get_class(&self, class_handle: usize) -> &value::Class {
         self.heap.get_class(class_handle)
+    }
+
+    fn get_instance(&self, instance_handle: usize) -> &value::Instance {
+        self.heap.get_instance(instance_handle)
     }
 
     fn collect_garbage(&mut self) {
