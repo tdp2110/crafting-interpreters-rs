@@ -594,6 +594,10 @@ impl Interpreter {
                 self.native_call(native_func, arg_count)?;
                 Ok(())
             }
+            value::Value::Class(class_id) => {
+                self.create_instance(class_id, arg_count)?;
+                Ok(())
+            }
             _ => Err(InterpreterError::Runtime(format!(
                 "attempted to call non-callable value of type {:?}.",
                 value::type_of(&val_to_call)
@@ -633,6 +637,21 @@ impl Interpreter {
                 native_func.name, err
             ))),
         }
+    }
+
+    fn create_instance(&mut self, class_id: usize, arg_count: u8) -> Result<(), InterpreterError>
+    {
+        for _ in 0..arg_count {
+            self.pop_stack();
+        }
+        self.pop_stack(); // class object
+        let instance_id = self.heap.manage_instance(
+            value::Instance {
+                class_id,
+                fields: HashMap::new()
+            });
+        self.stack.push(value::Value::Instance(instance_id));
+        Ok(())
     }
 
     fn call(&mut self, closure_handle: usize, arg_count: u8) -> Result<(), InterpreterError> {
@@ -1936,6 +1955,31 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["<class 'Brioche'>"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_classes_instances_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Brioche {}\n\
+             var instance = Brioche();\n\
+             print instance;\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["<Brioche instance>"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
