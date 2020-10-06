@@ -17,19 +17,25 @@ impl GCData {
         }
     }
     fn as_closure(&self) -> Option<&value::Closure> {
-        match &self {
+        match self {
             GCData::Closure(c) => Some(c),
             _ => None,
         }
     }
     fn as_class(&self) -> Option<&value::Class> {
-        match &self {
+        match self {
             GCData::Class(c) => Some(c),
             _ => None,
         }
     }
     fn as_instance(&self) -> Option<&value::Instance> {
-        match &self {
+        match self {
+            GCData::Instance(inst) => Some(inst),
+            _ => None,
+        }
+    }
+    fn as_instance_mut(&mut self) -> Option<&mut value::Instance> {
+        match self {
             GCData::Instance(inst) => Some(inst),
             _ => None,
         }
@@ -125,6 +131,10 @@ impl Heap {
 
     pub fn get_instance(&self, id: usize) -> &value::Instance {
         self.values.get(&id).unwrap().data.as_instance().unwrap()
+    }
+
+    pub fn get_instance_mut(&mut self, id: usize) -> &mut value::Instance {
+        self.values.get_mut(&id).unwrap().data.as_instance_mut().unwrap()
     }
 
     pub fn unmark(&mut self) {

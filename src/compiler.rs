@@ -89,6 +89,7 @@ enum ParseFn {
     And,
     Or,
     Call,
+    Dot,
 }
 
 struct ParseRule {
@@ -856,6 +857,22 @@ impl Compiler {
         Ok(())
     }
 
+    fn dot(&mut self, can_assign: bool) -> Result<(), String> {
+        self.consume(scanner::TokenType::Identifier, "Expected property name after '.'.")?;
+        let property_name = String::from_utf8(self.previous().clone().lexeme).unwrap();
+        let property_constant = self.identifier_constant(property_name);
+        let op =
+            if can_assign && self.matches(scanner::TokenType::Equal) {
+                self.expression()?;
+                bytecode::Op::SetProperty(property_constant)
+            } else {
+                bytecode::Op::GetProperty(property_constant)
+            };
+        self.emit_op(op, self.previous().line);
+        Ok(())
+
+    }
+
     fn argument_list(&mut self) -> Result<u8, String> {
         let mut arg_count: u8 = 0;
         if !self.check(scanner::TokenType::RightParen) {
@@ -958,6 +975,7 @@ impl Compiler {
             ParseFn::And => self.and(can_assign),
             ParseFn::Or => self.or(can_assign),
             ParseFn::Call => self.call(can_assign),
+            ParseFn::Dot => self.dot(can_assign),
         }
     }
 
@@ -1044,8 +1062,8 @@ impl Compiler {
             },
             scanner::TokenType::Dot => ParseRule {
                 prefix: None,
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Dot),
+                precedence: Precedence::Call,
             },
             scanner::TokenType::Minus => ParseRule {
                 prefix: Some(ParseFn::Unary),

@@ -65,6 +65,8 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             ),
             bytecode::Op::CloseUpvalue => "OP_CLOSE_UPVALUE".to_string(),
             bytecode::Op::Class(idx) => format!("OP_CLASS {}", idx),
+            bytecode::Op::SetProperty(idx) => format!("OP_SET_PROPERTY {}", idx),
+            bytecode::Op::GetProperty(idx) => format!("OP_GET_PROPERTY {}", idx),
         };
 
         println!(
@@ -555,6 +557,29 @@ impl Interpreter {
                         );
                     }
                 }
+                (bytecode::Op::SetProperty(idx), _) => {
+                    if let value::Value::String(attr_id) = self.read_constant(idx) {
+                        let val = self.pop_stack();
+                        let instance = self.pop_stack();
+                        self.setattr(instance, val.clone(), attr_id)?;
+                        self.stack.push(val);
+                    }
+                    else {
+                        panic!("expected string when setting property, found {:?}",
+                               value::type_of(&self.read_constant(idx)))
+                    }
+                }
+                (bytecode::Op::GetProperty(idx), _) => {
+                    if let value::Value::String(attr_id) = self.read_constant(idx) {
+                        let instance = self.pop_stack();
+                        let attr = self.getattr(instance, attr_id)?;
+                        self.stack.push(attr);
+                    }
+                    else {
+                        panic!("expected string when setting property, found {:?}",
+                               value::type_of(&self.read_constant(idx)))
+                    }
+                }
             }
         }
     }
@@ -742,6 +767,41 @@ impl Interpreter {
             Binop::Sub => left - right,
             Binop::Mul => left * right,
             Binop::Div => left / right,
+        }
+    }
+
+    fn setattr(&mut self, maybe_instance: value::Value, val: value::Value, attr_id: usize) -> Result<(), InterpreterError> {
+        let attr_name = self.get_str(attr_id).clone();
+        match maybe_instance {
+            value::Value::Instance(instance_id) => {
+                let instance = self.heap.get_instance_mut(instance_id);
+                instance.fields.insert(attr_name, val);
+                Ok(())
+            }
+            _ => {
+                Err(InterpreterError::Runtime(format!(
+                    "can't set attribute on value of type {:?}. Need class instance.",
+                    value::type_of(&maybe_instance))))
+            }
+        }
+    }
+
+    fn getattr(&mut self, maybe_instance: value::Value, attr_id: usize) -> Result<value::Value, InterpreterError> {
+        let attr_name = self.get_str(attr_id).clone();
+        match maybe_instance {
+            value::Value::Instance(instance_id) => {
+                let instance = self.heap.get_instance(instance_id);
+                match instance.fields.get(&attr_name) {
+                    Some(val) => Ok(val.clone()),
+                    None => Err(InterpreterError::Runtime(format!(
+                        "instance {} has no attribute `{}`.", self.format_val(&maybe_instance), attr_name)))
+                }
+            }
+            _ => {
+                Err(InterpreterError::Runtime(format!(
+                    "can't get attribute on value of type {:?}. Need class instance.",
+                    value::type_of(&maybe_instance))))
+            }
         }
     }
 
@@ -1980,6 +2040,84 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["<Brioche instance>"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setattr_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Foo {}\n\
+             var foo = Foo();\n\
+             foo.attr = 42;\n\
+             print foo.attr;\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["42"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setattr_2() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Toast {}\n\
+             var toast = Toast();\n\
+             print toast.jam = \"grape\";",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["grape"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_setattr_3() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Pair {}\n\
+             var pair = Pair();\n\
+             pair.first = 1;\n\
+             pair.second = 2;\n\
+             print pair.first + pair.second;",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["3"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);

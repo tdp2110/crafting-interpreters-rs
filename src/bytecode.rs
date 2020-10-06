@@ -51,6 +51,8 @@ pub enum Op {
     Call(u8),
     CloseUpvalue,
     Class(usize),
+    SetProperty(usize),
+    GetProperty(usize),
 }
 
 #[derive(Default, Clone, Debug)]
