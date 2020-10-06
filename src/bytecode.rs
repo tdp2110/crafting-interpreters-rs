@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use std::f64;
+
 #[derive(Default, Copy, Clone, Debug)]
 pub struct Lineno {
     pub value: usize,
@@ -79,16 +81,44 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn add_constant_number(&mut self, c: f64) -> usize {
-        self.add_constant(Constant::Number(c))
+        if let Some(id) = self.find_number(c) {
+            id
+        } else {
+            self.add_constant(Constant::Number(c))
+        }
     }
 
     pub fn add_constant_string(&mut self, s: String) -> usize {
-        self.add_constant(Constant::String(s))
+        if let Some(id) = self.find_string(&s) {
+            id
+        } else {
+            self.add_constant(Constant::String(s))
+        }
     }
 
     pub fn add_constant(&mut self, val: Constant) -> usize {
         let const_idx = self.constants.len();
         self.constants.push(val);
         const_idx
+    }
+
+    fn find_string(&self, s: &str) -> Option<usize> {
+        self.constants.iter().position(|c| {
+            if let Constant::String(s2) = c {
+                s == s2
+            } else {
+                false
+            }
+        })
+    }
+
+    fn find_number(&self, num: f64) -> Option<usize> {
+        self.constants.iter().position(|c| {
+            if let Constant::Number(num2) = c {
+                (num - num2).abs() < f64::EPSILON
+            } else {
+                false
+            }
+        })
     }
 }
