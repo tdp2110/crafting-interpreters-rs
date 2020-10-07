@@ -67,6 +67,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Class(idx) => format!("OP_CLASS {}", idx),
             bytecode::Op::SetProperty(idx) => format!("OP_SET_PROPERTY {}", idx),
             bytecode::Op::GetProperty(idx) => format!("OP_GET_PROPERTY {}", idx),
+            bytecode::Op::Method(idx) => format!("OP_METHOD {}", idx),
         };
 
         println!(
@@ -547,9 +548,12 @@ impl Interpreter {
                 (bytecode::Op::Class(idx), _) => {
                     if let value::Value::String(name_id) = self.read_constant(idx) {
                         let name = self.get_str(name_id).clone();
-                        self.stack.push(value::Value::Class(
-                            self.heap.manage_class(value::Class { name }),
-                        ));
+                        self.stack.push(value::Value::Class(self.heap.manage_class(
+                            value::Class {
+                                name,
+                                methods: HashMap::new(),
+                            },
+                        )));
                     } else {
                         panic!(
                             "expected string when defining class, found {:?}",
@@ -563,10 +567,11 @@ impl Interpreter {
                         let instance = self.pop_stack();
                         self.setattr(instance, val.clone(), attr_id)?;
                         self.stack.push(val);
-                    }
-                    else {
-                        panic!("expected string when setting property, found {:?}",
-                               value::type_of(&self.read_constant(idx)))
+                    } else {
+                        panic!(
+                            "expected string when setting property, found {:?}",
+                            value::type_of(&self.read_constant(idx))
+                        )
                     }
                 }
                 (bytecode::Op::GetProperty(idx), _) => {
@@ -574,10 +579,30 @@ impl Interpreter {
                         let instance = self.pop_stack();
                         let attr = self.getattr(instance, attr_id)?;
                         self.stack.push(attr);
+                    } else {
+                        panic!(
+                            "expected string when setting property, found {:?}",
+                            value::type_of(&self.read_constant(idx))
+                        )
                     }
-                    else {
-                        panic!("expected string when setting property, found {:?}",
-                               value::type_of(&self.read_constant(idx)))
+                }
+                (bytecode::Op::Method(idx), _) => {
+                    if let value::Value::String(method_name_id) = self.read_constant(idx) {
+                        let method_name = self.heap.get_str(method_name_id).clone();
+                        let maybe_method = self.peek_by(0).clone();
+                        let maybe_method_id = self.heap.extract_id(&maybe_method).unwrap();
+                        let maybe_class = self.peek_by(1).clone();
+                        match maybe_class {
+                            value::Value::Class(class_id) => {
+                                let class = self.heap.get_class_mut(class_id);
+                                class.methods.insert(method_name.clone(), maybe_method_id);
+                            }
+                            _ => {
+                                panic!("should only define methods on a class!");
+                            }
+                        }
+                    } else {
+                        panic!("expected string when defining a method.");
                     }
                 }
             }
@@ -664,17 +689,15 @@ impl Interpreter {
         }
     }
 
-    fn create_instance(&mut self, class_id: usize, arg_count: u8) -> Result<(), InterpreterError>
-    {
+    fn create_instance(&mut self, class_id: usize, arg_count: u8) -> Result<(), InterpreterError> {
         for _ in 0..arg_count {
             self.pop_stack();
         }
         self.pop_stack(); // class object
-        let instance_id = self.heap.manage_instance(
-            value::Instance {
-                class_id,
-                fields: HashMap::new()
-            });
+        let instance_id = self.heap.manage_instance(value::Instance {
+            class_id,
+            fields: HashMap::new(),
+        });
         self.stack.push(value::Value::Instance(instance_id));
         Ok(())
     }
@@ -770,7 +793,12 @@ impl Interpreter {
         }
     }
 
-    fn setattr(&mut self, maybe_instance: value::Value, val: value::Value, attr_id: usize) -> Result<(), InterpreterError> {
+    fn setattr(
+        &mut self,
+        maybe_instance: value::Value,
+        val: value::Value,
+        attr_id: usize,
+    ) -> Result<(), InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
         match maybe_instance {
             value::Value::Instance(instance_id) => {
@@ -778,15 +806,18 @@ impl Interpreter {
                 instance.fields.insert(attr_name, val);
                 Ok(())
             }
-            _ => {
-                Err(InterpreterError::Runtime(format!(
-                    "can't set attribute on value of type {:?}. Need class instance.",
-                    value::type_of(&maybe_instance))))
-            }
+            _ => Err(InterpreterError::Runtime(format!(
+                "can't set attribute on value of type {:?}. Need class instance.",
+                value::type_of(&maybe_instance)
+            ))),
         }
     }
 
-    fn getattr(&mut self, maybe_instance: value::Value, attr_id: usize) -> Result<value::Value, InterpreterError> {
+    fn getattr(
+        &self,
+        maybe_instance: value::Value,
+        attr_id: usize,
+    ) -> Result<value::Value, InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
         match maybe_instance {
             value::Value::Instance(instance_id) => {
@@ -794,14 +825,16 @@ impl Interpreter {
                 match instance.fields.get(&attr_name) {
                     Some(val) => Ok(val.clone()),
                     None => Err(InterpreterError::Runtime(format!(
-                        "instance {} has no attribute `{}`.", self.format_val(&maybe_instance), attr_name)))
+                        "instance {} has no attribute `{}`.",
+                        self.format_val(&maybe_instance),
+                        attr_name
+                    ))),
                 }
             }
-            _ => {
-                Err(InterpreterError::Runtime(format!(
-                    "can't get attribute on value of type {:?}. Need class instance.",
-                    value::type_of(&maybe_instance))))
-            }
+            _ => Err(InterpreterError::Runtime(format!(
+                "can't get attribute on value of type {:?}. Need class instance.",
+                value::type_of(&maybe_instance)
+            ))),
         }
     }
 

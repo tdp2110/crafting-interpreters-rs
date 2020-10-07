@@ -53,6 +53,7 @@ pub enum Op {
     Class(usize),
     SetProperty(usize),
     GetProperty(usize),
+    Method(usize),
 }
 
 #[derive(Default, Clone, Debug)]

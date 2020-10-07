@@ -137,19 +137,49 @@ impl Compiler {
 
     fn class_decl(&mut self) -> Result<(), String> {
         self.consume(scanner::TokenType::Identifier, "Expected class name.")?;
-        let class_name = String::from_utf8(self.previous().clone().lexeme).unwrap();
+        let class_name_tok = self.previous().clone();
+        let class_name = String::from_utf8(class_name_tok.clone().lexeme).unwrap();
         let name_constant = self.identifier_constant(class_name);
         let line = self.previous().line;
         self.emit_op(bytecode::Op::Class(name_constant), line);
         self.define_variable(name_constant);
+        self.named_variable(class_name_tok.clone(), false);
         self.consume(
             scanner::TokenType::LeftBrace,
             "Expected '{' before class body.",
         )?;
+        loop {
+            if self.check(scanner::TokenType::RightBrace) || self.check(scanner::TokenType::Eof) {
+                break;
+            }
+
+            self.method()?;
+        }
         self.consume(
             scanner::TokenType::RightBrace,
             "Expected '}' after class body.",
         )?;
+        self.emit_op(bytecode::Op::Pop, self.previous().line);
+        Ok(())
+    }
+
+    fn method(&mut self) -> Result<(), String> {
+        self.consume(scanner::TokenType::Identifier, "Expected method name.")?;
+        let constant = if let Some(scanner::Literal::Identifier(method_name)) =
+            &self.previous().literal.clone()
+        {
+            self.identifier_constant(method_name.clone())
+        } else {
+            panic!(
+                "expected identifier when parsing method, found {:?}",
+                self.previous()
+            );
+        };
+
+        self.function(FunctionType::Function)?;
+
+        self.emit_op(bytecode::Op::Method(constant), self.previous().line);
+
         Ok(())
     }
 
@@ -858,19 +888,20 @@ impl Compiler {
     }
 
     fn dot(&mut self, can_assign: bool) -> Result<(), String> {
-        self.consume(scanner::TokenType::Identifier, "Expected property name after '.'.")?;
+        self.consume(
+            scanner::TokenType::Identifier,
+            "Expected property name after '.'.",
+        )?;
         let property_name = String::from_utf8(self.previous().clone().lexeme).unwrap();
         let property_constant = self.identifier_constant(property_name);
-        let op =
-            if can_assign && self.matches(scanner::TokenType::Equal) {
-                self.expression()?;
-                bytecode::Op::SetProperty(property_constant)
-            } else {
-                bytecode::Op::GetProperty(property_constant)
-            };
+        let op = if can_assign && self.matches(scanner::TokenType::Equal) {
+            self.expression()?;
+            bytecode::Op::SetProperty(property_constant)
+        } else {
+            bytecode::Op::GetProperty(property_constant)
+        };
         self.emit_op(op, self.previous().line);
         Ok(())
-
     }
 
     fn argument_list(&mut self) -> Result<u8, String> {

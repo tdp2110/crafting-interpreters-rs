@@ -44,6 +44,7 @@ pub struct NativeFunction {
 #[derive(Clone)]
 pub struct Class {
     pub name: String,
+    pub methods: HashMap<String, usize>,
 }
 
 #[derive(Clone)]

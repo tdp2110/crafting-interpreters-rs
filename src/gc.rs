@@ -1,6 +1,7 @@
 use crate::value;
 
 use std::collections::HashMap;
+use std::iter::FromIterator;
 
 enum GCData {
     String(String),
@@ -23,6 +24,12 @@ impl GCData {
         }
     }
     fn as_class(&self) -> Option<&value::Class> {
+        match self {
+            GCData::Class(c) => Some(c),
+            _ => None,
+        }
+    }
+    fn as_class_mut(&mut self) -> Option<&mut value::Class> {
         match self {
             GCData::Class(c) => Some(c),
             _ => None,
@@ -97,12 +104,15 @@ impl Heap {
 
     pub fn manage_class(&mut self, c: value::Class) -> usize {
         let id = self.generate_id();
+        self.bytes_allocated += c.name.len();
+        self.bytes_allocated += c.methods.keys().map(|method_name| method_name.len()).len();
         self.values.insert(id, GCVal::from(GCData::Class(c)));
         id
     }
 
     pub fn manage_instance(&mut self, inst: value::Instance) -> usize {
         let id = self.generate_id();
+        self.bytes_allocated += inst.fields.keys().map(|attr| attr.len()).sum::<usize>();
         self.values.insert(id, GCVal::from(GCData::Instance(inst)));
         id
     }
@@ -129,12 +139,26 @@ impl Heap {
         self.values.get(&id).unwrap().data.as_class().unwrap()
     }
 
+    pub fn get_class_mut(&mut self, id: usize) -> &mut value::Class {
+        self.values
+            .get_mut(&id)
+            .unwrap()
+            .data
+            .as_class_mut()
+            .unwrap()
+    }
+
     pub fn get_instance(&self, id: usize) -> &value::Instance {
         self.values.get(&id).unwrap().data.as_instance().unwrap()
     }
 
     pub fn get_instance_mut(&mut self, id: usize) -> &mut value::Instance {
-        self.values.get_mut(&id).unwrap().data.as_instance_mut().unwrap()
+        self.values
+            .get_mut(&id)
+            .unwrap()
+            .data
+            .as_instance_mut()
+            .unwrap()
     }
 
     pub fn unmark(&mut self) {
@@ -160,8 +184,8 @@ impl Heap {
         }
     }
 
-    pub fn class_children(&self, _class: &value::Class) -> Vec<usize> {
-        Vec::new()
+    pub fn class_children(&self, class: &value::Class) -> Vec<usize> {
+        Vec::from_iter(class.methods.values().copied())
     }
 
     pub fn instance_children(&self, instance: &value::Instance) -> Vec<usize> {
