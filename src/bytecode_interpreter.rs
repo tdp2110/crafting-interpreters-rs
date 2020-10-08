@@ -664,6 +664,10 @@ impl Interpreter {
                 self.create_instance(class_id, arg_count)?;
                 Ok(())
             }
+            value::Value::BoundMethod(method_id) => {
+                self.call_bound_method(method_id, arg_count)?;
+                Ok(())
+            }
             _ => Err(InterpreterError::Runtime(format!(
                 "attempted to call non-callable value of type {:?}.",
                 value::type_of(&val_to_call)
@@ -716,6 +720,16 @@ impl Interpreter {
         });
         self.stack.push(value::Value::Instance(instance_id));
         Ok(())
+    }
+
+    fn call_bound_method(
+        &mut self,
+        method_id: usize,
+        arg_count: u8,
+    ) -> Result<(), InterpreterError> {
+        let bound_method = self.get_bound_method(method_id).clone();
+        let closure_id = bound_method.closure_id;
+        self.call(closure_id, arg_count)
     }
 
     fn call(&mut self, closure_handle: usize, arg_count: u8) -> Result<(), InterpreterError> {
@@ -2225,6 +2239,36 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["<bound method of Foo instance>"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_calling_bound_methods_no_this() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Scone {\n\
+               topping(first, second) {\n\
+                 print \"scone with \" + first + \" and \" + second;\n\
+               }\n\
+             }\n\
+             \n\
+             var scone = Scone();\n\
+             scone.topping(\"berries\", \"cream\");",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["scone with berries and cream"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
