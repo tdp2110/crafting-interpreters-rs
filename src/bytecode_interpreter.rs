@@ -223,10 +223,16 @@ impl Interpreter {
             }
             value::Value::Instance(instance_handle) => {
                 let instance = self.get_instance(*instance_handle);
-                let class = self.get_class(instance.class_id);
-                format!("<{} instance>", class.name)
+                let class_name = &self.get_class(instance.class_id).name;
+                format!("<{} instance>", class_name)
             }
             value::Value::NativeFunction(func) => format!("<native fn {}>", func.name),
+            value::Value::BoundMethod(bound_method_id) => {
+                let bound_method = self.get_bound_method(*bound_method_id);
+                let instance = self.get_instance(bound_method.instance_id);
+                let class_name = &self.get_class(instance.class_id).name;
+                format!("<bound method of {} instance>", class_name)
+            }
             value::Value::Nil => "nil".to_string(),
         }
     }
@@ -576,9 +582,19 @@ impl Interpreter {
                 }
                 (bytecode::Op::GetProperty(idx), _) => {
                     if let value::Value::String(attr_id) = self.read_constant(idx) {
-                        let instance = self.pop_stack();
-                        let attr = self.getattr(instance, attr_id)?;
-                        self.stack.push(attr);
+                        let maybe_instance = self.peek().clone();
+                        if let Some(attr) = self.getattr(maybe_instance.clone(), attr_id)? {
+                            self.pop_stack();
+                            self.stack.push(attr);
+                        } else {
+                            if !self.bind_method(maybe_instance.clone(), attr_id)? {
+                                return Err(InterpreterError::Runtime(format!(
+                                    "value {} has no attribute {}.",
+                                    self.format_val(&maybe_instance),
+                                    self.get_str(attr_id)
+                                )));
+                            }
+                        }
                     } else {
                         panic!(
                             "expected string when setting property, found {:?}",
@@ -734,6 +750,7 @@ impl Interpreter {
             value::Value::NativeFunction(_) => false,
             value::Value::Class(_) => false,
             value::Value::Instance(_) => false,
+            value::Value::BoundMethod(_) => false,
             value::Value::String(s) => self.get_str(*s).is_empty(),
         }
     }
@@ -817,24 +834,48 @@ impl Interpreter {
         &self,
         maybe_instance: value::Value,
         attr_id: usize,
-    ) -> Result<value::Value, InterpreterError> {
+    ) -> Result<Option<value::Value>, InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
         match maybe_instance {
             value::Value::Instance(instance_id) => {
                 let instance = self.heap.get_instance(instance_id);
                 match instance.fields.get(&attr_name) {
-                    Some(val) => Ok(val.clone()),
-                    None => Err(InterpreterError::Runtime(format!(
-                        "instance {} has no attribute `{}`.",
-                        self.format_val(&maybe_instance),
-                        attr_name
-                    ))),
+                    Some(val) => Ok(Some(val.clone())),
+                    None => Ok(None),
                 }
             }
             _ => Err(InterpreterError::Runtime(format!(
                 "can't get attribute on value of type {:?}. Need class instance.",
                 value::type_of(&maybe_instance)
             ))),
+        }
+    }
+
+    fn bind_method(
+        &mut self,
+        maybe_instance: value::Value,
+        attr_id: usize,
+    ) -> Result<bool, InterpreterError> {
+        let attr_name = self.get_str(attr_id).clone();
+        match maybe_instance {
+            value::Value::Instance(instance_id) => {
+                let instance = self.heap.get_instance(instance_id).clone();
+                let class = self.heap.get_class(instance.class_id).clone();
+                if let Some(closure_id) = class.methods.get(&attr_name) {
+                    self.pop_stack();
+                    self.stack
+                        .push(value::Value::BoundMethod(self.heap.manage_bound_method(
+                            value::BoundMethod {
+                                instance_id,
+                                closure_id: *closure_id,
+                            },
+                        )));
+                    return Ok(true);
+                } else {
+                    return Ok(false);
+                }
+            }
+            _ => Ok(false),
         }
     }
 
@@ -895,6 +936,10 @@ impl Interpreter {
 
     fn get_class(&self, class_handle: usize) -> &value::Class {
         self.heap.get_class(class_handle)
+    }
+
+    fn get_bound_method(&self, method_handle: usize) -> &value::BoundMethod {
+        self.heap.get_bound_method(method_handle)
     }
 
     fn get_instance(&self, instance_handle: usize) -> &value::Instance {
@@ -2151,6 +2196,35 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["3"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_bound_methods_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Foo {\n\
+               bar() {\n\
+                 return 42;
+               }\n\
+             }\n\
+             var foo = Foo();\n\
+             print foo.bar;",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["<bound method of Foo instance>"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);

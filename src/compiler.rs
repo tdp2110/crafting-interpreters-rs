@@ -143,7 +143,7 @@ impl Compiler {
         let line = self.previous().line;
         self.emit_op(bytecode::Op::Class(name_constant), line);
         self.define_variable(name_constant);
-        self.named_variable(class_name_tok.clone(), false);
+        self.named_variable(class_name_tok, false)?;
         self.consume(
             scanner::TokenType::LeftBrace,
             "Expected '{' before class body.",

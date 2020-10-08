@@ -54,12 +54,19 @@ pub struct Instance {
 }
 
 #[derive(Clone)]
+pub struct BoundMethod {
+    pub instance_id: usize,
+    pub closure_id: usize,
+}
+
+#[derive(Clone)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     String(usize),
     Function(usize),
     Instance(usize),
+    BoundMethod(usize),
     Class(usize),
     NativeFunction(NativeFunction),
     Nil,
@@ -74,6 +81,7 @@ pub enum Type {
     Function,
     NativeFunction,
     Class,
+    BoundMethod,
     Instance,
     Nil,
 }
@@ -85,6 +93,7 @@ pub fn type_of(value: &Value) -> Type {
         Value::String(_) => Type::String,
         Value::Function(_) => Type::Function,
         Value::NativeFunction(_) => Type::NativeFunction,
+        Value::BoundMethod(_) => Type::BoundMethod,
         Value::Class(_) => Type::Class,
         Value::Instance(_) => Type::Instance,
         Value::Nil => Type::Nil,

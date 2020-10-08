@@ -8,6 +8,7 @@ enum GCData {
     Closure(value::Closure),
     Class(value::Class),
     Instance(value::Instance),
+    BoundMethod(value::BoundMethod),
 }
 
 impl GCData {
@@ -20,6 +21,12 @@ impl GCData {
     fn as_closure(&self) -> Option<&value::Closure> {
         match self {
             GCData::Closure(c) => Some(c),
+            _ => None,
+        }
+    }
+    fn as_bound_method(&self) -> Option<&value::BoundMethod> {
+        match self {
+            GCData::BoundMethod(m) => Some(m),
             _ => None,
         }
     }
@@ -117,6 +124,13 @@ impl Heap {
         id
     }
 
+    pub fn manage_bound_method(&mut self, method: value::BoundMethod) -> usize {
+        let id = self.generate_id();
+        self.values
+            .insert(id, GCVal::from(GCData::BoundMethod(method)));
+        id
+    }
+
     fn generate_id(&mut self) -> usize {
         self.id_counter += 1;
         loop {
@@ -133,6 +147,15 @@ impl Heap {
 
     pub fn get_closure(&self, id: usize) -> &value::Closure {
         self.values.get(&id).unwrap().data.as_closure().unwrap()
+    }
+
+    pub fn get_bound_method(&self, id: usize) -> &value::BoundMethod {
+        self.values
+            .get(&id)
+            .unwrap()
+            .data
+            .as_bound_method()
+            .unwrap()
     }
 
     pub fn get_class(&self, id: usize) -> &value::Class {
@@ -181,7 +204,12 @@ impl Heap {
             GCData::Closure(closure) => self.closure_children(closure),
             GCData::Class(class) => self.class_children(class),
             GCData::Instance(instance) => self.instance_children(instance),
+            GCData::BoundMethod(method) => self.bound_method_children(method),
         }
+    }
+
+    pub fn bound_method_children(&self, method: &value::BoundMethod) -> Vec<usize> {
+        vec![method.instance_id, method.closure_id]
     }
 
     pub fn class_children(&self, class: &value::Class) -> Vec<usize> {
