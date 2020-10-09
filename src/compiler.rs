@@ -12,6 +12,7 @@ struct Local {
 enum FunctionType {
     Function,
     Script,
+    Method,
 }
 
 pub struct Compiler {
@@ -90,6 +91,7 @@ enum ParseFn {
     Or,
     Call,
     Dot,
+    This,
 }
 
 struct ParseRule {
@@ -176,7 +178,7 @@ impl Compiler {
             );
         };
 
-        self.function(FunctionType::Function)?;
+        self.function(FunctionType::Method)?;
 
         self.emit_op(bytecode::Op::Method(constant), self.previous().line);
 
@@ -202,6 +204,12 @@ impl Compiler {
                 panic!("expected identifier");
             };
         self.push_level(level);
+
+        if function_type != FunctionType::Function {
+            let local = self.current_level_mut().locals.first_mut().unwrap();
+            local.name.literal = Some(scanner::Literal::Identifier("this".to_string()));
+            println!("locals = {:?}", self.current_level().locals);
+        }
 
         self.begin_scope();
         self.consume(
@@ -674,43 +682,48 @@ impl Compiler {
     }
 
     fn named_variable(&mut self, tok: scanner::Token, can_assign: bool) -> Result<(), String> {
-        if tok.ty != scanner::TokenType::Identifier {
-            return Err("Expected idenitifier.".to_string());
+        let name = match tok.ty {
+            scanner::TokenType::Identifier => {
+                if let Some(scanner::Literal::Identifier(n)) = tok.literal.clone() {
+                    Some(n.clone())
+                } else {
+                    None
+                }
+            }
+            scanner::TokenType::This => Some("this".to_string()),
+            _ => None,
+        }
+        .unwrap();
+
+        let get_op: bytecode::Op;
+        let set_op: bytecode::Op;
+
+        match self.resolve_variable(&name) {
+            Ok(Resolution::Local(idx)) => {
+                get_op = bytecode::Op::GetLocal(idx);
+                set_op = bytecode::Op::SetLocal(idx);
+            }
+            Ok(Resolution::Global) => {
+                let idx = self.identifier_constant(name);
+                get_op = bytecode::Op::GetGlobal(idx);
+                set_op = bytecode::Op::SetGlobal(idx);
+            }
+            Ok(Resolution::Upvalue(idx)) => {
+                get_op = bytecode::Op::GetUpval(idx);
+                set_op = bytecode::Op::SetUpval(idx);
+            }
+            Err(err) => {
+                return Err(err);
+            }
         }
 
-        if let Some(scanner::Literal::Identifier(name)) = tok.literal.clone() {
-            let get_op: bytecode::Op;
-            let set_op: bytecode::Op;
-
-            match self.resolve_variable(&name) {
-                Ok(Resolution::Local(idx)) => {
-                    get_op = bytecode::Op::GetLocal(idx);
-                    set_op = bytecode::Op::SetLocal(idx);
-                }
-                Ok(Resolution::Global) => {
-                    let idx = self.identifier_constant(name);
-                    get_op = bytecode::Op::GetGlobal(idx);
-                    set_op = bytecode::Op::SetGlobal(idx);
-                }
-                Ok(Resolution::Upvalue(idx)) => {
-                    get_op = bytecode::Op::GetUpval(idx);
-                    set_op = bytecode::Op::SetUpval(idx);
-                }
-                Err(err) => {
-                    return Err(err);
-                }
-            }
-
-            if can_assign && self.matches(scanner::TokenType::Equal) {
-                self.expression()?;
-                self.emit_op(set_op, tok.line);
-            } else {
-                self.emit_op(get_op, tok.line);
-            }
-            Ok(())
+        if can_assign && self.matches(scanner::TokenType::Equal) {
+            self.expression()?;
+            self.emit_op(set_op, tok.line);
         } else {
-            panic!("expected identifier when parsing variable, found {:?}", tok);
+            self.emit_op(get_op, tok.line);
         }
+        Ok(())
     }
 
     fn resolve_variable(&mut self, name: &str) -> Result<Resolution, String> {
@@ -784,7 +797,7 @@ impl Compiler {
                         prev_tok,
                     ));
                 }
-                return Ok(Some(level.locals.len() - 2 - idx));
+                return Ok(Some(level.locals.len() - 1 - idx));
             }
         }
         Ok(None)
@@ -885,6 +898,10 @@ impl Compiler {
         let arg_count = self.argument_list()?;
         self.emit_op(bytecode::Op::Call(arg_count), self.previous().line);
         Ok(())
+    }
+
+    fn this(&mut self, _can_assign: bool) -> Result<(), String> {
+        self.variable(false)
     }
 
     fn dot(&mut self, can_assign: bool) -> Result<(), String> {
@@ -1007,6 +1024,7 @@ impl Compiler {
             ParseFn::Or => self.or(can_assign),
             ParseFn::Call => self.call(can_assign),
             ParseFn::Dot => self.dot(can_assign),
+            ParseFn::This => self.this(can_assign),
         }
     }
 
@@ -1237,7 +1255,7 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::This => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::This),
                 infix: None,
                 precedence: Precedence::None,
             },

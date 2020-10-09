@@ -508,19 +508,19 @@ impl Interpreter {
                 }
                 (bytecode::Op::GetLocal(idx), _) => {
                     let slots_offset = self.frame().slots_offset;
-                    let val = self.stack[slots_offset + idx].clone();
+                    let val = self.stack[slots_offset + idx - 1].clone();
                     self.stack.push(val);
                 }
                 (bytecode::Op::SetLocal(idx), _) => {
                     let val = self.peek();
                     let slots_offset = self.frame().slots_offset;
-                    self.stack[slots_offset + idx] = val.clone();
+                    self.stack[slots_offset + idx - 1] = val.clone();
                 }
                 (bytecode::Op::GetUpval(idx), _) => {
                     let upvalue = self.frame().closure.upvalues[idx].clone();
                     let val = match &*upvalue.borrow() {
                         value::Upvalue::Closed(value) => value.clone(),
-                        value::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
+                        value::Upvalue::Open(stack_index) => self.stack[*stack_index - 1].clone(),
                     };
                     self.stack.push(val);
                 }
@@ -529,7 +529,9 @@ impl Interpreter {
                     let upvalue = self.frame().closure.upvalues[idx].clone();
                     match &mut *upvalue.borrow_mut() {
                         value::Upvalue::Closed(value) => *value = new_value,
-                        value::Upvalue::Open(stack_index) => self.stack[*stack_index] = new_value,
+                        value::Upvalue::Open(stack_index) => {
+                            self.stack[*stack_index - 1] = new_value
+                        }
                     };
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
@@ -614,7 +616,10 @@ impl Interpreter {
                                 class.methods.insert(method_name.clone(), maybe_method_id);
                             }
                             _ => {
-                                panic!("should only define methods on a class!");
+                                panic!(
+                                    "should only define methods on a class! tried on {:?}",
+                                    self.format_val(&maybe_class)
+                                );
                             }
                         }
                     } else {
@@ -626,7 +631,7 @@ impl Interpreter {
     }
 
     fn close_upvalues(&mut self, index: usize) {
-        let value = &self.stack[index];
+        let value = &self.stack[index - 1];
         for upval in &self.upvalues {
             if upval.borrow().is_open_with_index(index) {
                 upval.replace(value::Upvalue::Closed(value.clone()));
@@ -729,6 +734,10 @@ impl Interpreter {
     ) -> Result<(), InterpreterError> {
         let bound_method = self.get_bound_method(method_id).clone();
         let closure_id = bound_method.closure_id;
+        let arg_count_usize: usize = arg_count.into();
+        let stack_len = self.stack.len();
+        self.stack[stack_len - arg_count_usize - 1] =
+            value::Value::Instance(bound_method.instance_id);
         self.call(closure_id, arg_count)
     }
 
@@ -2251,6 +2260,98 @@ mod tests {
 
     #[test]
     fn test_calling_bound_methods_no_this() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Scone {\n\
+               topping(first, second) {\n\
+                 print \"scone with \" + first + \" and \" + second;\n\
+               }\n\
+             }\n\
+             \n\
+             var scone = Scone();\n\
+             scone.topping(\"berries\", \"cream\");",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["scone with berries and cream"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_calling_bound_methods_with_this_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Nested {\n\
+               method() {\n\
+                 print this;\n\
+               }\n\
+             }\n\
+             \n\
+             Nested().method();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["<Nested instance>"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_calling_bound_methods_with_this_2() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Nested {\n\
+               method() {\n\
+                 fun function() {\n\
+                   print this;\n\
+                 }\n\
+                 \n\
+                 function();\n\
+               }\n\
+             }\n\
+             \n\
+             Nested().method();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["<Nested instance>"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_calling_bound_methods_with_this_3() {
         let func_or_err = Compiler::compile(String::from(
             "class Scone {\n\
                topping(first, second) {\n\
