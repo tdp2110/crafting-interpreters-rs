@@ -208,7 +208,6 @@ impl Compiler {
         if function_type != FunctionType::Function {
             let local = self.current_level_mut().locals.first_mut().unwrap();
             local.name.literal = Some(scanner::Literal::Identifier("this".to_string()));
-            println!("locals = {:?}", self.current_level().locals);
         }
 
         self.begin_scope();

@@ -268,16 +268,16 @@ impl Interpreter {
                         self.close_upvalues(idx);
                     }
 
+                    if self.frames.len() <= 1 {
+                        self.frames.pop();
+                        return Ok(());
+                    }
+
                     let num_to_pop = self.stack.len() - self.frame().slots_offset
                         + usize::from(self.frame().closure.function.arity);
                     self.frames.pop();
 
                     self.pop_stack_n_times(num_to_pop);
-
-                    if self.frames.is_empty() {
-                        self.pop_stack();
-                        return Ok(());
-                    }
 
                     self.stack.push(result);
                 }
@@ -614,6 +614,7 @@ impl Interpreter {
                             value::Value::Class(class_id) => {
                                 let class = self.heap.get_class_mut(class_id);
                                 class.methods.insert(method_name.clone(), maybe_method_id);
+                                self.pop_stack();
                             }
                             _ => {
                                 panic!(
@@ -2351,16 +2352,13 @@ mod tests {
     }
 
     #[test]
-    fn test_calling_bound_methods_with_this_3() {
+    fn test_multiple_method_definitions() {
         let func_or_err = Compiler::compile(String::from(
-            "class Scone {\n\
-               topping(first, second) {\n\
-                 print \"scone with \" + first + \" and \" + second;\n\
-               }\n\
+            "class Brunch {\n\
+               bacon() {}\n\
+               eggs() {}\n\
              }\n\
-             \n\
-             var scone = Scone();\n\
-             scone.topping(\"berries\", \"cream\");",
+             print Brunch().bacon();",
         ));
 
         match func_or_err {
@@ -2369,7 +2367,7 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => {
-                        assert_eq!(interp.output, vec!["scone with berries and cream"]);
+                        assert_eq!(interp.output, vec!["nil"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
