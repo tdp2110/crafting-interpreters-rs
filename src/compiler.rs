@@ -8,6 +8,10 @@ struct Local {
     is_captured: bool,
 }
 
+struct ClassCompiler {
+    name: scanner::Token,
+}
+
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum FunctionType {
     Function,
@@ -20,6 +24,7 @@ pub struct Compiler {
     token_idx: usize,
     levels: Vec<Level>,
     level_idx: usize,
+    current_class: Option<ClassCompiler>,
 }
 
 impl Default for Compiler {
@@ -29,6 +34,7 @@ impl Default for Compiler {
             token_idx: 0,
             levels: vec![Default::default()],
             level_idx: 0,
+            current_class: None,
         }
     }
 }
@@ -145,7 +151,15 @@ impl Compiler {
         let line = self.previous().line;
         self.emit_op(bytecode::Op::Class(name_constant), line);
         self.define_variable(name_constant);
-        self.named_variable(class_name_tok, false)?;
+        self.named_variable(class_name_tok.clone(), false)?;
+
+        let mut saved_class_compiler = None;
+
+        std::mem::swap(&mut saved_class_compiler, &mut self.current_class);
+        self.current_class = Some(ClassCompiler {
+            name: class_name_tok.clone(),
+        });
+
         self.consume(
             scanner::TokenType::LeftBrace,
             "Expected '{' before class body.",
@@ -162,6 +176,9 @@ impl Compiler {
             "Expected '}' after class body.",
         )?;
         self.emit_op(bytecode::Op::Pop, self.previous().line);
+
+        std::mem::swap(&mut self.current_class, &mut saved_class_compiler);
+
         Ok(())
     }
 
@@ -900,6 +917,14 @@ impl Compiler {
     }
 
     fn this(&mut self, _can_assign: bool) -> Result<(), String> {
+        let tok = self.previous().clone();
+        if self.current_class.is_none() {
+            return Err(format!(
+                "Cannot use 'this' outside of class at line={}, col={}",
+                tok.line, tok.col
+            ));
+        }
+
         self.variable(false)
     }
 
@@ -1321,5 +1346,30 @@ impl Compiler {
 
     fn locals_mut(&mut self) -> &mut Vec<Local> {
         &mut self.current_level_mut().locals
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::compiler::*;
+
+    #[test]
+    fn test_this_outside_method_1() {
+        let func_or_err = Compiler::compile(String::from("print this;"));
+
+        match func_or_err {
+            Ok(_) => panic!(),
+            Err(err) => assert!(err.starts_with("Cannot use 'this' outside of class")),
+        }
+    }
+
+    #[test]
+    fn test_this_outside_method_2() {
+        let func_or_err = Compiler::compile(String::from("fun foo() {print this;}"));
+
+        match func_or_err {
+            Ok(_) => panic!(),
+            Err(err) => assert!(err.starts_with("Cannot use 'this' outside of class")),
+        }
     }
 }
