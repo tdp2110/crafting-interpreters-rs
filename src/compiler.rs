@@ -8,6 +8,7 @@ struct Local {
     is_captured: bool,
 }
 
+#[allow(dead_code)]
 struct ClassCompiler {
     name: scanner::Token,
 }
@@ -17,6 +18,7 @@ enum FunctionType {
     Function,
     Script,
     Method,
+    Initializer,
 }
 
 pub struct Compiler {
@@ -184,10 +186,10 @@ impl Compiler {
 
     fn method(&mut self) -> Result<(), String> {
         self.consume(scanner::TokenType::Identifier, "Expected method name.")?;
-        let constant = if let Some(scanner::Literal::Identifier(method_name)) =
+        let method_name = if let Some(scanner::Literal::Identifier(method_name)) =
             &self.previous().literal.clone()
         {
-            self.identifier_constant(method_name.clone())
+            method_name.clone()
         } else {
             panic!(
                 "expected identifier when parsing method, found {:?}",
@@ -195,7 +197,15 @@ impl Compiler {
             );
         };
 
-        self.function(FunctionType::Method)?;
+        let constant = self.identifier_constant(method_name.clone());
+
+        let function_type = if method_name == "init".to_string() {
+            FunctionType::Initializer
+        } else {
+            FunctionType::Method
+        };
+
+        self.function(function_type)?;
 
         self.emit_op(bytecode::Op::Method(constant), self.previous().line);
 
@@ -996,7 +1006,12 @@ impl Compiler {
     }
 
     fn emit_return(&mut self) {
-        self.emit_op(bytecode::Op::Nil, self.previous().line);
+        let op = match self.current_level().function_type {
+            FunctionType::Initializer => bytecode::Op::GetLocal(0),
+            _ => bytecode::Op::Nil,
+        };
+
+        self.emit_op(op, self.previous().line);
         self.emit_op(bytecode::Op::Return, self.previous().line);
     }
 

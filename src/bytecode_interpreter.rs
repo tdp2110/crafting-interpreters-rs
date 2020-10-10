@@ -667,7 +667,36 @@ impl Interpreter {
                 Ok(())
             }
             value::Value::Class(class_id) => {
-                self.create_instance(class_id, arg_count)?;
+                let new_instance =
+                    value::Value::Instance(self.heap.manage_instance(value::Instance {
+                        class_id,
+                        fields: HashMap::new(),
+                    }));
+
+                let arg_count_usize: usize = arg_count.into();
+                let stack_len = self.stack.len();
+                self.stack[stack_len - 1 - arg_count_usize] = new_instance;
+
+                {
+                    let maybe_method_id =
+                        match self.get_class(class_id).methods.get(&"init".to_string()) {
+                            Some(method_id) => Some(method_id.clone()),
+                            None => None,
+                        };
+
+                    if let Some(method_id) = maybe_method_id {
+                        return self.call(method_id, arg_count);
+                    }
+                }
+
+                if arg_count > 0 {
+                    return Err(InterpreterError::Runtime(format!(
+                        "Call to class ctor expected 0 arguments, got {}.",
+                        arg_count,
+                    )));
+                }
+
+                self.create_instance(class_id);
                 Ok(())
             }
             value::Value::BoundMethod(method_id) => {
@@ -715,17 +744,13 @@ impl Interpreter {
         }
     }
 
-    fn create_instance(&mut self, class_id: usize, arg_count: u8) -> Result<(), InterpreterError> {
-        for _ in 0..arg_count {
-            self.pop_stack();
-        }
+    fn create_instance(&mut self, class_id: usize) {
         self.pop_stack(); // class object
         let instance_id = self.heap.manage_instance(value::Instance {
             class_id,
             fields: HashMap::new(),
         });
         self.stack.push(value::Value::Instance(instance_id));
-        Ok(())
     }
 
     fn call_bound_method(
@@ -848,8 +873,9 @@ impl Interpreter {
                 Ok(())
             }
             _ => Err(InterpreterError::Runtime(format!(
-                "can't set attribute on value of type {:?}. Need class instance.",
-                value::type_of(&maybe_instance)
+                "can't set attribute on value of type {:?}. Need class instance. val = {:?}",
+                value::type_of(&maybe_instance),
+                self.format_val(&maybe_instance)
             ))),
         }
     }
@@ -869,7 +895,8 @@ impl Interpreter {
                 }
             }
             _ => Err(InterpreterError::Runtime(format!(
-                "can't get attribute on value of type {:?}. Need class instance.",
+                "can't get attribute {}  on value of type {:?}. Need class instance.",
+                attr_name,
                 value::type_of(&maybe_instance)
             ))),
         }
@@ -2368,6 +2395,33 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["nil"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_init_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Brunch {\n\
+               init(x) {this.x = x;}\n\
+               eggs(y) {return this.x + y;}\n\
+             }\n\
+             print Brunch(2).eggs(3);",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["5"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
