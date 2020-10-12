@@ -54,6 +54,7 @@ pub enum Op {
     SetProperty(usize),
     GetProperty(usize),
     Method(usize),
+    Invoke(/*method_name*/ String, /*arg count*/ u8),
 }
 
 #[derive(Default, Clone, Debug)]

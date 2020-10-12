@@ -944,10 +944,13 @@ impl Compiler {
             "Expected property name after '.'.",
         )?;
         let property_name = String::from_utf8(self.previous().clone().lexeme).unwrap();
-        let property_constant = self.identifier_constant(property_name);
+        let property_constant = self.identifier_constant(property_name.clone());
         let op = if can_assign && self.matches(scanner::TokenType::Equal) {
             self.expression()?;
             bytecode::Op::SetProperty(property_constant)
+        } else if self.matches(scanner::TokenType::LeftParen) {
+            let arg_count = self.argument_list()?;
+            bytecode::Op::Invoke(property_name, arg_count)
         } else {
             bytecode::Op::GetProperty(property_constant)
         };

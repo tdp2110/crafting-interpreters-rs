@@ -68,6 +68,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::SetProperty(idx) => format!("OP_SET_PROPERTY {}", idx),
             bytecode::Op::GetProperty(idx) => format!("OP_GET_PROPERTY {}", idx),
             bytecode::Op::Method(idx) => format!("OP_METHOD {}", idx),
+            bytecode::Op::Invoke(method_name, arg_count) => {
+                format!("OP_INVOKE {} nargs={}", method_name, arg_count)
+            }
         };
 
         println!(
@@ -627,8 +630,48 @@ impl Interpreter {
                         panic!("expected string when defining a method.");
                     }
                 }
+                (bytecode::Op::Invoke(method_name, arg_count), _) => {
+                    self.invoke(&method_name, arg_count)?;
+                }
             }
         }
+    }
+
+    fn invoke(&mut self, method_name: &str, arg_count: u8) -> Result<(), InterpreterError> {
+        let receiver_id = match self.peek_by(arg_count.into()) {
+            value::Value::Instance(id) => id.clone(),
+            _ => {
+                return Err(InterpreterError::Runtime(
+                    "Only instances have methods.".to_string(),
+                ));
+            }
+        };
+
+        let class_id = self.get_instance(receiver_id).class_id;
+        self.invoke_from(class_id, &method_name, arg_count)
+    }
+
+    fn invoke_from(
+        &mut self,
+        class_id: usize,
+        method_name: &str,
+        arg_count: u8,
+    ) -> Result<(), InterpreterError> {
+        let method_id = match self
+            .get_class(class_id)
+            .methods
+            .get(&String::from(method_name))
+        {
+            Some(method_id) => method_id.clone(),
+            None => {
+                return Err(InterpreterError::Runtime(format!(
+                    "Undefined property {}.",
+                    method_name
+                )))
+            }
+        };
+
+        self.call_value(value::Value::Function(method_id), arg_count)
     }
 
     fn close_upvalues(&mut self, index: usize) {
