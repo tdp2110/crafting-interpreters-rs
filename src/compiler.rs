@@ -159,7 +159,7 @@ impl Compiler {
 
         std::mem::swap(&mut saved_class_compiler, &mut self.current_class);
         self.current_class = Some(ClassCompiler {
-            name: class_name_tok.clone(),
+            name: class_name_tok,
         });
 
         self.consume(
@@ -199,7 +199,7 @@ impl Compiler {
 
         let constant = self.identifier_constant(method_name.clone());
 
-        let function_type = if method_name == "init".to_string() {
+        let function_type = if method_name == "init" {
             FunctionType::Initializer
         } else {
             FunctionType::Method
@@ -711,7 +711,7 @@ impl Compiler {
         let name = match tok.ty {
             scanner::TokenType::Identifier => {
                 if let Some(scanner::Literal::Identifier(n)) = tok.literal.clone() {
-                    Some(n.clone())
+                    Some(n)
                 } else {
                     None
                 }

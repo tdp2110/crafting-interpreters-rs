@@ -591,14 +591,12 @@ impl Interpreter {
                         if let Some(attr) = self.getattr(maybe_instance.clone(), attr_id)? {
                             self.pop_stack();
                             self.stack.push(attr);
-                        } else {
-                            if !self.bind_method(maybe_instance.clone(), attr_id)? {
-                                return Err(InterpreterError::Runtime(format!(
-                                    "value {} has no attribute {}.",
-                                    self.format_val(&maybe_instance),
-                                    self.get_str(attr_id)
-                                )));
-                            }
+                        } else if !self.bind_method(maybe_instance.clone(), attr_id)? {
+                            return Err(InterpreterError::Runtime(format!(
+                                "value {} has no attribute {}.",
+                                self.format_val(&maybe_instance),
+                                self.get_str(attr_id)
+                            )));
                         }
                     } else {
                         panic!(
@@ -639,13 +637,22 @@ impl Interpreter {
 
     fn invoke(&mut self, method_name: &str, arg_count: u8) -> Result<(), InterpreterError> {
         let receiver_id = match self.peek_by(arg_count.into()) {
-            value::Value::Instance(id) => id.clone(),
+            value::Value::Instance(id) => *id,
             _ => {
                 return Err(InterpreterError::Runtime(
                     "Only instances have methods.".to_string(),
                 ));
             }
         };
+
+        if let Some(field) = self
+            .get_instance(receiver_id)
+            .fields
+            .get(&String::from(method_name))
+            .cloned()
+        {
+            return self.call_value(field, arg_count);
+        }
 
         let class_id = self.get_instance(receiver_id).class_id;
         self.invoke_from(class_id, &method_name, arg_count)
@@ -662,7 +669,7 @@ impl Interpreter {
             .methods
             .get(&String::from(method_name))
         {
-            Some(method_id) => method_id.clone(),
+            Some(method_id) => *method_id,
             None => {
                 return Err(InterpreterError::Runtime(format!(
                     "Undefined property {}.",
@@ -723,7 +730,7 @@ impl Interpreter {
                 {
                     let maybe_method_id =
                         match self.get_class(class_id).methods.get(&"init".to_string()) {
-                            Some(method_id) => Some(method_id.clone()),
+                            Some(method_id) => Some(*method_id),
                             None => None,
                         };
 
@@ -964,9 +971,9 @@ impl Interpreter {
                                 closure_id: *closure_id,
                             },
                         )));
-                    return Ok(true);
+                    Ok(true)
                 } else {
-                    return Ok(false);
+                    Ok(false)
                 }
             }
             _ => Ok(false),
@@ -2465,6 +2472,40 @@ mod tests {
                 match res {
                     Ok(()) => {
                         assert_eq!(interp.output, vec!["5"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_invoking_fields() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Oops {\n\
+               init() {\n\
+                 fun f() {\n\
+                   print \"not a method\";\n\
+                 }\n\
+                 \n\
+                 this.field = f;\n\
+               }\n\
+             }\n\
+             \n\
+             var oops = Oops();\n\
+             oops.field();\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["not a method"]);
                     }
                     Err(err) => {
                         panic!("{:?}", err);
