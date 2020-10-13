@@ -71,6 +71,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Invoke(method_name, arg_count) => {
                 format!("OP_INVOKE {} nargs={}", method_name, arg_count)
             }
+            bytecode::Op::Inherit => "OP_INHERIT".to_string(),
         };
 
         println!(
@@ -631,6 +632,30 @@ impl Interpreter {
                 (bytecode::Op::Invoke(method_name, arg_count), _) => {
                     self.invoke(&method_name, arg_count)?;
                 }
+                (bytecode::Op::Inherit, lineno) => {
+                    {
+                        let (superclass_id, subclass_id) = match (self.peek_by(1), self.peek()) {
+                            (
+                                value::Value::Class(superclass_id),
+                                value::Value::Class(subclass_id),
+                            ) => (*superclass_id, *subclass_id),
+                            (not_a_class, value::Value::Class(_)) => {
+                                return Err(InterpreterError::Runtime(format!(
+                                    "Superclass must be a class, found {:?} at lineno={:?}",
+                                    value::type_of(&not_a_class),
+                                    lineno
+                                )));
+                            }
+                            _ => panic!("expected classes when interpreting Inherit!"),
+                        };
+
+                        let superclass_methods = self.get_class(superclass_id).methods.clone();
+                        let subclass = self.get_class_mut(subclass_id);
+
+                        subclass.methods.extend(superclass_methods);
+                    }
+                    self.pop_stack(); //subclass
+                }
             }
         }
     }
@@ -1037,6 +1062,10 @@ impl Interpreter {
 
     fn get_class(&self, class_handle: usize) -> &value::Class {
         self.heap.get_class(class_handle)
+    }
+
+    fn get_class_mut(&mut self, class_handle: usize) -> &mut value::Class {
+        self.heap.get_class_mut(class_handle)
     }
 
     fn get_bound_method(&self, method_handle: usize) -> &value::BoundMethod {
@@ -2510,6 +2539,158 @@ mod tests {
                     Err(err) => {
                         panic!("{:?}", err);
                     }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_inheritance_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class A {\n\
+               f() {\n\
+                 return \"cat\";\n\
+               }\n\
+             }\n\
+             class B < A {}\n\
+             var b = B();\n\
+             print b.f();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["cat"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_inheritance_2() {
+        let func_or_err = Compiler::compile(String::from(
+            "class A {\n\
+               f() {\n\
+                 return \"cat\";\n\
+               }\n\
+             }\n\
+             class B < A {}\n\
+             class C < B {}\n\
+             var c = C();\n\
+             print c.f();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["cat"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_inheritance_3() {
+        let func_or_err = Compiler::compile(String::from(
+            "class A {\n\
+               f() {\n\
+                 return this.attr;
+               }\n\
+             }\n\
+             class B < A {\n\
+               init(attr) {\n\
+                 this.attr = attr;\n\
+               }\n\
+             }\n\
+             var b = B(42);\n\
+             print b.f();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["42"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_inheritance_4() {
+        let func_or_err = Compiler::compile(String::from(
+            "class A {\n\
+               f() {\n\
+                 return this.attr;
+               }\n\
+             }\n\
+             class B < A {\n\
+             }\n\
+             var b = B();\n\
+             b.attr = 42;
+             print b.f();",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        assert_eq!(interp.output, vec!["42"]);
+                    }
+                    Err(err) => {
+                        panic!("{:?}", err);
+                    }
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_inheriting_non_class() {
+        let func_or_err = Compiler::compile(String::from(
+            "var NotClass = \"So not a class\";\n\
+             class OhNo < NotClass {}\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => {
+                        panic!();
+                    }
+                    Err(InterpreterError::Compile(_)) => panic!(),
+                    Err(InterpreterError::Runtime(err)) => assert!(
+                        err.starts_with("Superclass must be a class, found String at lineno=")
+                    ),
                 }
             }
             Err(err) => panic!(err),

@@ -149,10 +149,28 @@ impl Compiler {
         self.consume(scanner::TokenType::Identifier, "Expected class name.")?;
         let class_name_tok = self.previous().clone();
         let class_name = String::from_utf8(class_name_tok.clone().lexeme).unwrap();
-        let name_constant = self.identifier_constant(class_name);
+        let name_constant = self.identifier_constant(class_name.clone());
         let line = self.previous().line;
         self.emit_op(bytecode::Op::Class(name_constant), line);
         self.define_variable(name_constant);
+
+        if self.matches(scanner::TokenType::Less) {
+            self.consume(scanner::TokenType::Identifier, "Expected superclass name.")?;
+            self.variable(false)?;
+
+            if Compiler::identifiers_equal(&class_name_tok.literal, &self.previous().literal) {
+                return Err(format!(
+                    "A class cannot inherit from itself. Class name = {}, line,col={},{}.",
+                    class_name,
+                    self.previous().line,
+                    self.previous().col
+                ));
+            }
+
+            self.named_variable(class_name_tok.clone(), false)?;
+            self.emit_op(bytecode::Op::Inherit, self.previous().line);
+        }
+
         self.named_variable(class_name_tok.clone(), false)?;
 
         let mut saved_class_compiler = None;
@@ -1388,6 +1406,16 @@ mod tests {
         match func_or_err {
             Ok(_) => panic!(),
             Err(err) => assert!(err.starts_with("Cannot use 'this' outside of class")),
+        }
+    }
+
+    #[test]
+    fn test_self_ineritance_is_error() {
+        let func_or_err = Compiler::compile(String::from("class A < A {}"));
+
+        match func_or_err {
+            Ok(_) => panic!(),
+            Err(err) => assert!(err.starts_with("A class cannot inherit from itself.")),
         }
     }
 }
