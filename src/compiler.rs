@@ -11,6 +11,7 @@ struct Local {
 #[allow(dead_code)]
 struct ClassCompiler {
     name: scanner::Token,
+    has_superclass: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -154,6 +155,14 @@ impl Compiler {
         self.emit_op(bytecode::Op::Class(name_constant), line);
         self.define_variable(name_constant);
 
+        let mut saved_class_compiler = None;
+
+        std::mem::swap(&mut saved_class_compiler, &mut self.current_class);
+        self.current_class = Some(ClassCompiler {
+            name: class_name_tok.clone(),
+            has_superclass: false,
+        });
+
         if self.matches(scanner::TokenType::Less) {
             self.consume(scanner::TokenType::Identifier, "Expected superclass name.")?;
             self.variable(false)?;
@@ -167,18 +176,21 @@ impl Compiler {
                 ));
             }
 
+            self.begin_scope();
+            self.add_local(Compiler::synthetic_token("super"));
+            self.define_variable(0);
+
             self.named_variable(class_name_tok.clone(), false)?;
             self.emit_op(bytecode::Op::Inherit, self.previous().line);
+
+            if let Some(current_class) = &mut self.current_class {
+                current_class.has_superclass = true;
+            } else {
+                panic!()
+            }
         }
 
         self.named_variable(class_name_tok.clone(), false)?;
-
-        let mut saved_class_compiler = None;
-
-        std::mem::swap(&mut saved_class_compiler, &mut self.current_class);
-        self.current_class = Some(ClassCompiler {
-            name: class_name_tok,
-        });
 
         self.consume(
             scanner::TokenType::LeftBrace,
@@ -196,6 +208,12 @@ impl Compiler {
             "Expected '}' after class body.",
         )?;
         self.emit_op(bytecode::Op::Pop, self.previous().line);
+
+        if let Some(current_class) = &self.current_class {
+            if current_class.has_superclass {
+                self.end_scope();
+            }
+        }
 
         std::mem::swap(&mut self.current_class, &mut saved_class_compiler);
 
@@ -391,6 +409,16 @@ impl Compiler {
                     id1
                 );
             }
+        }
+    }
+
+    fn synthetic_token(text: &str) -> scanner::Token {
+        scanner::Token {
+            ty: scanner::TokenType::Identifier,
+            lexeme: text.as_bytes().to_vec(),
+            literal: Some(scanner::Literal::Identifier(String::from(text))),
+            line: 0,
+            col: -1,
         }
     }
 
