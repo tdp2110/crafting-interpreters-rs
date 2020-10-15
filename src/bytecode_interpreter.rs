@@ -72,6 +72,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
                 format!("OP_INVOKE {} nargs={}", method_name, arg_count)
             }
             bytecode::Op::Inherit => "OP_INHERIT".to_string(),
+            bytecode::Op::GetSuper(idx) => format!("OP_GET_SUPER {}", idx),
         };
 
         println!(
@@ -656,6 +657,7 @@ impl Interpreter {
                     }
                     self.pop_stack(); //subclass
                 }
+                (bytecode::Op::GetSuper(_), _) => unimplemented!(),
             }
         }
     }

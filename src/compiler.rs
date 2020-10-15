@@ -101,6 +101,7 @@ enum ParseFn {
     Call,
     Dot,
     This,
+    Super,
 }
 
 struct ParseRule {
@@ -972,6 +973,48 @@ impl Compiler {
         Ok(())
     }
 
+    fn super_(&mut self, _can_assign: bool) -> Result<(), String> {
+        let tok = self.previous().clone();
+        match &self.current_class {
+            None => {
+                return Err(format!(
+                    "Can't use 'super' outside of a class (line,col={},{})",
+                    tok.line, tok.col
+                ))
+            }
+            Some(class) => {
+                if !class.has_superclass {
+                    return Err(format!(
+                        "Can't use 'super' in a class with no superclass (line,col={},{})",
+                        tok.line, tok.col
+                    ));
+                }
+            }
+        }
+        self.consume(
+            scanner::TokenType::Dot,
+            "Expected '.' after 'super' keyword.",
+        )?;
+        self.consume(
+            scanner::TokenType::Identifier,
+            "Expected superclass method name.",
+        )?;
+
+        let method_name = if let Some(scanner::Literal::Identifier(method_name)) =
+            &self.previous().literal.clone()
+        {
+            method_name.clone()
+        } else {
+            panic!()
+        };
+
+        let name = self.identifier_constant(method_name);
+        self.named_variable(Compiler::synthetic_token("this"), false)?;
+        self.named_variable(Compiler::synthetic_token("super"), false)?;
+        self.emit_op(bytecode::Op::GetSuper(name), self.previous().line);
+        Ok(())
+    }
+
     fn this(&mut self, _can_assign: bool) -> Result<(), String> {
         let tok = self.previous().clone();
         if self.current_class.is_none() {
@@ -1113,6 +1156,7 @@ impl Compiler {
             ParseFn::Call => self.call(can_assign),
             ParseFn::Dot => self.dot(can_assign),
             ParseFn::This => self.this(can_assign),
+            ParseFn::Super => self.super_(can_assign),
         }
     }
 
@@ -1338,7 +1382,7 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::Super => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::Super),
                 infix: None,
                 precedence: Precedence::None,
             },
@@ -1444,6 +1488,26 @@ mod tests {
         match func_or_err {
             Ok(_) => panic!(),
             Err(err) => assert!(err.starts_with("A class cannot inherit from itself.")),
+        }
+    }
+
+    #[test]
+    fn test_cant_use_super_outside_class() {
+        let func_or_err = Compiler::compile(String::from("fun f() { super.bar(); }"));
+
+        match func_or_err {
+            Ok(_) => panic!(),
+            Err(err) => assert!(err.starts_with("Can't use 'super' outside of a class")),
+        }
+    }
+
+    #[test]
+    fn test_cant_use_super_in_class_with_no_superclass() {
+        let func_or_err = Compiler::compile(String::from("class Foo { bar() { super.bar(); } }"));
+
+        match func_or_err {
+            Ok(_) => panic!(),
+            Err(err) => assert!(err.starts_with("Can't use 'super' in a class with no superclass")),
         }
     }
 }
