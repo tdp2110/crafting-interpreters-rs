@@ -301,7 +301,7 @@ impl Interpreter {
                                     if let Some(upval) = self.find_open_uval(*idx) {
                                         upval
                                     } else {
-                                        let index = self.frame().slots_offset + *idx;
+                                        let index = self.frame().slots_offset + *idx - 1;
                                         let upval =
                                             Rc::new(RefCell::new(value::Upvalue::Open(index)));
                                         self.upvalues.push(upval.clone());
@@ -525,7 +525,7 @@ impl Interpreter {
                     let upvalue = self.frame().closure.upvalues[idx].clone();
                     let val = match &*upvalue.borrow() {
                         value::Upvalue::Closed(value) => value.clone(),
-                        value::Upvalue::Open(stack_index) => self.stack[*stack_index - 1].clone(),
+                        value::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
                     };
                     self.stack.push(val);
                 }
@@ -534,9 +534,7 @@ impl Interpreter {
                     let upvalue = self.frame().closure.upvalues[idx].clone();
                     match &mut *upvalue.borrow_mut() {
                         value::Upvalue::Closed(value) => *value = new_value,
-                        value::Upvalue::Open(stack_index) => {
-                            self.stack[*stack_index - 1] = new_value
-                        }
+                        value::Upvalue::Open(stack_index) => self.stack[*stack_index] = new_value,
                     };
                 }
                 (bytecode::Op::JumpIfFalse(offset), _) => {
@@ -590,10 +588,20 @@ impl Interpreter {
                 (bytecode::Op::GetProperty(idx), _) => {
                     if let value::Value::String(attr_id) = self.read_constant(idx) {
                         let maybe_instance = self.peek().clone();
+
+                        let (class_id, instance_id) = match maybe_instance {
+                            value::Value::Instance(instance_id) => {
+                                let instance = self.heap.get_instance(instance_id).clone();
+                                (instance.class_id, instance_id)
+                            }
+                            _ => panic!(),
+                        };
+
+                        let class = self.heap.get_class(class_id).clone();
                         if let Some(attr) = self.getattr(maybe_instance.clone(), attr_id)? {
                             self.pop_stack();
                             self.stack.push(attr);
-                        } else if !self.bind_method(maybe_instance.clone(), attr_id)? {
+                        } else if !self.bind_method(instance_id, class.clone(), attr_id)? {
                             return Err(InterpreterError::Runtime(format!(
                                 "value {} has no attribute {}.",
                                 self.format_val(&maybe_instance),
@@ -657,7 +665,34 @@ impl Interpreter {
                     }
                     self.pop_stack(); //subclass
                 }
-                (bytecode::Op::GetSuper(_), _) => unimplemented!(),
+                (bytecode::Op::GetSuper(idx), _) => {
+                    let method_id = if let value::Value::String(method_id) = self.read_constant(idx)
+                    {
+                        method_id
+                    } else {
+                        panic!();
+                    };
+
+                    let maybe_superclass = self.pop_stack();
+                    let superclass = match maybe_superclass {
+                        value::Value::Class(class_id) => self.get_class(class_id).clone(),
+                        _ => panic!(),
+                    };
+
+                    let maybe_instance = self.peek();
+                    let instance_id = match maybe_instance {
+                        value::Value::Instance(instance_id) => *instance_id,
+                        _ => panic!(),
+                    };
+
+                    if !self.bind_method(instance_id, superclass, method_id)? {
+                        return Err(InterpreterError::Runtime(format!(
+                            "superclass {} has no attribute {}.",
+                            self.format_val(&maybe_superclass),
+                            self.get_str(method_id)
+                        )));
+                    }
+                }
             }
         }
     }
@@ -709,7 +744,7 @@ impl Interpreter {
     }
 
     fn close_upvalues(&mut self, index: usize) {
-        let value = &self.stack[index - 1];
+        let value = &self.stack[index];
         for upval in &self.upvalues {
             if upval.borrow().is_open_with_index(index) {
                 upval.replace(value::Upvalue::Closed(value.clone()));
@@ -981,29 +1016,23 @@ impl Interpreter {
 
     fn bind_method(
         &mut self,
-        maybe_instance: value::Value,
+        instance_id: usize,
+        class: value::Class,
         attr_id: usize,
     ) -> Result<bool, InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
-        match maybe_instance {
-            value::Value::Instance(instance_id) => {
-                let instance = self.heap.get_instance(instance_id).clone();
-                let class = self.heap.get_class(instance.class_id).clone();
-                if let Some(closure_id) = class.methods.get(&attr_name) {
-                    self.pop_stack();
-                    self.stack
-                        .push(value::Value::BoundMethod(self.heap.manage_bound_method(
-                            value::BoundMethod {
-                                instance_id,
-                                closure_id: *closure_id,
-                            },
-                        )));
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            _ => Ok(false),
+        if let Some(closure_id) = class.methods.get(&attr_name) {
+            self.pop_stack();
+            self.stack
+                .push(value::Value::BoundMethod(self.heap.manage_bound_method(
+                    value::BoundMethod {
+                        instance_id,
+                        closure_id: *closure_id,
+                    },
+                )));
+            Ok(true)
+        } else {
+            Ok(false)
         }
     }
 
@@ -2693,6 +2722,89 @@ mod tests {
                     Err(InterpreterError::Runtime(err)) => assert!(
                         err.starts_with("Superclass must be a class, found String at lineno=")
                     ),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_super_1() {
+        let func_or_err = Compiler::compile(String::from(
+            "class A {\n\
+               method() {\n\
+                 print \"A method\";\n\
+               }\n\
+             }\n\
+             \n\
+             class B < A {\n\
+               method() {\n\
+                 print \"B method\";\n\
+               }\n\
+               \n\
+               test() {\n\
+                 super.method();\n\
+               }\n\
+             }\n\
+             \n\
+             class C < B {}\n\
+             \n\
+             C().test();\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["A method"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_super_2() {
+        let func_or_err = Compiler::compile(String::from(
+            "class Doughnut {\n\
+               cook() {\n\
+                 print \"Dunk in the fryer.\";\n\
+                 this.finish(\"sprinkles\");\n\
+               }\n\
+               \n\
+               finish(ingredient) {\n\
+                 print \"Finish with \" + ingredient;\n\
+               }\n\
+             }\n\
+             \n\
+             class Cruller < Doughnut {\n\
+               finish(ingredient) {\n\
+                 // No sprinkles.\n\
+                 super.finish(\"icing\");\n\
+               }\n\
+             }\n\
+             \n\
+             Doughnut().cook();\n\
+             Cruller().cook();\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(
+                        interp.output,
+                        vec![
+                            "Dunk in the fryer.",
+                            "Finish with sprinkles",
+                            "Dunk in the fryer.",
+                            "Finish with icing"
+                        ]
+                    ),
+                    Err(err) => panic!(err),
                 }
             }
             Err(err) => panic!(err),

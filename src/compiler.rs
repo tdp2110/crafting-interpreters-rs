@@ -191,7 +191,7 @@ impl Compiler {
             }
         }
 
-        self.named_variable(class_name_tok.clone(), false)?;
+        self.named_variable(class_name_tok, false)?;
 
         self.consume(
             scanner::TokenType::LeftBrace,
@@ -803,7 +803,6 @@ impl Compiler {
         if let Some(idx) = self.resolve_local(&name)? {
             return Ok(Resolution::Local(idx));
         }
-
         if let Some(idx) = self.resolve_upval(&name)? {
             return Ok(Resolution::Upvalue(idx));
         }
@@ -821,7 +820,7 @@ impl Compiler {
         if let Some(local_idx) =
             Compiler::resolve_local_static(&self.levels[prev_level_idx], name, self.previous())?
         {
-            self.levels[prev_level_idx].locals[local_idx + 1].is_captured = true;
+            self.levels[prev_level_idx].locals[local_idx].is_captured = true;
 
             return Ok(Some(self.add_upval(bytecode::UpvalueLoc::Local(local_idx))));
         }
