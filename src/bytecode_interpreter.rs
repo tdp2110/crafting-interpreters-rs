@@ -118,7 +118,7 @@ pub struct Interpreter {
     globals: HashMap<String, value::Value>,
     upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
     heap: gc::Heap,
-    gray_stack: Vec<usize>,
+    gray_stack: Vec<gc::HeapId>,
 }
 
 impl Default for Interpreter {
@@ -733,7 +733,7 @@ impl Interpreter {
 
     fn invoke_from_class(
         &mut self,
-        class_id: usize,
+        class_id: gc::HeapId,
         method_name: &str,
         arg_count: u8,
     ) -> Result<(), InterpreterError> {
@@ -867,7 +867,7 @@ impl Interpreter {
         }
     }
 
-    fn create_instance(&mut self, class_id: usize) {
+    fn create_instance(&mut self, class_id: gc::HeapId) {
         self.pop_stack(); // class object
         let instance_id = self.heap.manage_instance(value::Instance {
             class_id,
@@ -878,7 +878,7 @@ impl Interpreter {
 
     fn call_bound_method(
         &mut self,
-        method_id: usize,
+        method_id: gc::HeapId,
         arg_count: u8,
     ) -> Result<(), InterpreterError> {
         let bound_method = self.get_bound_method(method_id).clone();
@@ -890,7 +890,7 @@ impl Interpreter {
         self.call(closure_id, arg_count)
     }
 
-    fn call(&mut self, closure_handle: usize, arg_count: u8) -> Result<(), InterpreterError> {
+    fn call(&mut self, closure_handle: gc::HeapId, arg_count: u8) -> Result<(), InterpreterError> {
         let closure = self.get_closure(closure_handle).clone();
         let func = &closure.function;
         if arg_count != func.arity {
@@ -986,7 +986,7 @@ impl Interpreter {
         &mut self,
         maybe_instance: value::Value,
         val: value::Value,
-        attr_id: usize,
+        attr_id: gc::HeapId,
     ) -> Result<(), InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
         match maybe_instance {
@@ -1006,7 +1006,7 @@ impl Interpreter {
     fn getattr(
         &self,
         maybe_instance: value::Value,
-        attr_id: usize,
+        attr_id: gc::HeapId,
     ) -> Result<Option<value::Value>, InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
         match maybe_instance {
@@ -1027,9 +1027,9 @@ impl Interpreter {
 
     fn bind_method(
         &mut self,
-        instance_id: usize,
+        instance_id: gc::HeapId,
         class: value::Class,
-        attr_id: usize,
+        attr_id: gc::HeapId,
     ) -> Result<bool, InterpreterError> {
         let attr_name = self.get_str(attr_id).clone();
         if let Some(closure_id) = class.methods.get(&attr_name) {
@@ -1094,27 +1094,27 @@ impl Interpreter {
         }
     }
 
-    fn get_str(&self, str_handle: usize) -> &String {
+    fn get_str(&self, str_handle: gc::HeapId) -> &String {
         self.heap.get_str(str_handle)
     }
 
-    fn get_closure(&self, closure_handle: usize) -> &value::Closure {
+    fn get_closure(&self, closure_handle: gc::HeapId) -> &value::Closure {
         self.heap.get_closure(closure_handle)
     }
 
-    fn get_class(&self, class_handle: usize) -> &value::Class {
+    fn get_class(&self, class_handle: gc::HeapId) -> &value::Class {
         self.heap.get_class(class_handle)
     }
 
-    fn get_class_mut(&mut self, class_handle: usize) -> &mut value::Class {
+    fn get_class_mut(&mut self, class_handle: gc::HeapId) -> &mut value::Class {
         self.heap.get_class_mut(class_handle)
     }
 
-    fn get_bound_method(&self, method_handle: usize) -> &value::BoundMethod {
+    fn get_bound_method(&self, method_handle: gc::HeapId) -> &value::BoundMethod {
         self.heap.get_bound_method(method_handle)
     }
 
-    fn get_instance(&self, instance_handle: usize) -> &value::Instance {
+    fn get_instance(&self, instance_handle: gc::HeapId) -> &value::Instance {
         self.heap.get_instance(instance_handle)
     }
 
@@ -1136,7 +1136,7 @@ impl Interpreter {
         }
     }
 
-    fn blacken_object(&mut self, val: usize) {
+    fn blacken_object(&mut self, val: gc::HeapId) {
         let children_to_walk = self.heap.children(val);
         for child_val in children_to_walk {
             if !self.heap.is_marked(child_val) {
@@ -1147,21 +1147,21 @@ impl Interpreter {
     }
 
     fn mark_roots(&mut self) {
-        let stack_vals_to_mark: Vec<usize> = self
+        let stack_vals_to_mark: Vec<gc::HeapId> = self
             .stack
             .iter()
             .map(Interpreter::extract_id)
             .flatten()
             .collect();
 
-        let frame_closure_children: Vec<usize> = self
+        let frame_closure_children: Vec<gc::HeapId> = self
             .frames
             .iter()
             .map(|frame| self.heap.closure_children(&frame.closure))
             .flatten()
             .collect();
 
-        let globals_to_mark: Vec<usize> = self
+        let globals_to_mark: Vec<gc::HeapId> = self
             .globals
             .values()
             .map(Interpreter::extract_id)
@@ -1177,7 +1177,7 @@ impl Interpreter {
         }
     }
 
-    fn extract_id(val: &value::Value) -> Option<usize> {
+    fn extract_id(val: &value::Value) -> Option<gc::HeapId> {
         match val {
             value::Value::Number(_) => None,
             value::Value::Bool(_) => None,
@@ -1191,7 +1191,7 @@ impl Interpreter {
         }
     }
 
-    fn mark_value(&mut self, handle: usize) {
+    fn mark_value(&mut self, handle: gc::HeapId) {
         let is_marked = self.heap.is_marked(handle);
         if !is_marked {
             self.heap.mark(handle);

@@ -70,11 +70,13 @@ impl GCVal {
     }
 }
 
+pub type HeapId = usize;
+
 pub struct Heap {
     bytes_allocated: usize,
     next_gc: usize,
     id_counter: usize,
-    values: HashMap<usize, GCVal>,
+    values: HashMap<HeapId, GCVal>,
 }
 
 impl Default for Heap {
@@ -94,14 +96,14 @@ impl Default for Heap {
 }
 
 impl Heap {
-    pub fn manage_str(&mut self, s: String) -> usize {
+    pub fn manage_str(&mut self, s: String) -> HeapId {
         self.bytes_allocated += s.len();
         let id = self.generate_id();
         self.values.insert(id, GCVal::from(GCData::String(s)));
         id
     }
 
-    pub fn manage_closure(&mut self, c: value::Closure) -> usize {
+    pub fn manage_closure(&mut self, c: value::Closure) -> HeapId {
         self.bytes_allocated += c.function.chunk.code.len();
         self.bytes_allocated += c.function.chunk.constants.len();
         let id = self.generate_id();
@@ -109,7 +111,7 @@ impl Heap {
         id
     }
 
-    pub fn manage_class(&mut self, c: value::Class) -> usize {
+    pub fn manage_class(&mut self, c: value::Class) -> HeapId {
         let id = self.generate_id();
         self.bytes_allocated += c.name.len();
         self.bytes_allocated += c.methods.keys().map(|method_name| method_name.len()).len();
@@ -117,21 +119,21 @@ impl Heap {
         id
     }
 
-    pub fn manage_instance(&mut self, inst: value::Instance) -> usize {
+    pub fn manage_instance(&mut self, inst: value::Instance) -> HeapId {
         let id = self.generate_id();
         self.bytes_allocated += inst.fields.keys().map(|attr| attr.len()).sum::<usize>();
         self.values.insert(id, GCVal::from(GCData::Instance(inst)));
         id
     }
 
-    pub fn manage_bound_method(&mut self, method: value::BoundMethod) -> usize {
+    pub fn manage_bound_method(&mut self, method: value::BoundMethod) -> HeapId {
         let id = self.generate_id();
         self.values
             .insert(id, GCVal::from(GCData::BoundMethod(method)));
         id
     }
 
-    fn generate_id(&mut self) -> usize {
+    fn generate_id(&mut self) -> HeapId {
         self.id_counter += 1;
         loop {
             if !self.values.contains_key(&self.id_counter) {
@@ -141,15 +143,15 @@ impl Heap {
         }
     }
 
-    pub fn get_str(&self, id: usize) -> &String {
+    pub fn get_str(&self, id: HeapId) -> &String {
         self.values.get(&id).unwrap().data.as_str().unwrap()
     }
 
-    pub fn get_closure(&self, id: usize) -> &value::Closure {
+    pub fn get_closure(&self, id: HeapId) -> &value::Closure {
         self.values.get(&id).unwrap().data.as_closure().unwrap()
     }
 
-    pub fn get_bound_method(&self, id: usize) -> &value::BoundMethod {
+    pub fn get_bound_method(&self, id: HeapId) -> &value::BoundMethod {
         self.values
             .get(&id)
             .unwrap()
@@ -158,11 +160,11 @@ impl Heap {
             .unwrap()
     }
 
-    pub fn get_class(&self, id: usize) -> &value::Class {
+    pub fn get_class(&self, id: HeapId) -> &value::Class {
         self.values.get(&id).unwrap().data.as_class().unwrap()
     }
 
-    pub fn get_class_mut(&mut self, id: usize) -> &mut value::Class {
+    pub fn get_class_mut(&mut self, id: HeapId) -> &mut value::Class {
         self.values
             .get_mut(&id)
             .unwrap()
@@ -171,11 +173,11 @@ impl Heap {
             .unwrap()
     }
 
-    pub fn get_instance(&self, id: usize) -> &value::Instance {
+    pub fn get_instance(&self, id: HeapId) -> &value::Instance {
         self.values.get(&id).unwrap().data.as_instance().unwrap()
     }
 
-    pub fn get_instance_mut(&mut self, id: usize) -> &mut value::Instance {
+    pub fn get_instance_mut(&mut self, id: HeapId) -> &mut value::Instance {
         self.values
             .get_mut(&id)
             .unwrap()
@@ -190,15 +192,15 @@ impl Heap {
         }
     }
 
-    pub fn mark(&mut self, id: usize) {
+    pub fn mark(&mut self, id: HeapId) {
         self.values.get_mut(&id).unwrap().is_marked = true;
     }
 
-    pub fn is_marked(&self, id: usize) -> bool {
+    pub fn is_marked(&self, id: HeapId) -> bool {
         self.values.get(&id).unwrap().is_marked
     }
 
-    pub fn children(&self, id: usize) -> Vec<usize> {
+    pub fn children(&self, id: HeapId) -> Vec<HeapId> {
         match &self.values.get(&id).unwrap().data {
             GCData::String(_) => Vec::new(),
             GCData::Closure(closure) => self.closure_children(closure),
@@ -208,15 +210,15 @@ impl Heap {
         }
     }
 
-    pub fn bound_method_children(&self, method: &value::BoundMethod) -> Vec<usize> {
+    pub fn bound_method_children(&self, method: &value::BoundMethod) -> Vec<HeapId> {
         vec![method.instance_id, method.closure_id]
     }
 
-    pub fn class_children(&self, class: &value::Class) -> Vec<usize> {
+    pub fn class_children(&self, class: &value::Class) -> Vec<HeapId> {
         Vec::from_iter(class.methods.values().copied())
     }
 
-    pub fn instance_children(&self, instance: &value::Instance) -> Vec<usize> {
+    pub fn instance_children(&self, instance: &value::Instance) -> Vec<HeapId> {
         let mut res = Vec::new();
         res.push(instance.class_id);
 
@@ -229,8 +231,8 @@ impl Heap {
         res
     }
 
-    pub fn closure_children(&self, closure: &value::Closure) -> Vec<usize> {
-        let res: Vec<usize> = closure
+    pub fn closure_children(&self, closure: &value::Closure) -> Vec<HeapId> {
+        let res: Vec<HeapId> = closure
             .upvalues
             .iter()
             .map(|upval| match &*upval.borrow() {
@@ -242,7 +244,7 @@ impl Heap {
         res
     }
 
-    pub fn extract_id(&self, val: &value::Value) -> Option<usize> {
+    pub fn extract_id(&self, val: &value::Value) -> Option<HeapId> {
         match val {
             value::Value::String(id) => Some(*id),
             value::Value::Function(id) => Some(*id),

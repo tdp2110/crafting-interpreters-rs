@@ -44,30 +44,30 @@ pub struct NativeFunction {
 #[derive(Clone)]
 pub struct Class {
     pub name: String,
-    pub methods: HashMap<String, usize>,
+    pub methods: HashMap<String, gc::HeapId>,
 }
 
 #[derive(Clone)]
 pub struct Instance {
-    pub class_id: usize,
+    pub class_id: gc::HeapId,
     pub fields: HashMap<String, Value>,
 }
 
 #[derive(Clone)]
 pub struct BoundMethod {
-    pub instance_id: usize,
-    pub closure_id: usize,
+    pub instance_id: gc::HeapId,
+    pub closure_id: gc::HeapId,
 }
 
 #[derive(Clone)]
 pub enum Value {
     Number(f64),
     Bool(bool),
-    String(usize),
-    Function(usize),
-    Instance(usize),
-    BoundMethod(usize),
-    Class(usize),
+    String(gc::HeapId),
+    Function(gc::HeapId),
+    Instance(gc::HeapId),
+    BoundMethod(gc::HeapId),
+    Class(gc::HeapId),
     NativeFunction(NativeFunction),
     Nil,
 }
