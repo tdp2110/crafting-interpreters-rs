@@ -1111,6 +1111,7 @@ impl Interpreter {
         self.heap.unmark();
         self.mark_roots();
         self.trace_references();
+
         self.heap.sweep();
     }
 
@@ -1138,11 +1139,7 @@ impl Interpreter {
         let stack_vals_to_mark: Vec<usize> = self
             .stack
             .iter()
-            .map(|val| match val {
-                value::Value::String(id) => Some(*id),
-                value::Value::Function(id) => Some(*id),
-                _ => None,
-            })
+            .map(Interpreter::extract_id)
             .flatten()
             .collect();
 
@@ -1156,11 +1153,7 @@ impl Interpreter {
         let globals_to_mark: Vec<usize> = self
             .globals
             .values()
-            .map(|val| match val {
-                value::Value::String(id) => Some(*id),
-                value::Value::Function(id) => Some(*id),
-                _ => None,
-            })
+            .map(Interpreter::extract_id)
             .flatten()
             .collect();
 
@@ -1170,6 +1163,20 @@ impl Interpreter {
             .chain(globals_to_mark.iter())
         {
             self.mark_value(*val);
+        }
+    }
+
+    fn extract_id(val: &value::Value) -> Option<usize> {
+        match val {
+            value::Value::Number(_) => None,
+            value::Value::Bool(_) => None,
+            value::Value::String(id) => Some(*id),
+            value::Value::Function(id) => Some(*id),
+            value::Value::Instance(id) => Some(*id),
+            value::Value::BoundMethod(id) => Some(*id),
+            value::Value::Class(id) => Some(*id),
+            value::Value::NativeFunction(_) => None,
+            value::Value::Nil => None,
         }
     }
 
