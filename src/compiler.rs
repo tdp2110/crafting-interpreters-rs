@@ -1007,10 +1007,17 @@ impl Compiler {
             panic!()
         };
 
-        let name = self.identifier_constant(method_name);
         self.named_variable(Compiler::synthetic_token("this"), false)?;
-        self.named_variable(Compiler::synthetic_token("super"), false)?;
-        self.emit_op(bytecode::Op::GetSuper(name), self.previous().line);
+
+        let op = if self.matches(scanner::TokenType::LeftParen) {
+            let arg_count = self.argument_list()?;
+            self.named_variable(Compiler::synthetic_token("super"), false)?;
+            bytecode::Op::SuperInvoke(method_name, arg_count)
+        } else {
+            self.named_variable(Compiler::synthetic_token("super"), false)?;
+            bytecode::Op::GetSuper(self.identifier_constant(method_name))
+        };
+        self.emit_op(op, self.previous().line);
         Ok(())
     }
 

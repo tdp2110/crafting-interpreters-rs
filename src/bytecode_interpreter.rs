@@ -73,6 +73,9 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             }
             bytecode::Op::Inherit => "OP_INHERIT".to_string(),
             bytecode::Op::GetSuper(idx) => format!("OP_GET_SUPER {}", idx),
+            bytecode::Op::SuperInvoke(method_name, arg_count) => {
+                format!("OP_SUPER_INOKE {} nargs={}", method_name, arg_count)
+            }
         };
 
         println!(
@@ -693,6 +696,14 @@ impl Interpreter {
                         )));
                     }
                 }
+                (bytecode::Op::SuperInvoke(method_name, arg_count), _) => {
+                    let maybe_superclass = self.pop_stack();
+                    let superclass_id = match maybe_superclass {
+                        value::Value::Class(class_id) => class_id,
+                        _ => panic!("{}", self.format_val(&maybe_superclass)),
+                    };
+                    self.invoke_from_class(superclass_id, &method_name, arg_count)?;
+                }
             }
         }
     }
@@ -717,10 +728,10 @@ impl Interpreter {
         }
 
         let class_id = self.get_instance(receiver_id).class_id;
-        self.invoke_from(class_id, &method_name, arg_count)
+        self.invoke_from_class(class_id, &method_name, arg_count)
     }
 
-    fn invoke_from(
+    fn invoke_from_class(
         &mut self,
         class_id: usize,
         method_name: &str,
@@ -2774,6 +2785,44 @@ mod tests {
 
     #[test]
     fn test_super_2() {
+        let func_or_err = Compiler::compile(String::from(
+            "class A {\n\
+               method() {\n\
+                 print \"A method\";\n\
+               }\n\
+             }\n\
+             \n\
+             class B < A {\n\
+               method() {\n\
+                 print \"B method\";\n\
+               }\n\
+               \n\
+               test() {\n\
+                 var func = super.method;\n\
+                 func();\n\
+               }\n\
+             }\n\
+             \n\
+             class C < B {}\n\
+             \n\
+             C().test();\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["A method"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_super_3() {
         let func_or_err = Compiler::compile(String::from(
             "class Doughnut {\n\
                cook() {\n\
