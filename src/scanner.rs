@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
-#[allow(dead_code)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,

@@ -8,9 +8,7 @@ struct Local {
     is_captured: bool,
 }
 
-#[allow(dead_code)]
 struct ClassCompiler {
-    name: scanner::Token,
     has_superclass: bool,
 }
 
@@ -160,7 +158,6 @@ impl Compiler {
 
         std::mem::swap(&mut saved_class_compiler, &mut self.current_class);
         self.current_class = Some(ClassCompiler {
-            name: class_name_tok.clone(),
             has_superclass: false,
         });
 

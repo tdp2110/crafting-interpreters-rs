@@ -1,7 +1,6 @@
 use crate::expr;
 use crate::scanner;
 
-#[allow(dead_code)]
 struct Parser {
     tokens: Vec<scanner::Token>,
     current: usize,

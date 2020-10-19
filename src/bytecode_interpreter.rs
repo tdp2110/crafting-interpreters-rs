@@ -5,6 +5,7 @@ use crate::value;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::rc::Rc;
 
 pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
@@ -170,10 +171,16 @@ impl Default for Interpreter {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-#[allow(dead_code)]
 pub enum InterpreterError {
-    Compile(String),
     Runtime(String),
+}
+
+impl fmt::Display for InterpreterError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            InterpreterError::Runtime(err) => write!(f, "Lox runtime error: {}", err),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -360,10 +367,8 @@ impl Interpreter {
                     let val2 = self.peek_by(1).clone();
 
                     match (&val1, &val2) {
-                        (value::Value::Number(n1), value::Value::Number(n2)) => {
-                            self.pop_stack();
-                            self.pop_stack();
-                            self.stack.push(value::Value::Number(n1 + n2));
+                        (value::Value::Number(_), value::Value::Number(_)) => {
+                            self.numeric_binop(Binop::Add, lineno)?
                         }
                         (value::Value::String(s1), value::Value::String(s2)) => {
                             self.pop_stack();
@@ -2733,7 +2738,6 @@ mod tests {
                     Ok(()) => {
                         panic!();
                     }
-                    Err(InterpreterError::Compile(_)) => panic!(),
                     Err(InterpreterError::Runtime(err)) => assert!(
                         err.starts_with("Superclass must be a class, found String at lineno=")
                     ),

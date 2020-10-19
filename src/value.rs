@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub enum Upvalue {
     Open(usize),
     Closed(Value),
@@ -73,7 +72,6 @@ pub enum Value {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[allow(dead_code)]
 pub enum Type {
     Number,
     Bool,
