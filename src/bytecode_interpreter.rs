@@ -117,6 +117,7 @@ pub struct Interpreter {
     upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
     heap: gc::Heap,
     gray_stack: Vec<gc::HeapId>,
+    line: usize,
 }
 
 impl Default for Interpreter {
@@ -129,6 +130,7 @@ impl Default for Interpreter {
             upvalues: Default::default(),
             heap: Default::default(),
             gray_stack: Default::default(),
+            line: 1,
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
@@ -203,7 +205,7 @@ impl CallFrame {
 }
 
 impl Interpreter {
-    pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
+    pub fn prepare_interpret(&mut self, func: bytecode::Function) {
         self.stack
             .push(value::Value::Function(self.heap.manage_closure(
                 value::Closure {
@@ -219,6 +221,10 @@ impl Interpreter {
             ip: 0,
             slots_offset: 1,
         });
+    }
+
+    pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
+        self.prepare_interpret(func);
         self.run()
     }
 
@@ -249,107 +255,111 @@ impl Interpreter {
         }
     }
 
-    fn frame_mut(&mut self) -> &mut CallFrame {
-        let frames_len = self.frames.len();
-        &mut self.frames[frames_len - 1]
-    }
-
-    fn frame(&self) -> &CallFrame {
-        &self.frames[self.frames.len() - 1]
-    }
-
     fn run(&mut self) -> Result<(), InterpreterError> {
         loop {
-            if self.frames.is_empty()
-                || self.frame().ip >= self.frame().closure.function.chunk.code.len()
-            {
+            if self.is_done() {
                 return Ok(());
             }
 
-            let op = self.next_op();
-
-            if self.heap.should_collect() {
-                self.collect_garbage();
+            match self.step() {
+                Ok(()) => {}
+                Err(err) => return Err(err),
             }
+        }
+    }
 
-            match op {
-                (bytecode::Op::Return, _) => {
-                    let result = self.pop_stack();
+    pub fn is_done(&self) -> bool {
+        self.frames.is_empty() || self.frame().ip >= self.frame().closure.function.chunk.code.len()
+    }
 
-                    for idx in self.frame().slots_offset..self.stack.len() {
-                        self.close_upvalues(idx);
-                    }
+    pub fn step(&mut self) -> Result<(), InterpreterError> {
+        let op = self.next_op();
 
-                    if self.frames.len() <= 1 {
-                        self.frames.pop();
-                        return Ok(());
-                    }
+        if self.heap.should_collect() {
+            self.collect_garbage();
+        }
 
-                    let num_to_pop = self.stack.len() - self.frame().slots_offset
-                        + usize::from(self.frame().closure.function.arity);
+        self.line = match op {
+            (_, bytecode::Lineno { value: line }) => line,
+        };
+
+        match op {
+            (bytecode::Op::Return, _) => {
+                let result = self.pop_stack();
+
+                for idx in self.frame().slots_offset..self.stack.len() {
+                    self.close_upvalues(idx);
+                }
+
+                if self.frames.len() <= 1 {
                     self.frames.pop();
-
-                    self.pop_stack_n_times(num_to_pop);
-
-                    self.stack.push(result);
+                    return Ok(());
                 }
-                (bytecode::Op::Closure(idx, upvals), _) => {
-                    let constant = self.read_constant(idx);
 
-                    if let value::Value::Function(closure_handle) = constant {
-                        let closure = self.get_closure(closure_handle).clone();
-                        let upvalues = upvals
-                            .iter()
-                            .map(|upval| match upval {
-                                bytecode::UpvalueLoc::Upvalue(idx) => {
-                                    self.frame().closure.upvalues[*idx].clone()
+                let num_to_pop = self.stack.len() - self.frame().slots_offset
+                    + usize::from(self.frame().closure.function.arity);
+                self.frames.pop();
+
+                self.pop_stack_n_times(num_to_pop);
+
+                self.stack.push(result);
+            }
+            (bytecode::Op::Closure(idx, upvals), _) => {
+                let constant = self.read_constant(idx);
+
+                if let value::Value::Function(closure_handle) = constant {
+                    let closure = self.get_closure(closure_handle).clone();
+                    let upvalues = upvals
+                        .iter()
+                        .map(|upval| match upval {
+                            bytecode::UpvalueLoc::Upvalue(idx) => {
+                                self.frame().closure.upvalues[*idx].clone()
+                            }
+                            bytecode::UpvalueLoc::Local(idx) => {
+                                if let Some(upval) = self.find_open_uval(*idx) {
+                                    upval
+                                } else {
+                                    let index = self.frame().slots_offset + *idx - 1;
+                                    let upval = Rc::new(RefCell::new(value::Upvalue::Open(index)));
+                                    self.upvalues.push(upval.clone());
+                                    upval
                                 }
-                                bytecode::UpvalueLoc::Local(idx) => {
-                                    if let Some(upval) = self.find_open_uval(*idx) {
-                                        upval
-                                    } else {
-                                        let index = self.frame().slots_offset + *idx - 1;
-                                        let upval =
-                                            Rc::new(RefCell::new(value::Upvalue::Open(index)));
-                                        self.upvalues.push(upval.clone());
-                                        upval
-                                    }
-                                }
-                            })
-                            .collect();
+                            }
+                        })
+                        .collect();
 
-                        self.stack
-                            .push(value::Value::Function(self.heap.manage_closure(
-                                value::Closure {
-                                    function: closure.function,
-                                    upvalues,
-                                },
-                            )));
-                    } else {
-                        panic!(
-                            "When interpreting bytecode::Op::Closure, expected function, found {:?}",
-                            value::type_of(&constant)
-                        );
-                    }
+                    self.stack
+                        .push(value::Value::Function(self.heap.manage_closure(
+                            value::Closure {
+                                function: closure.function,
+                                upvalues,
+                            },
+                        )));
+                } else {
+                    panic!(
+                        "When interpreting bytecode::Op::Closure, expected function, found {:?}",
+                        value::type_of(&constant)
+                    );
                 }
-                (bytecode::Op::Constant(idx), _) => {
-                    let constant = self.read_constant(idx);
-                    self.stack.push(constant);
-                }
-                (bytecode::Op::Nil, _) => {
-                    self.stack.push(value::Value::Nil);
-                }
-                (bytecode::Op::True, _) => {
-                    self.stack.push(value::Value::Bool(true));
-                }
-                (bytecode::Op::False, _) => {
-                    self.stack.push(value::Value::Bool(false));
-                }
-                (bytecode::Op::Negate, lineno) => {
-                    let top_stack = self.peek();
-                    let maybe_number = Interpreter::extract_number(top_stack);
+            }
+            (bytecode::Op::Constant(idx), _) => {
+                let constant = self.read_constant(idx);
+                self.stack.push(constant);
+            }
+            (bytecode::Op::Nil, _) => {
+                self.stack.push(value::Value::Nil);
+            }
+            (bytecode::Op::True, _) => {
+                self.stack.push(value::Value::Bool(true));
+            }
+            (bytecode::Op::False, _) => {
+                self.stack.push(value::Value::Bool(false));
+            }
+            (bytecode::Op::Negate, lineno) => {
+                let top_stack = self.peek();
+                let maybe_number = Interpreter::extract_number(top_stack);
 
-                    match maybe_number {
+                match maybe_number {
                         Some(to_negate) => {
                             self.pop_stack();
                             self.stack.push(value::Value::Number(-to_negate));
@@ -361,53 +371,53 @@ impl Interpreter {
                             )))
                         }
                     }
-                }
-                (bytecode::Op::Add, lineno) => {
-                    let val1 = self.peek_by(0).clone();
-                    let val2 = self.peek_by(1).clone();
+            }
+            (bytecode::Op::Add, lineno) => {
+                let val1 = self.peek_by(0).clone();
+                let val2 = self.peek_by(1).clone();
 
-                    match (&val1, &val2) {
-                        (value::Value::Number(_), value::Value::Number(_)) => {
-                            self.numeric_binop(Binop::Add, lineno)?
-                        }
-                        (value::Value::String(s1), value::Value::String(s2)) => {
-                            self.pop_stack();
-                            self.pop_stack();
-                            self.stack
-                                .push(value::Value::String(self.heap.manage_str(format!(
-                                    "{}{}",
-                                    self.get_str(*s2),
-                                    self.get_str(*s1)
-                                ))));
-                        }
-                        _ => {
-                            return Err(InterpreterError::Runtime(format!(
-                                "invalid operands of type {:?} and {:?} in add expression: \
+                match (&val1, &val2) {
+                    (value::Value::Number(_), value::Value::Number(_)) => {
+                        self.numeric_binop(Binop::Add, lineno)?
+                    }
+                    (value::Value::String(s1), value::Value::String(s2)) => {
+                        self.pop_stack();
+                        self.pop_stack();
+                        self.stack
+                            .push(value::Value::String(self.heap.manage_str(format!(
+                                "{}{}",
+                                self.get_str(*s2),
+                                self.get_str(*s1)
+                            ))));
+                    }
+                    _ => {
+                        return Err(InterpreterError::Runtime(format!(
+                            "invalid operands of type {:?} and {:?} in add expression: \
                                  both operands must be number or string (line={})",
-                                value::type_of(&val1),
-                                value::type_of(&val2),
-                                lineno.value
-                            )))
-                        }
+                            value::type_of(&val1),
+                            value::type_of(&val2),
+                            lineno.value
+                        )))
                     }
                 }
-                (bytecode::Op::Subtract, lineno) => match self.numeric_binop(Binop::Sub, lineno) {
-                    Ok(()) => {}
-                    Err(err) => return Err(err),
-                },
-                (bytecode::Op::Multiply, lineno) => match self.numeric_binop(Binop::Mul, lineno) {
-                    Ok(()) => {}
-                    Err(err) => return Err(err),
-                },
-                (bytecode::Op::Divide, lineno) => match self.numeric_binop(Binop::Div, lineno) {
-                    Ok(()) => {}
-                    Err(err) => return Err(err),
-                },
-                (bytecode::Op::Not, lineno) => {
-                    let top_stack = self.peek();
-                    let maybe_bool = Interpreter::extract_bool(top_stack);
+            }
+            (bytecode::Op::Subtract, lineno) => match self.numeric_binop(Binop::Sub, lineno) {
+                Ok(()) => {}
+                Err(err) => return Err(err),
+            },
+            (bytecode::Op::Multiply, lineno) => match self.numeric_binop(Binop::Mul, lineno) {
+                Ok(()) => {}
+                Err(err) => return Err(err),
+            },
+            (bytecode::Op::Divide, lineno) => match self.numeric_binop(Binop::Div, lineno) {
+                Ok(()) => {}
+                Err(err) => return Err(err),
+            },
+            (bytecode::Op::Not, lineno) => {
+                let top_stack = self.peek();
+                let maybe_bool = Interpreter::extract_bool(top_stack);
 
-                    match maybe_bool {
+                match maybe_bool {
                         Some(b) => {
                             self.pop_stack();
                             self.stack.push(value::Value::Bool(!b));
@@ -418,18 +428,18 @@ impl Interpreter {
                                 value::type_of(top_stack), lineno.value)))
                         }
                     }
-                }
-                (bytecode::Op::Equal, _) => {
-                    let val1 = self.pop_stack();
-                    let val2 = self.pop_stack();
-                    self.stack
-                        .push(value::Value::Bool(self.values_equal(&val1, &val2)));
-                }
-                (bytecode::Op::Greater, lineno) => {
-                    let val1 = self.peek_by(0).clone();
-                    let val2 = self.peek_by(1).clone();
+            }
+            (bytecode::Op::Equal, _) => {
+                let val1 = self.pop_stack();
+                let val2 = self.pop_stack();
+                self.stack
+                    .push(value::Value::Bool(self.values_equal(&val1, &val2)));
+            }
+            (bytecode::Op::Greater, lineno) => {
+                let val1 = self.peek_by(0).clone();
+                let val2 = self.peek_by(1).clone();
 
-                    match (&val1, &val2) {
+                match (&val1, &val2) {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
@@ -441,12 +451,12 @@ impl Interpreter {
                             value::type_of(&val1), value::type_of(&val2), lineno.value)))
 
                     }
-                }
-                (bytecode::Op::Less, lineno) => {
-                    let val1 = self.peek_by(0).clone();
-                    let val2 = self.peek_by(1).clone();
+            }
+            (bytecode::Op::Less, lineno) => {
+                let val1 = self.peek_by(0).clone();
+                let val2 = self.peek_by(1).clone();
 
-                    match (&val1, &val2) {
+                match (&val1, &val2) {
                         (value::Value::Number(n1), value::Value::Number(n2)) => {
                             self.pop_stack();
                             self.pop_stack();
@@ -457,257 +467,254 @@ impl Interpreter {
                             value::type_of(&val1), value::type_of(&val2), lineno.value)))
 
                     }
-                }
-                (bytecode::Op::Print, _) => {
-                    let to_print = self.peek().clone();
-                    self.print_val(&to_print);
-                }
-                (bytecode::Op::Pop, _) => {
-                    self.pop_stack();
-                }
-                (bytecode::Op::DefineGlobal(idx), _) => {
-                    if let value::Value::String(name_id) = self.read_constant(idx) {
-                        let val = self.pop_stack();
-                        self.globals.insert(self.get_str(name_id).clone(), val);
-                    } else {
-                        panic!(
-                            "expected string when defining global, found {:?}",
-                            value::type_of(&self.read_constant(idx))
-                        );
-                    }
-                }
-                (bytecode::Op::GetGlobal(idx), lineno) => {
-                    if let value::Value::String(name_id) = self.read_constant(idx) {
-                        match self.globals.get(self.get_str(name_id)) {
-                            Some(val) => {
-                                self.stack.push(val.clone());
-                            }
-                            None => {
-                                return Err(InterpreterError::Runtime(format!(
-                                    "Undefined variable '{}' at line {}.",
-                                    self.get_str(name_id),
-                                    lineno.value
-                                )));
-                            }
-                        }
-                    } else {
-                        panic!(
-                            "expected string when defining global, found {:?}",
-                            value::type_of(&self.read_constant(idx))
-                        );
-                    }
-                }
-                (bytecode::Op::SetGlobal(idx), lineno) => {
-                    if let value::Value::String(name_id) = self.read_constant(idx) {
-                        let name_str = self.get_str(name_id).clone();
-                        if self.globals.contains_key(&name_str) {
-                            let val = self.peek().clone();
-                            self.globals.insert(name_str, val);
-                        } else {
-                            return Err(InterpreterError::Runtime(format!(
-                                "Use of undefined variable {} in setitem expression at line {}.",
-                                name_str, lineno.value
-                            )));
-                        }
-                    } else {
-                        panic!(
-                            "expected string when setting global, found {:?}",
-                            value::type_of(&self.read_constant(idx))
-                        );
-                    }
-                }
-                (bytecode::Op::GetLocal(idx), _) => {
-                    let slots_offset = self.frame().slots_offset;
-                    let val = self.stack[slots_offset + idx - 1].clone();
-                    self.stack.push(val);
-                }
-                (bytecode::Op::SetLocal(idx), _) => {
-                    let val = self.peek();
-                    let slots_offset = self.frame().slots_offset;
-                    self.stack[slots_offset + idx - 1] = val.clone();
-                }
-                (bytecode::Op::GetUpval(idx), _) => {
-                    let upvalue = self.frame().closure.upvalues[idx].clone();
-                    let val = match &*upvalue.borrow() {
-                        value::Upvalue::Closed(value) => value.clone(),
-                        value::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
-                    };
-                    self.stack.push(val);
-                }
-                (bytecode::Op::SetUpval(idx), _) => {
-                    let new_value = self.peek().clone();
-                    let upvalue = self.frame().closure.upvalues[idx].clone();
-                    match &mut *upvalue.borrow_mut() {
-                        value::Upvalue::Closed(value) => *value = new_value,
-                        value::Upvalue::Open(stack_index) => self.stack[*stack_index] = new_value,
-                    };
-                }
-                (bytecode::Op::JumpIfFalse(offset), _) => {
-                    if self.is_falsey(&self.peek()) {
-                        self.frame_mut().ip += offset;
-                    }
-                }
-                (bytecode::Op::Jump(offset), _) => {
-                    self.frame_mut().ip += offset;
-                }
-                (bytecode::Op::Loop(offset), _) => {
-                    self.frame_mut().ip -= offset;
-                }
-                (bytecode::Op::Call(arg_count), _) => {
-                    self.call_value(self.peek_by(arg_count.into()).clone(), arg_count)?;
-                }
-                (bytecode::Op::CloseUpvalue, _) => {
-                    let idx = self.stack.len() - 1;
-                    self.close_upvalues(idx);
-                    self.stack.pop();
-                }
-                (bytecode::Op::Class(idx), _) => {
-                    if let value::Value::String(name_id) = self.read_constant(idx) {
-                        let name = self.get_str(name_id).clone();
-                        self.stack.push(value::Value::Class(self.heap.manage_class(
-                            value::Class {
-                                name,
-                                methods: HashMap::new(),
-                            },
-                        )));
-                    } else {
-                        panic!(
-                            "expected string when defining class, found {:?}",
-                            value::type_of(&self.read_constant(idx))
-                        );
-                    }
-                }
-                (bytecode::Op::SetProperty(idx), _) => {
-                    if let value::Value::String(attr_id) = self.read_constant(idx) {
-                        let val = self.pop_stack();
-                        let instance = self.pop_stack();
-                        self.setattr(instance, val.clone(), attr_id)?;
-                        self.stack.push(val);
-                    } else {
-                        panic!(
-                            "expected string when setting property, found {:?}",
-                            value::type_of(&self.read_constant(idx))
-                        )
-                    }
-                }
-                (bytecode::Op::GetProperty(idx), _) => {
-                    if let value::Value::String(attr_id) = self.read_constant(idx) {
-                        let maybe_instance = self.peek().clone();
-
-                        let (class_id, instance_id) = match maybe_instance {
-                            value::Value::Instance(instance_id) => {
-                                let instance = self.heap.get_instance(instance_id).clone();
-                                (instance.class_id, instance_id)
-                            }
-                            _ => panic!(),
-                        };
-
-                        let class = self.heap.get_class(class_id).clone();
-                        if let Some(attr) = self.getattr(maybe_instance.clone(), attr_id)? {
-                            self.pop_stack();
-                            self.stack.push(attr);
-                        } else if !self.bind_method(instance_id, class.clone(), attr_id)? {
-                            return Err(InterpreterError::Runtime(format!(
-                                "value {} has no attribute {}.",
-                                self.format_val(&maybe_instance),
-                                self.get_str(attr_id)
-                            )));
-                        }
-                    } else {
-                        panic!(
-                            "expected string when setting property, found {:?}",
-                            value::type_of(&self.read_constant(idx))
-                        )
-                    }
-                }
-                (bytecode::Op::Method(idx), _) => {
-                    if let value::Value::String(method_name_id) = self.read_constant(idx) {
-                        let method_name = self.heap.get_str(method_name_id).clone();
-                        let maybe_method = self.peek_by(0).clone();
-                        let maybe_method_id = self.heap.extract_id(&maybe_method).unwrap();
-                        let maybe_class = self.peek_by(1).clone();
-                        match maybe_class {
-                            value::Value::Class(class_id) => {
-                                let class = self.heap.get_class_mut(class_id);
-                                class.methods.insert(method_name.clone(), maybe_method_id);
-                                self.pop_stack();
-                            }
-                            _ => {
-                                panic!(
-                                    "should only define methods on a class! tried on {:?}",
-                                    self.format_val(&maybe_class)
-                                );
-                            }
-                        }
-                    } else {
-                        panic!("expected string when defining a method.");
-                    }
-                }
-                (bytecode::Op::Invoke(method_name, arg_count), _) => {
-                    self.invoke(&method_name, arg_count)?;
-                }
-                (bytecode::Op::Inherit, lineno) => {
-                    {
-                        let (superclass_id, subclass_id) = match (self.peek_by(1), self.peek()) {
-                            (
-                                value::Value::Class(superclass_id),
-                                value::Value::Class(subclass_id),
-                            ) => (*superclass_id, *subclass_id),
-                            (not_a_class, value::Value::Class(_)) => {
-                                return Err(InterpreterError::Runtime(format!(
-                                    "Superclass must be a class, found {:?} at lineno={:?}",
-                                    value::type_of(&not_a_class),
-                                    lineno
-                                )));
-                            }
-                            _ => panic!("expected classes when interpreting Inherit!"),
-                        };
-
-                        let superclass_methods = self.get_class(superclass_id).methods.clone();
-                        let subclass = self.get_class_mut(subclass_id);
-
-                        subclass.methods.extend(superclass_methods);
-                    }
-                    self.pop_stack(); //subclass
-                }
-                (bytecode::Op::GetSuper(idx), _) => {
-                    let method_id = if let value::Value::String(method_id) = self.read_constant(idx)
-                    {
-                        method_id
-                    } else {
-                        panic!();
-                    };
-
-                    let maybe_superclass = self.pop_stack();
-                    let superclass = match maybe_superclass {
-                        value::Value::Class(class_id) => self.get_class(class_id).clone(),
-                        _ => panic!(),
-                    };
-
-                    let maybe_instance = self.peek();
-                    let instance_id = match maybe_instance {
-                        value::Value::Instance(instance_id) => *instance_id,
-                        _ => panic!(),
-                    };
-
-                    if !self.bind_method(instance_id, superclass, method_id)? {
-                        return Err(InterpreterError::Runtime(format!(
-                            "superclass {} has no attribute {}.",
-                            self.format_val(&maybe_superclass),
-                            self.get_str(method_id)
-                        )));
-                    }
-                }
-                (bytecode::Op::SuperInvoke(method_name, arg_count), _) => {
-                    let maybe_superclass = self.pop_stack();
-                    let superclass_id = match maybe_superclass {
-                        value::Value::Class(class_id) => class_id,
-                        _ => panic!("{}", self.format_val(&maybe_superclass)),
-                    };
-                    self.invoke_from_class(superclass_id, &method_name, arg_count)?;
+            }
+            (bytecode::Op::Print, _) => {
+                let to_print = self.peek().clone();
+                self.print_val(&to_print);
+            }
+            (bytecode::Op::Pop, _) => {
+                self.pop_stack();
+            }
+            (bytecode::Op::DefineGlobal(idx), _) => {
+                if let value::Value::String(name_id) = self.read_constant(idx) {
+                    let val = self.pop_stack();
+                    self.globals.insert(self.get_str(name_id).clone(), val);
+                } else {
+                    panic!(
+                        "expected string when defining global, found {:?}",
+                        value::type_of(&self.read_constant(idx))
+                    );
                 }
             }
+            (bytecode::Op::GetGlobal(idx), lineno) => {
+                if let value::Value::String(name_id) = self.read_constant(idx) {
+                    match self.globals.get(self.get_str(name_id)) {
+                        Some(val) => {
+                            self.stack.push(val.clone());
+                        }
+                        None => {
+                            return Err(InterpreterError::Runtime(format!(
+                                "Undefined variable '{}' at line {}.",
+                                self.get_str(name_id),
+                                lineno.value
+                            )));
+                        }
+                    }
+                } else {
+                    panic!(
+                        "expected string when defining global, found {:?}",
+                        value::type_of(&self.read_constant(idx))
+                    );
+                }
+            }
+            (bytecode::Op::SetGlobal(idx), lineno) => {
+                if let value::Value::String(name_id) = self.read_constant(idx) {
+                    let name_str = self.get_str(name_id).clone();
+                    if self.globals.contains_key(&name_str) {
+                        let val = self.peek().clone();
+                        self.globals.insert(name_str, val);
+                    } else {
+                        return Err(InterpreterError::Runtime(format!(
+                            "Use of undefined variable {} in setitem expression at line {}.",
+                            name_str, lineno.value
+                        )));
+                    }
+                } else {
+                    panic!(
+                        "expected string when setting global, found {:?}",
+                        value::type_of(&self.read_constant(idx))
+                    );
+                }
+            }
+            (bytecode::Op::GetLocal(idx), _) => {
+                let slots_offset = self.frame().slots_offset;
+                let val = self.stack[slots_offset + idx - 1].clone();
+                self.stack.push(val);
+            }
+            (bytecode::Op::SetLocal(idx), _) => {
+                let val = self.peek();
+                let slots_offset = self.frame().slots_offset;
+                self.stack[slots_offset + idx - 1] = val.clone();
+            }
+            (bytecode::Op::GetUpval(idx), _) => {
+                let upvalue = self.frame().closure.upvalues[idx].clone();
+                let val = match &*upvalue.borrow() {
+                    value::Upvalue::Closed(value) => value.clone(),
+                    value::Upvalue::Open(stack_index) => self.stack[*stack_index].clone(),
+                };
+                self.stack.push(val);
+            }
+            (bytecode::Op::SetUpval(idx), _) => {
+                let new_value = self.peek().clone();
+                let upvalue = self.frame().closure.upvalues[idx].clone();
+                match &mut *upvalue.borrow_mut() {
+                    value::Upvalue::Closed(value) => *value = new_value,
+                    value::Upvalue::Open(stack_index) => self.stack[*stack_index] = new_value,
+                };
+            }
+            (bytecode::Op::JumpIfFalse(offset), _) => {
+                if self.is_falsey(&self.peek()) {
+                    self.frame_mut().ip += offset;
+                }
+            }
+            (bytecode::Op::Jump(offset), _) => {
+                self.frame_mut().ip += offset;
+            }
+            (bytecode::Op::Loop(offset), _) => {
+                self.frame_mut().ip -= offset;
+            }
+            (bytecode::Op::Call(arg_count), _) => {
+                self.call_value(self.peek_by(arg_count.into()).clone(), arg_count)?;
+            }
+            (bytecode::Op::CloseUpvalue, _) => {
+                let idx = self.stack.len() - 1;
+                self.close_upvalues(idx);
+                self.stack.pop();
+            }
+            (bytecode::Op::Class(idx), _) => {
+                if let value::Value::String(name_id) = self.read_constant(idx) {
+                    let name = self.get_str(name_id).clone();
+                    self.stack
+                        .push(value::Value::Class(self.heap.manage_class(value::Class {
+                            name,
+                            methods: HashMap::new(),
+                        })));
+                } else {
+                    panic!(
+                        "expected string when defining class, found {:?}",
+                        value::type_of(&self.read_constant(idx))
+                    );
+                }
+            }
+            (bytecode::Op::SetProperty(idx), _) => {
+                if let value::Value::String(attr_id) = self.read_constant(idx) {
+                    let val = self.pop_stack();
+                    let instance = self.pop_stack();
+                    self.setattr(instance, val.clone(), attr_id)?;
+                    self.stack.push(val);
+                } else {
+                    panic!(
+                        "expected string when setting property, found {:?}",
+                        value::type_of(&self.read_constant(idx))
+                    )
+                }
+            }
+            (bytecode::Op::GetProperty(idx), _) => {
+                if let value::Value::String(attr_id) = self.read_constant(idx) {
+                    let maybe_instance = self.peek().clone();
+
+                    let (class_id, instance_id) = match maybe_instance {
+                        value::Value::Instance(instance_id) => {
+                            let instance = self.heap.get_instance(instance_id).clone();
+                            (instance.class_id, instance_id)
+                        }
+                        _ => panic!(),
+                    };
+
+                    let class = self.heap.get_class(class_id).clone();
+                    if let Some(attr) = self.getattr(maybe_instance.clone(), attr_id)? {
+                        self.pop_stack();
+                        self.stack.push(attr);
+                    } else if !self.bind_method(instance_id, class.clone(), attr_id)? {
+                        return Err(InterpreterError::Runtime(format!(
+                            "value {} has no attribute {}.",
+                            self.format_val(&maybe_instance),
+                            self.get_str(attr_id)
+                        )));
+                    }
+                } else {
+                    panic!(
+                        "expected string when setting property, found {:?}",
+                        value::type_of(&self.read_constant(idx))
+                    )
+                }
+            }
+            (bytecode::Op::Method(idx), _) => {
+                if let value::Value::String(method_name_id) = self.read_constant(idx) {
+                    let method_name = self.heap.get_str(method_name_id).clone();
+                    let maybe_method = self.peek_by(0).clone();
+                    let maybe_method_id = self.heap.extract_id(&maybe_method).unwrap();
+                    let maybe_class = self.peek_by(1).clone();
+                    match maybe_class {
+                        value::Value::Class(class_id) => {
+                            let class = self.heap.get_class_mut(class_id);
+                            class.methods.insert(method_name.clone(), maybe_method_id);
+                            self.pop_stack();
+                        }
+                        _ => {
+                            panic!(
+                                "should only define methods on a class! tried on {:?}",
+                                self.format_val(&maybe_class)
+                            );
+                        }
+                    }
+                } else {
+                    panic!("expected string when defining a method.");
+                }
+            }
+            (bytecode::Op::Invoke(method_name, arg_count), _) => {
+                self.invoke(&method_name, arg_count)?;
+            }
+            (bytecode::Op::Inherit, lineno) => {
+                {
+                    let (superclass_id, subclass_id) = match (self.peek_by(1), self.peek()) {
+                        (value::Value::Class(superclass_id), value::Value::Class(subclass_id)) => {
+                            (*superclass_id, *subclass_id)
+                        }
+                        (not_a_class, value::Value::Class(_)) => {
+                            return Err(InterpreterError::Runtime(format!(
+                                "Superclass must be a class, found {:?} at lineno={:?}",
+                                value::type_of(&not_a_class),
+                                lineno
+                            )));
+                        }
+                        _ => panic!("expected classes when interpreting Inherit!"),
+                    };
+
+                    let superclass_methods = self.get_class(superclass_id).methods.clone();
+                    let subclass = self.get_class_mut(subclass_id);
+
+                    subclass.methods.extend(superclass_methods);
+                }
+                self.pop_stack(); //subclass
+            }
+            (bytecode::Op::GetSuper(idx), _) => {
+                let method_id = if let value::Value::String(method_id) = self.read_constant(idx) {
+                    method_id
+                } else {
+                    panic!();
+                };
+
+                let maybe_superclass = self.pop_stack();
+                let superclass = match maybe_superclass {
+                    value::Value::Class(class_id) => self.get_class(class_id).clone(),
+                    _ => panic!(),
+                };
+
+                let maybe_instance = self.peek();
+                let instance_id = match maybe_instance {
+                    value::Value::Instance(instance_id) => *instance_id,
+                    _ => panic!(),
+                };
+
+                if !self.bind_method(instance_id, superclass, method_id)? {
+                    return Err(InterpreterError::Runtime(format!(
+                        "superclass {} has no attribute {}.",
+                        self.format_val(&maybe_superclass),
+                        self.get_str(method_id)
+                    )));
+                }
+            }
+            (bytecode::Op::SuperInvoke(method_name, arg_count), _) => {
+                let maybe_superclass = self.pop_stack();
+                let superclass_id = match maybe_superclass {
+                    value::Value::Class(class_id) => class_id,
+                    _ => panic!("{}", self.format_val(&maybe_superclass)),
+                };
+                self.invoke_from_class(superclass_id, &method_name, arg_count)?;
+            }
         }
+        Ok(())
     }
 
     fn invoke(&mut self, method_name: &str, arg_count: u8) -> Result<(), InterpreterError> {
@@ -731,6 +738,15 @@ impl Interpreter {
 
         let class_id = self.get_instance(receiver_id).class_id;
         self.invoke_from_class(class_id, &method_name, arg_count)
+    }
+
+    fn frame_mut(&mut self) -> &mut CallFrame {
+        let frames_len = self.frames.len();
+        &mut self.frames[frames_len - 1]
+    }
+
+    fn frame(&self) -> &CallFrame {
+        &self.frames[self.frames.len() - 1]
     }
 
     fn invoke_from_class(
