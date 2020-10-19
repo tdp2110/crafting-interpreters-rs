@@ -3,6 +3,7 @@ extern crate clap;
 use clap::{App, Arg};
 
 use std::fs;
+use std::io::{self, BufRead, Write};
 
 mod builtins;
 mod bytecode;
@@ -19,7 +20,47 @@ static INPUT_STR: &str = "INPUT";
 static SHOW_TOKENS_STR: &str = "tokens";
 static SHOW_AST_STR: &str = "ast";
 static DISASSEMBLE_STR: &str = "disassemble";
+static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
+
+fn debug(func: bytecode::Function, input: String) {
+    let lines: Vec<_> = input.lines().collect();
+    let mut interpreter = bytecode_interpreter::Interpreter::default();
+    interpreter.prepare_interpret(func);
+    loop {
+        if interpreter.is_done() {
+            println!("loxdb => done");
+        }
+        print!("loxdb => ");
+        io::stdout().flush().unwrap();
+        let mut line = String::new();
+        let stdin = io::stdin();
+        stdin
+            .lock()
+            .read_line(&mut line)
+            .expect("Could not read line");
+        let line = line.trim();
+        match line {
+            "dis" => {
+                let func = &interpreter.frame().closure.function;
+                bytecode_interpreter::disassemble_chunk(&func.chunk, &func.name)
+            }
+            "op" => {
+                let frame = interpreter.frame();
+                println!("{:?}", frame.closure.function.chunk.code[frame.ip].0);
+            }
+            "step" | "s" => match interpreter.step() {
+                Ok(()) => {}
+                Err(err) => println!("{}", err),
+            },
+            "quit" | "q" => {
+                break;
+            }
+            "list" => println!("{}", lines[interpreter.line]),
+            _ => println!("unknown command"),
+        }
+    }
+}
 
 fn main() {
     let matches = App::new("loxi")
@@ -49,6 +90,12 @@ fn main() {
                 .long("--disassemble")
                 .takes_value(false)
                 .help("show the bytecode"),
+        )
+        .arg(
+            Arg::with_name(DEBUG_STR)
+                .long("--debug")
+                .takes_value(false)
+                .help("run in the debugger"),
         )
         .arg(
             Arg::with_name(TREEWALK_STR)
@@ -108,12 +155,16 @@ fn main() {
                     }
                 }
 
-                let func_or_err = compiler::Compiler::compile(input);
+                let func_or_err = compiler::Compiler::compile(input.clone());
 
                 match func_or_err {
                     Ok(func) => {
                         if matches.is_present(DISASSEMBLE_STR) {
                             bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
+                        }
+                        if matches.is_present(DEBUG_STR) {
+                            debug(func, input);
+                            std::process::exit(0);
                         }
                         let res = bytecode_interpreter::Interpreter::default().interpret(func);
                         match res {

@@ -117,7 +117,7 @@ pub struct Interpreter {
     upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
     heap: gc::Heap,
     gray_stack: Vec<gc::HeapId>,
-    line: usize,
+    pub line: usize,
 }
 
 impl Default for Interpreter {
@@ -130,7 +130,7 @@ impl Default for Interpreter {
             upvalues: Default::default(),
             heap: Default::default(),
             gray_stack: Default::default(),
-            line: 1,
+            line: 0,
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
@@ -186,10 +186,10 @@ impl fmt::Display for InterpreterError {
 }
 
 #[derive(Default)]
-struct CallFrame {
-    closure: value::Closure,
-    ip: usize,
-    slots_offset: usize,
+pub struct CallFrame {
+    pub closure: value::Closure,
+    pub ip: usize,
+    pub slots_offset: usize,
 }
 
 impl CallFrame {
@@ -745,7 +745,7 @@ impl Interpreter {
         &mut self.frames[frames_len - 1]
     }
 
-    fn frame(&self) -> &CallFrame {
+    pub fn frame(&self) -> &CallFrame {
         &self.frames[self.frames.len() - 1]
     }
 
