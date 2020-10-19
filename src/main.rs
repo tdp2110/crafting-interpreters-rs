@@ -18,8 +18,8 @@ mod value;
 static INPUT_STR: &str = "INPUT";
 static SHOW_TOKENS_STR: &str = "tokens";
 static SHOW_AST_STR: &str = "ast";
-static SHOW_BYTECODE_STR: &str = "show-bytecode";
-static BYTECODE_STR: &str = "bytecode";
+static DISASSEMBLE_STR: &str = "disassemble";
+static TREEWALK_STR: &str = "treewalk";
 
 fn main() {
     let matches = App::new("loxi")
@@ -45,16 +45,16 @@ fn main() {
                 .help("show the AST"),
         )
         .arg(
-            Arg::with_name(SHOW_BYTECODE_STR)
-                .long("--show-bytecode")
+            Arg::with_name(DISASSEMBLE_STR)
+                .long("--disassemble")
                 .takes_value(false)
                 .help("show the bytecode"),
         )
         .arg(
-            Arg::with_name(BYTECODE_STR)
-                .long("--bytecode")
+            Arg::with_name(TREEWALK_STR)
+                .long("--treewalk")
                 .takes_value(false)
-                .help("run the bytecode interpreter"),
+                .help("run the tree-walk interpreter instead of the bytecode interpreter"),
         )
         .get_matches();
 
@@ -63,69 +63,72 @@ fn main() {
 
         match maybe_input {
             Ok(input) => {
-                if matches.is_present(SHOW_BYTECODE_STR) || matches.is_present(BYTECODE_STR) {
-                    let func_or_err = compiler::Compiler::compile(input);
-
-                    match func_or_err {
-                        Ok(func) => {
-                            if matches.is_present(SHOW_BYTECODE_STR) {
-                                bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
+                if matches.is_present(SHOW_TOKENS_STR)
+                    || matches.is_present(SHOW_AST_STR)
+                    || matches.is_present(TREEWALK_STR)
+                {
+                    match scanner::scan_tokens(input.clone()) {
+                        Ok(tokens) => {
+                            if matches.is_present(SHOW_TOKENS_STR) {
+                                println!("tokens: {:#?}", tokens);
+                                std::process::exit(0);
                             }
-                            let res = bytecode_interpreter::Interpreter::default().interpret(func);
-                            match res {
-                                Ok(()) => {
-                                    std::process::exit(0);
+
+                            let stmts_maybe = parser::parse(tokens);
+
+                            match stmts_maybe {
+                                Ok(stmts) => {
+                                    if matches.is_present(SHOW_AST_STR) {
+                                        println!("AST: {:#?}", stmts);
+                                        std::process::exit(0);
+                                    }
+
+                                    let interpret_result = treewalk_interpreter::interpret(&stmts);
+
+                                    match interpret_result {
+                                        Ok(output) => {
+                                            println!("{}", output);
+                                        }
+                                        Err(err) => {
+                                            println!("Treewalk Interpreter Error: {}", err);
+                                            std::process::exit(-1);
+                                        }
+                                    }
                                 }
                                 Err(err) => {
-                                    println!("{:?}", err);
-                                    std::process::exit(1);
+                                    println!("parse error: {}", err);
+                                    std::process::exit(-1)
                                 }
                             }
                         }
                         Err(err) => {
-                            println!("{}", err);
-                            std::process::exit(1);
+                            println!("lexical error: {}", err);
+                            std::process::exit(-1);
                         }
                     }
                 }
 
-                match scanner::scan_tokens(input) {
-                    Ok(tokens) => {
-                        if matches.is_present(SHOW_TOKENS_STR) {
-                            println!("tokens: {:#?}", tokens);
-                            std::process::exit(0);
+                let func_or_err = compiler::Compiler::compile(input);
+
+                match func_or_err {
+                    Ok(func) => {
+                        if matches.is_present(DISASSEMBLE_STR) {
+                            bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
                         }
-
-                        let stmts_maybe = parser::parse(tokens);
-
-                        match stmts_maybe {
-                            Ok(stmts) => {
-                                if matches.is_present(SHOW_AST_STR) {
-                                    println!("AST: {:#?}", stmts);
-                                    std::process::exit(0);
-                                }
-
-                                let interpret_result = treewalk_interpreter::interpret(&stmts);
-
-                                match interpret_result {
-                                    Ok(output) => {
-                                        println!("{}", output);
-                                    }
-                                    Err(err) => {
-                                        println!("Treewalk Interpreter Error: {}", err);
-                                        std::process::exit(-1);
-                                    }
-                                }
+                        let res = bytecode_interpreter::Interpreter::default().interpret(func);
+                        match res {
+                            Ok(()) => {
+                                std::process::exit(0);
                             }
                             Err(err) => {
-                                println!("parse error: {}", err);
-                                std::process::exit(-1)
+                                println!("{:?}", err);
+                                std::process::exit(1);
                             }
                         }
                     }
                     Err(err) => {
-                        println!("lexical error: {}", err);
-                        std::process::exit(-1);
+                        println!("{}", err);
+                        std::process::exit(1);
                     }
                 }
             }
