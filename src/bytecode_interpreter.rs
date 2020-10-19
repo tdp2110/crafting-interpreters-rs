@@ -14,7 +14,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
 
     println!("------------ constants -----------");
     for (idx, constant) in chunk.constants.iter().enumerate() {
-        println!("{:<4} {:?}", idx, constant);
+        println!("{:<4} {}", idx, constant);
     }
 
     println!("\n------------ code -----------------");
@@ -22,7 +22,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
         let formatted_op = match op {
             bytecode::Op::Return => "OP_RETURN".to_string(),
             bytecode::Op::Constant(const_idx) => format!(
-                "OP_CONSTANT {:?} (idx={})",
+                "OP_CONSTANT {} (idx={})",
                 chunk.constants[*const_idx], *const_idx
             ),
             bytecode::Op::Nil => "OP_NIL".to_string(),
@@ -59,10 +59,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             bytecode::Op::Jump(offset) => format!("OP_JUMP {}", *offset),
             bytecode::Op::Loop(offset) => format!("OP_LOOP {}", *offset),
             bytecode::Op::Call(arg_count) => format!("OP_CALL {}", *arg_count),
-            bytecode::Op::Closure(idx, upvals) => format!(
-                "OP_CLOSURE {:?} (idx={}, upvals={:?})",
-                chunk.constants[*idx], *idx, upvals
-            ),
+            bytecode::Op::Closure(idx, _) => format!("OP_CLOSURE {}", chunk.constants[*idx],),
             bytecode::Op::CloseUpvalue => "OP_CLOSE_UPVALUE".to_string(),
             bytecode::Op::Class(idx) => format!("OP_CLASS {}", idx),
             bytecode::Op::SetProperty(idx) => format!("OP_SET_PROPERTY {}", idx),
@@ -79,7 +76,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
         };
 
         println!(
-            "{0: <04}   {1: <30} {2: <30}",
+            "{0: <04}   {1: <50} {2: <50}",
             idx,
             formatted_op,
             format!("line {}", lineno.value)

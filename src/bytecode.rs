@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use std::f64;
+use std::fmt;
 
 #[derive(Default, Copy, Clone, Debug)]
 pub struct Lineno {
@@ -78,6 +79,24 @@ pub enum Constant {
     Number(f64),
     String(String),
     Function(Closure),
+}
+
+impl fmt::Display for Constant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Constant::Number(n) => write!(f, "{}", n),
+            Constant::String(s) => write!(f, "{}", s),
+            Constant::Function(Closure {
+                function:
+                    Function {
+                        arity: _,
+                        chunk: _,
+                        name,
+                    },
+                upvalues: _,
+            }) => write!(f, "<fn {}>", name),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
