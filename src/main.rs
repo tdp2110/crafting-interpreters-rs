@@ -85,8 +85,8 @@ impl Debugger {
         match command {
             DebugCommand::Dis => {
                 let func = &self.interpreter.frame().closure.function;
-                println!("ip = {}", self.interpreter.frame().ip);
-                bytecode_interpreter::disassemble_chunk(&func.chunk, &func.name)
+                let dis_output = bytecode_interpreter::disassemble_chunk(&func.chunk, &func.name);
+                println!("{}", dis_output);
             }
             DebugCommand::Op => {
                 let frame = self.interpreter.frame();
@@ -131,12 +131,13 @@ impl Debugger {
         false
     }
 
-    fn list(&mut self) {
+    fn list(&self) {
+        let maxdist = 4;
+
         self.lines
             .iter()
             .enumerate()
             .filter(|(idx, _)| {
-                let maxdist = 4;
                 if self.interpreter.line < *idx {
                     *idx - self.interpreter.line < maxdist
                 } else {
@@ -150,6 +151,26 @@ impl Debugger {
                     "   "
                 };
                 println!("{} {:<4} {}", prefix, idx, line)
+            });
+
+        println!();
+
+        let ip = self.interpreter.frame().ip;
+        let chunk = &self.interpreter.frame().closure.function.chunk;
+        let dissed_code = bytecode_interpreter::disassemble_code(&chunk);
+        dissed_code
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| {
+                if ip < *idx {
+                    *idx - ip < maxdist
+                } else {
+                    ip - *idx < maxdist
+                }
+            })
+            .for_each(|(idx, line)| {
+                let prefix = if idx == ip { "==>" } else { "   " };
+                println!("{} {}", prefix, line);
             });
     }
 

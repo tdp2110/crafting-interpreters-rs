@@ -8,17 +8,9 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
-    if !name.is_empty() {
-        println!("============ {} ============", name);
-    }
+pub fn disassemble_code(chunk: &bytecode::Chunk) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
 
-    println!("------------ constants -----------");
-    for (idx, constant) in chunk.constants.iter().enumerate() {
-        println!("{:<4} {}", idx, constant);
-    }
-
-    println!("\n------------ code -----------------");
     for (idx, (op, lineno)) in chunk.code.iter().enumerate() {
         let formatted_op = match op {
             bytecode::Op::Return => "OP_RETURN".to_string(),
@@ -76,13 +68,35 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) {
             }
         };
 
-        println!(
+        lines.push(format!(
             "{0: <04}   {1: <50} {2: <50}",
             idx,
             formatted_op,
             format!("line {}", lineno.value)
-        );
+        ));
     }
+    lines
+}
+
+pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) -> String {
+    let mut lines: Vec<String> = Vec::new();
+
+    if !name.is_empty() {
+        lines.push(format!("============ {} ============", name));
+    }
+
+    lines.push(format!("------------ constants -----------"));
+    for (idx, constant) in chunk.constants.iter().enumerate() {
+        lines.push(format!("{:<4} {}", idx, constant));
+    }
+
+    lines.push(format!("\n------------ code -----------------"));
+
+    for code_line in disassemble_code(&chunk) {
+        lines.push(code_line)
+    }
+
+    lines.join("\n")
 }
 
 fn dis_builtin(heap: &gc::Heap, args: Vec<value::Value>) -> Result<value::Value, String> {
