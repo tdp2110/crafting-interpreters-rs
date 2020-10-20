@@ -56,8 +56,23 @@ fn debug(func: bytecode::Function, input: String) {
             "quit" | "q" => {
                 break;
             }
+            "stack" => {
+                for val in interpreter.stack.iter().rev() {
+                    println!("{}", interpreter.format_val(&val));
+                }
+            }
+            "globals" => {
+                for (name, val) in &interpreter.globals {
+                    println!("{}: {}", name, interpreter.format_val(&val));
+                }
+            }
+            "upvals" => {
+                for val in &interpreter.upvalues {
+                    println!("{}", interpreter.format_upval(&*val.borrow()));
+                }
+            }
             "list" => println!("{}", lines[interpreter.line]),
-            _ => println!("unknown command"),
+            _ => println!("\nunknown command"),
         }
     }
 }

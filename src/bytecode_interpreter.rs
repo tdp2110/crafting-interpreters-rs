@@ -111,10 +111,10 @@ enum Binop {
 
 pub struct Interpreter {
     frames: Vec<CallFrame>,
-    stack: Vec<value::Value>,
+    pub stack: Vec<value::Value>,
     output: Vec<String>,
-    globals: HashMap<String, value::Value>,
-    upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
+    pub globals: HashMap<String, value::Value>,
+    pub upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
     heap: gc::Heap,
     gray_stack: Vec<gc::HeapId>,
     pub line: usize,
@@ -226,6 +226,13 @@ impl Interpreter {
     pub fn interpret(&mut self, func: bytecode::Function) -> Result<(), InterpreterError> {
         self.prepare_interpret(func);
         self.run()
+    }
+
+    pub fn format_upval(&self, val: &value::Upvalue) -> String {
+        match val {
+            value::Upvalue::Open(idx) => format!("Open({})", idx),
+            value::Upvalue::Closed(val) => format!("Closed({})", self.format_val(&val)),
+        }
     }
 
     pub fn format_val(&self, val: &value::Value) -> String {
