@@ -23,56 +23,148 @@ static DISASSEMBLE_STR: &str = "disassemble";
 static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
 
-fn debug(func: bytecode::Function, input: String) {
-    let lines: Vec<_> = input.lines().collect();
-    let mut interpreter = bytecode_interpreter::Interpreter::default();
-    interpreter.prepare_interpret(func);
-    loop {
-        if interpreter.is_done() {
-            println!("loxdb => done");
+struct Debugger {
+    interpreter: bytecode_interpreter::Interpreter,
+    lines: Vec<String>,
+    last_command: Option<DebugCommand>,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum DebugCommand {
+    Dis,
+    Op,
+    Step,
+    Quit,
+    Stack,
+    Globals,
+    Upvals,
+    List,
+    RepeatOrNil,
+    Unknown,
+}
+
+impl Debugger {
+    fn init(func: bytecode::Function, input: String) -> Debugger {
+        let lines: Vec<String> = input.lines().map(|s| s.to_string()).collect();
+        let mut interpreter = bytecode_interpreter::Interpreter::default();
+        interpreter.prepare_interpret(func);
+        Debugger {
+            interpreter,
+            lines,
+            last_command: None,
         }
-        print!("loxdb => ");
-        io::stdout().flush().unwrap();
-        let mut line = String::new();
-        let stdin = io::stdin();
-        stdin
-            .lock()
-            .read_line(&mut line)
-            .expect("Could not read line");
-        let line = line.trim();
-        match line {
-            "dis" => {
-                let func = &interpreter.frame().closure.function;
-                bytecode_interpreter::disassemble_chunk(&func.chunk, &func.name)
+    }
+
+    fn debug(&mut self) {
+        loop {
+            if self.interpreter.is_done() {
+                println!("(loxdb) done");
             }
-            "op" => {
-                let frame = interpreter.frame();
-                println!("{:?}", frame.closure.function.chunk.code[frame.ip].0);
-            }
-            "step" | "s" => match interpreter.step() {
-                Ok(()) => {}
-                Err(err) => println!("{}", err),
-            },
-            "quit" | "q" => {
+            print!("(loxdb) ");
+            io::stdout().flush().unwrap();
+            let mut line = String::new();
+            let stdin = io::stdin();
+            stdin
+                .lock()
+                .read_line(&mut line)
+                .expect("Could not read line");
+            let line = line.trim();
+
+            let command = Debugger::read_command(&line);
+            if self.execute_command(command) {
                 break;
             }
-            "stack" => {
-                for val in interpreter.stack.iter().rev() {
-                    println!("{}", interpreter.format_val(&val));
+            if command != DebugCommand::RepeatOrNil {
+                self.last_command = Some(command);
+            }
+        }
+    }
+
+    // returns true if should break, false otherwise
+    fn execute_command(&mut self, command: DebugCommand) -> bool {
+        match command {
+            DebugCommand::Dis => {
+                let func = &self.interpreter.frame().closure.function;
+                println!("ip = {}", self.interpreter.frame().ip);
+                bytecode_interpreter::disassemble_chunk(&func.chunk, &func.name)
+            }
+            DebugCommand::Op => {
+                let frame = self.interpreter.frame();
+                println!("{:?}", frame.closure.function.chunk.code[frame.ip].0);
+            }
+            DebugCommand::Step => match self.interpreter.step() {
+                Ok(()) => self.list(),
+                Err(err) => println!("{}", err),
+            },
+            DebugCommand::Quit => {
+                return true;
+            }
+            DebugCommand::Stack => {
+                for val in self.interpreter.stack.iter().rev() {
+                    println!("{}", self.interpreter.format_val(&val));
                 }
             }
-            "globals" => {
-                for (name, val) in &interpreter.globals {
-                    println!("{}: {}", name, interpreter.format_val(&val));
+            DebugCommand::Globals => {
+                if self.interpreter.globals.is_empty() {
+                    println!("<empty globals>");
+                }
+                for (name, val) in &self.interpreter.globals {
+                    println!("{}: {}", name, self.interpreter.format_val(&val));
                 }
             }
-            "upvals" => {
-                for val in &interpreter.upvalues {
-                    println!("{}", interpreter.format_upval(&*val.borrow()));
+            DebugCommand::Upvals => {
+                if self.interpreter.upvalues.is_empty() {
+                    println!("<empty upvals>")
+                }
+                for val in &self.interpreter.upvalues {
+                    println!("{}", self.interpreter.format_upval(&*val.borrow()));
                 }
             }
-            "list" => println!("{}", lines[interpreter.line]),
-            _ => println!("\nunknown command"),
+            DebugCommand::List => self.list(),
+            DebugCommand::RepeatOrNil => {
+                if let Some(last_command) = self.last_command {
+                    self.execute_command(last_command);
+                }
+            }
+            DebugCommand::Unknown => println!("\nunknown command"),
+        }
+        false
+    }
+
+    fn list(&mut self) {
+        self.lines
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| {
+                let maxdist = 4;
+                if self.interpreter.line < *idx {
+                    *idx - self.interpreter.line < maxdist
+                } else {
+                    self.interpreter.line - *idx < maxdist
+                }
+            })
+            .for_each(|(idx, line)| {
+                let prefix = if idx == self.interpreter.line {
+                    "==>"
+                } else {
+                    "   "
+                };
+                println!("{} {:<4} {}", prefix, idx, line)
+            });
+    }
+
+    fn read_command(input: &str) -> DebugCommand {
+        match input {
+            "dis" => DebugCommand::Dis,
+            "op" => DebugCommand::Op,
+            "step" | "s" => DebugCommand::Step,
+            "quit" | "q" => DebugCommand::Quit,
+            "stack" => DebugCommand::Stack,
+            "globals" => DebugCommand::Globals,
+            "upvals" => DebugCommand::Upvals,
+            "list" => DebugCommand::List,
+            "" => DebugCommand::RepeatOrNil,
+            _ => DebugCommand::Unknown,
         }
     }
 }
@@ -178,7 +270,7 @@ fn main() {
                             bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
                         }
                         if matches.is_present(DEBUG_STR) {
-                            debug(func, input);
+                            Debugger::init(func, input).debug();
                             std::process::exit(0);
                         }
                         let res = bytecode_interpreter::Interpreter::default().interpret(func);
