@@ -27,6 +27,7 @@ struct Debugger {
     interpreter: bytecode_interpreter::Interpreter,
     lines: Vec<String>,
     last_command: Option<DebugCommand>,
+    paused: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -40,6 +41,7 @@ enum DebugCommand {
     Upvals,
     List,
     RepeatOrNil,
+    Go,
     Unknown,
 }
 
@@ -52,26 +54,32 @@ impl Debugger {
             interpreter,
             lines,
             last_command: None,
+            paused: true,
         }
     }
 
     fn debug(&mut self) {
         loop {
-            if self.interpreter.is_done() {
-                println!("(loxdb) done");
+            if !self.interpreter.is_done() && !self.paused {
+                self.execute_command(DebugCommand::Step, false);
+                continue;
             }
+
             print!("(loxdb) ");
             io::stdout().flush().unwrap();
             let mut line = String::new();
             let stdin = io::stdin();
-            stdin
+            let nchar = stdin
                 .lock()
                 .read_line(&mut line)
                 .expect("Could not read line");
+            if nchar == 0 {
+                break;
+            }
             let line = line.trim();
 
             let command = Debugger::read_command(&line);
-            if self.execute_command(command) {
+            if self.execute_command(command, true) {
                 break;
             }
             if command != DebugCommand::RepeatOrNil {
@@ -81,7 +89,7 @@ impl Debugger {
     }
 
     // returns true if should break, false otherwise
-    fn execute_command(&mut self, command: DebugCommand) -> bool {
+    fn execute_command(&mut self, command: DebugCommand, verbose_step: bool) -> bool {
         match command {
             DebugCommand::Dis => {
                 let func = &self.interpreter.frame().closure.function;
@@ -92,10 +100,20 @@ impl Debugger {
                 let frame = self.interpreter.frame();
                 println!("{:?}", frame.closure.function.chunk.code[frame.ip].0);
             }
-            DebugCommand::Step => match self.interpreter.step() {
-                Ok(()) => self.list(),
-                Err(err) => println!("{}", err),
-            },
+            DebugCommand::Step => {
+                if self.interpreter.is_done() {
+                    println!("cannot step a completed program");
+                    return true;
+                }
+                match self.interpreter.step() {
+                    Ok(()) => {
+                        if verbose_step {
+                            self.list()
+                        }
+                    }
+                    Err(err) => println!("{}", err),
+                }
+            }
             DebugCommand::Quit => {
                 return true;
             }
@@ -121,9 +139,10 @@ impl Debugger {
                 }
             }
             DebugCommand::List => self.list(),
+            DebugCommand::Go => self.paused = false,
             DebugCommand::RepeatOrNil => {
                 if let Some(last_command) = self.last_command {
-                    self.execute_command(last_command);
+                    self.execute_command(last_command, verbose_step);
                 }
             }
             DebugCommand::Unknown => println!("\nunknown command"),
@@ -132,6 +151,11 @@ impl Debugger {
     }
 
     fn list(&self) {
+        if self.interpreter.is_done() {
+            println!("program completed");
+            return;
+        }
+
         let maxdist = 4;
 
         self.lines
@@ -185,6 +209,7 @@ impl Debugger {
             "upvals" => DebugCommand::Upvals,
             "list" => DebugCommand::List,
             "" => DebugCommand::RepeatOrNil,
+            "go" | "g" => DebugCommand::Go,
             _ => DebugCommand::Unknown,
         }
     }
