@@ -186,6 +186,12 @@ impl Debugger {
     }
 
     fn list(&self) {
+        let ip = self.interpreter.frame().ip;
+        if self.interpreter.line == 0 || ip == 0 {
+            println!("program has not started.");
+            return;
+        }
+
         if self.interpreter.is_done() {
             println!("program completed");
             return;
@@ -204,17 +210,16 @@ impl Debugger {
                 }
             })
             .for_each(|(idx, line)| {
-                let prefix = if idx == self.interpreter.line {
+                let prefix = if idx + 1 == self.interpreter.line {
                     "==>"
                 } else {
                     "   "
                 };
-                println!("{} {:<4} {}", prefix, idx, line)
+                println!("{} {:<4} {}", prefix, idx + 1, line)
             });
 
         println!();
 
-        let ip = self.interpreter.frame().ip;
         let chunk = &self.interpreter.frame().closure.function.chunk;
         let dissed_code = bytecode_interpreter::disassemble_code(&chunk);
         dissed_code

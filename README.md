@@ -128,8 +128,8 @@ reached breakpoint at line 4
 (loxdb) list
     1    fun b() { c(); }
     2    fun c() {
-    3      c("too", "many");
-==> 4    }
+==> 3      c("too", "many");
+    4    }
     5
     6    a();
 
