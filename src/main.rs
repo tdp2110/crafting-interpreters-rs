@@ -2,6 +2,7 @@ extern crate clap;
 
 use clap::{App, Arg};
 
+use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead, Write};
 
@@ -28,6 +29,7 @@ struct Debugger {
     lines: Vec<String>,
     last_command: Option<DebugCommand>,
     paused: bool,
+    breakpoints: HashSet<usize>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -42,6 +44,7 @@ enum DebugCommand {
     List,
     RepeatOrNil,
     Go,
+    Break(usize),
     Unknown,
 }
 
@@ -55,14 +58,21 @@ impl Debugger {
             lines,
             last_command: None,
             paused: true,
+            breakpoints: Default::default(),
         }
     }
 
     fn debug(&mut self) {
         loop {
             if !self.interpreter.is_done() && !self.paused {
-                self.execute_command(DebugCommand::Step, false);
-                continue;
+                if self.breakpoints.contains(&self.interpreter.line) {
+                    self.paused = true;
+                    self.breakpoints.remove(&self.interpreter.line);
+                    println!("reached breakpoint at line {}", self.interpreter.line);
+                } else {
+                    self.execute_command(DebugCommand::Step, false);
+                    continue;
+                }
             }
 
             print!("(loxdb) ");
@@ -139,7 +149,15 @@ impl Debugger {
                 }
             }
             DebugCommand::List => self.list(),
-            DebugCommand::Go => self.paused = false,
+            DebugCommand::Go => {
+                self.paused = false;
+                let line = self.interpreter.line;
+                self.run_until_off_line(line);
+            }
+            DebugCommand::Break(lineno) => {
+                println!("inserted breakpoint at line {}", lineno);
+                self.breakpoints.insert(lineno);
+            }
             DebugCommand::RepeatOrNil => {
                 if let Some(last_command) = self.last_command {
                     self.execute_command(last_command, verbose_step);
@@ -148,6 +166,15 @@ impl Debugger {
             DebugCommand::Unknown => println!("\nunknown command"),
         }
         false
+    }
+
+    fn run_until_off_line(&mut self, line: usize) {
+        loop {
+            if self.interpreter.is_done() || self.interpreter.line != line {
+                break;
+            }
+            self.execute_command(DebugCommand::Step, false);
+        }
     }
 
     fn list(&self) {
@@ -210,7 +237,15 @@ impl Debugger {
             "list" => DebugCommand::List,
             "" => DebugCommand::RepeatOrNil,
             "go" | "g" => DebugCommand::Go,
-            _ => DebugCommand::Unknown,
+            _ => {
+                let words: Vec<_> = input.split_whitespace().collect();
+                if words.len() == 2 && words[0] == "b" {
+                    if let Ok(lineno) = words[1].parse::<usize>() {
+                        return DebugCommand::Break(lineno);
+                    }
+                }
+                DebugCommand::Unknown
+            }
         }
     }
 }
