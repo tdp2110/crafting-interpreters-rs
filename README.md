@@ -13,7 +13,7 @@ Consider fib.lox
 ```
 fun fib(n) {
   if (n < 2) return n;
-  return fib(n - 1) + fib(n - 2); 
+  return fib(n - 1) + fib(n - 2);
 }
 
 var before = clock();
@@ -101,7 +101,7 @@ Giving
 
 ## Debugger
 
-This project includes a basic (in-progress, possibly never to progress further) debugger. 
+This project includes a basic (in-progress, possibly never to progress further) debugger.
 
 For example, consider f.lox
 
@@ -139,17 +139,17 @@ reached breakpoint at line 4
     0003   OP_CALL 2                                          line 4
     0004   OP_POP                                             line 4
 (loxdb) bt
-in script
-in a()
-in b()
-in c()
+[line 7] in script
+[line 1] in a()
+[line 2] in b()
+[line 4] in c()
 (loxdb) g
 Lox runtime error: Expected 0 arguments but found 2..
 
 Traceback:
 
-in script
-in a()
-in b()
-in c()
+[line 7] in script
+[line 1] in a()
+[line 2] in b()
+[line 4] in c()
 ```

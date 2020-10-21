@@ -248,10 +248,11 @@ impl Interpreter {
             .iter()
             .map(|frame| {
                 let frame_name = &frame.closure.function.name;
+                let (_, lineno) = frame.closure.function.chunk.code[frame.ip - 1];
                 if frame_name.is_empty() {
-                    "in script".to_string()
+                    format!("[line {}] in script", lineno.value)
                 } else {
-                    format!("in {}()", frame_name)
+                    format!("[line {}] in {}()", lineno.value, frame_name)
                 }
             })
             .collect();
