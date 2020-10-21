@@ -242,6 +242,22 @@ impl Interpreter {
         self.run()
     }
 
+    pub fn format_backtrace(&self) -> String {
+        let lines: Vec<_> = self
+            .frames
+            .iter()
+            .map(|frame| {
+                let frame_name = &frame.closure.function.name;
+                if frame_name.is_empty() {
+                    format!("in script")
+                } else {
+                    format!("in {}()", frame_name)
+                }
+            })
+            .collect();
+        lines.join("\n")
+    }
+
     pub fn format_upval(&self, val: &value::Upvalue) -> String {
         match val {
             value::Upvalue::Open(idx) => format!("Open({})", idx),

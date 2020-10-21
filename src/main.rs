@@ -45,6 +45,7 @@ enum DebugCommand {
     RepeatOrNil,
     Go,
     Break(usize),
+    Backtrace,
     Unknown,
 }
 
@@ -121,7 +122,11 @@ impl Debugger {
                             self.list()
                         }
                     }
-                    Err(err) => println!("{}", err),
+                    Err(err) => println!(
+                        "{}.\n\nTraceback:\n\n{}",
+                        err,
+                        self.interpreter.format_backtrace()
+                    ),
                 }
             }
             DebugCommand::Quit => {
@@ -162,6 +167,9 @@ impl Debugger {
                 if let Some(last_command) = self.last_command {
                     self.execute_command(last_command, verbose_step);
                 }
+            }
+            DebugCommand::Backtrace => {
+                println!("{}", self.interpreter.format_backtrace());
             }
             DebugCommand::Unknown => println!("\nunknown command"),
         }
@@ -237,6 +245,7 @@ impl Debugger {
             "list" => DebugCommand::List,
             "" => DebugCommand::RepeatOrNil,
             "go" | "g" => DebugCommand::Go,
+            "backtrace" | "bt" => DebugCommand::Backtrace,
             _ => {
                 let words: Vec<_> = input.split_whitespace().collect();
                 if words.len() == 2 && words[0] == "b" {
