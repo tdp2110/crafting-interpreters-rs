@@ -85,12 +85,12 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) -> String {
         lines.push(format!("============ {} ============", name));
     }
 
-    lines.push(format!("------------ constants -----------"));
+    lines.push("------------ constants -----------".to_string());
     for (idx, constant) in chunk.constants.iter().enumerate() {
         lines.push(format!("{:<4} {}", idx, constant));
     }
 
-    lines.push(format!("\n------------ code -----------------"));
+    lines.push("\n------------ code -----------------".to_string());
 
     for code_line in disassemble_code(&chunk) {
         lines.push(code_line)
@@ -249,7 +249,7 @@ impl Interpreter {
             .map(|frame| {
                 let frame_name = &frame.closure.function.name;
                 if frame_name.is_empty() {
-                    format!("in script")
+                    "in script".to_string()
                 } else {
                     format!("in {}()", frame_name)
                 }
@@ -652,7 +652,7 @@ impl Interpreter {
                     if let Some(attr) = self.getattr(maybe_instance.clone(), attr_id)? {
                         self.pop_stack();
                         self.stack.push(attr);
-                    } else if !self.bind_method(instance_id, class.clone(), attr_id)? {
+                    } else if !self.bind_method(instance_id, class, attr_id)? {
                         return Err(InterpreterError::Runtime(format!(
                             "value {} has no attribute {}.",
                             self.format_val(&maybe_instance),
@@ -675,7 +675,7 @@ impl Interpreter {
                     match maybe_class {
                         value::Value::Class(class_id) => {
                             let class = self.heap.get_class_mut(class_id);
-                            class.methods.insert(method_name.clone(), maybe_method_id);
+                            class.methods.insert(method_name, maybe_method_id);
                             self.pop_stack();
                         }
                         _ => {

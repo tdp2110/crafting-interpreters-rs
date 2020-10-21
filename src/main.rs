@@ -311,7 +311,7 @@ fn main() {
                     || matches.is_present(SHOW_AST_STR)
                     || matches.is_present(TREEWALK_STR)
                 {
-                    match scanner::scan_tokens(input.clone()) {
+                    match scanner::scan_tokens(input) {
                         Ok(tokens) => {
                             if matches.is_present(SHOW_TOKENS_STR) {
                                 println!("tokens: {:#?}", tokens);
@@ -332,6 +332,7 @@ fn main() {
                                     match interpret_result {
                                         Ok(output) => {
                                             println!("{}", output);
+                                            std::process::exit(0);
                                         }
                                         Err(err) => {
                                             println!("Treewalk Interpreter Error: {}", err);
@@ -357,7 +358,11 @@ fn main() {
                 match func_or_err {
                     Ok(func) => {
                         if matches.is_present(DISASSEMBLE_STR) {
-                            bytecode_interpreter::disassemble_chunk(&func.chunk, input_file);
+                            println!(
+                                "{}",
+                                bytecode_interpreter::disassemble_chunk(&func.chunk, input_file)
+                            );
+                            std::process::exit(0);
                         }
                         if matches.is_present(DEBUG_STR) {
                             Debugger::init(func, input).debug();
