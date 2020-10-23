@@ -25,13 +25,13 @@ print after - before;
 We can run this in the treewalk interpreter using
 
 ```
-cargo run --release -- fib.lox --treewalk
+cargo run --release --quiet -- fib.lox --treewalk
 ```
 
 On my laptop, this prints a timing of 1755 milliseconds. We can run the same thing in the bytecode interpreter using
 
 ```
-cargo run --release -- fib.lox
+cargo run --release --quiet -- fib.lox
 ```
 
 On the same laptop, this shows a timing of 401 milliseconds.
@@ -45,7 +45,7 @@ print "hello world!";
 We can tokenize this with
 
 ```
-cargo run --release -- hello_world.lox --show-tokens
+cargo run --release --quiet -- hello_world.lox --show-tokens
 ```
 
 Which gives output
@@ -62,7 +62,7 @@ tokens: [
 We can show the AST with
 
 ```
-cargo run --release -- hello_world.lox --show-ast
+cargo run --release --quiet -- hello_world.lox --show-ast
 ```
 
 Which gives
@@ -82,7 +82,7 @@ AST: [
 Finally, we can show compiled bytecode with
 
 ```
-cargo run --release -- hello_world.lox --disassemble
+cargo run --release --quiet -- hello_world.lox --disassemble
 ```
 
 Giving
@@ -118,9 +118,7 @@ a();
 We can explore this in the debugger with
 
 ```
-cargo run -- f.lox --debug
-    Finished dev [unoptimized + debuginfo] target(s) in 0.02s
-     Running `target/debug/crafting-interpreters-rs f.lox --debug`
+cargo run --release --quiet -- f.lox --debug
 (loxdb) b 4
 inserted breakpoint at line 4
 (loxdb) g
@@ -159,13 +157,13 @@ Traceback:
 A REPL for interactive development is also available, which uses the slower treewalk interpreter. Launch with
 
 ```
-cargo run --release -- --repl
+cargo run --release --quiet
 ```
 
 Here's an example session:
 
 ```
-cargo run --release -- --repl
+cargo run --release --quiet
 lox >>> var x = 10;
 lox >>> fun f(n) { return n + 1; }
 lox >>> f(x);

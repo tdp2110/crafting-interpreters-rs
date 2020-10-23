@@ -23,14 +23,16 @@ static SHOW_AST_STR: &str = "ast";
 static DISASSEMBLE_STR: &str = "disassemble";
 static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
-static REPL_STR: &str = "repl";
 
 fn run_repl() {
-    let mut interpreter = treewalk_interpreter::Interpreter {
-        ..Default::default()
-    };
+    let mut interpreter: treewalk_interpreter::Interpreter = Default::default();
+    println!(
+        "============================================\n\
+         Welcome to lox! using tree-walk interpreter.\n\
+         ============================================\n"
+    );
     loop {
-        print!("lox >>> ");
+        print!(">>> ");
         io::stdout().flush().unwrap();
         let mut line = String::new();
         let stdin = io::stdin();
@@ -347,18 +349,7 @@ fn main() {
                 .takes_value(false)
                 .help("run the tree-walk interpreter instead of the bytecode interpreter"),
         )
-        .arg(
-            Arg::with_name(REPL_STR)
-                .long("--repl")
-                .takes_value(false)
-                .help("run the repl"),
-        )
         .get_matches();
-
-    if matches.is_present(REPL_STR) {
-        run_repl();
-        std::process::exit(0);
-    }
 
     if let Some(input_file) = matches.value_of(INPUT_STR) {
         let maybe_input = fs::read_to_string(input_file);
@@ -447,5 +438,7 @@ fn main() {
                 std::process::exit(-1);
             }
         }
+    } else {
+        run_repl();
     }
 }

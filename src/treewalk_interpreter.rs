@@ -330,9 +330,7 @@ impl fmt::Display for Value {
 }
 
 pub fn interpret(stmts: &[expr::Stmt]) -> Result<String, String> {
-    let mut interpreter = Interpreter {
-        ..Default::default()
-    };
+    let mut interpreter: Interpreter = Default::default();
     interpreter.interpret(stmts)?;
 
     Ok(interpreter.output.join("\n"))
