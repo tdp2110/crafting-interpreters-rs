@@ -153,3 +153,21 @@ Traceback:
 [line 2] in b()
 [line 4] in c()
 ```
+
+## REPL
+
+A REPL for interactive development is also available, which uses the slower treewalk interpreter. Launch with
+
+```
+cargo run --release -- --repl
+```
+
+Here's an example session:
+
+```
+cargo run --release -- --repl
+lox >>> var x = 10;
+lox >>> fun f(n) { return n + 1; }
+lox >>> f(x);
+11
+```

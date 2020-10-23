@@ -23,6 +23,48 @@ static SHOW_AST_STR: &str = "ast";
 static DISASSEMBLE_STR: &str = "disassemble";
 static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
+static REPL_STR: &str = "repl";
+
+fn run_repl() {
+    let mut interpreter = treewalk_interpreter::Interpreter {
+        ..Default::default()
+    };
+    loop {
+        print!("lox >>> ");
+        io::stdout().flush().unwrap();
+        let mut line = String::new();
+        let stdin = io::stdin();
+        let nchar = stdin
+            .lock()
+            .read_line(&mut line)
+            .expect("Could not read line");
+        if nchar == 0 {
+            break;
+        }
+
+        match scanner::scan_tokens(line) {
+            Ok(tokens) => match parser::parse(tokens) {
+                Ok(stmts) => {
+                    let stmts2: Vec<expr::Stmt> = stmts
+                        .iter()
+                        .map(|stmt| match stmt {
+                            expr::Stmt::Expr(expr) => expr::Stmt::Print(expr.clone()),
+                            _ => stmt.clone(),
+                        })
+                        .collect();
+                    match interpreter.interpret(&stmts2) {
+                        Ok(()) => {}
+                        Err(err) => println!("Runtime error: {}", err),
+                    }
+                }
+                Err(err) => println!("\nParse error: {}", err),
+            },
+            Err(err) => {
+                println!("\nScanner error: {}", err);
+            }
+        }
+    }
+}
 
 struct Debugger {
     interpreter: bytecode_interpreter::Interpreter,
@@ -272,7 +314,7 @@ fn main() {
         .arg(
             Arg::with_name(INPUT_STR)
                 .help("sets input file to use")
-                .required(true)
+                .required(false)
                 .index(1),
         )
         .arg(
@@ -305,7 +347,18 @@ fn main() {
                 .takes_value(false)
                 .help("run the tree-walk interpreter instead of the bytecode interpreter"),
         )
+        .arg(
+            Arg::with_name(REPL_STR)
+                .long("--repl")
+                .takes_value(false)
+                .help("run the repl"),
+        )
         .get_matches();
+
+    if matches.is_present(REPL_STR) {
+        run_repl();
+        std::process::exit(0);
+    }
 
     if let Some(input_file) = matches.value_of(INPUT_STR) {
         let maybe_input = fs::read_to_string(input_file);
@@ -335,8 +388,7 @@ fn main() {
                                     let interpret_result = treewalk_interpreter::interpret(&stmts);
 
                                     match interpret_result {
-                                        Ok(output) => {
-                                            println!("{}", output);
+                                        Ok(_) => {
                                             std::process::exit(0);
                                         }
                                         Err(err) => {

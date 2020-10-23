@@ -616,6 +616,7 @@ impl Interpreter {
             }
             expr::Stmt::Print(e) => match self.interpret_expr(e) {
                 Ok(val) => {
+                    println!("{}", val);
                     self.output.push(format!("{}", val));
                     Ok(())
                 }
