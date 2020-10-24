@@ -74,6 +74,7 @@ impl Callable for LoxFunction {
         let saved_enclosing_function = interpreter.enclosing_function;
 
         let mut env = self.closure.clone();
+        env.venv.extend(saved_env.venv.clone());
         env.venv.extend(args_env);
 
         if let Some(this_val) = &self.this_binding {
@@ -480,8 +481,8 @@ impl Default for Interpreter {
 
 impl Interpreter {
     pub fn interpret(&mut self, stmts: &[expr::Stmt]) -> Result<(), String> {
-        for stmt in stmts.iter() {
-            self.execute(stmt)?;
+        for stmt in stmts {
+            self.execute(stmt)?
         }
         Ok(())
     }
@@ -664,7 +665,7 @@ impl Interpreter {
     pub fn lookup(&self, sym: &expr::Symbol) -> Result<&Value, String> {
         match self.env.get(sym) {
             Ok(val) => Ok(val),
-            _ => self.globals.get(sym),
+            Err(_) => self.globals.get(sym),
         }
     }
 
@@ -1652,6 +1653,21 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_late_binding() {
+        let res = evaluate(
+            "fun a() { b(); }\n\
+             fun b() { print \"hello world\"; }\n\
+             \n\
+             a();\n",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "'hello world'"),
             Err(err) => panic!(err),
         }
     }
