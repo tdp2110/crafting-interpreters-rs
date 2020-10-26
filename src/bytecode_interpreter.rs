@@ -317,9 +317,7 @@ impl Interpreter {
             self.collect_garbage();
         }
 
-        self.line = match op {
-            (_, bytecode::Lineno { value: line }) => line,
-        };
+        self.line = op.1.value;
 
         match op {
             (bytecode::Op::Return, _) => {
@@ -2915,6 +2913,28 @@ mod tests {
                             "Finish with icing"
                         ]
                     ),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_late_binding() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun a() { b(); }\n\
+             fun b() { print \"hello world\"; }\n\
+             \n\
+             a();\n",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["hello world"]),
                     Err(err) => panic!(err),
                 }
             }
