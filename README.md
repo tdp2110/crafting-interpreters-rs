@@ -118,7 +118,7 @@ a();
 We can explore this in the debugger with
 
 ```
-cargo run --release --quiet -- f.lox --debug
+$ cargo run --release --quiet -- f.lox --debug
 (loxdb) b 4
 inserted breakpoint at line 4
 (loxdb) g
@@ -163,9 +163,13 @@ cargo run --release --quiet
 Here's an example session:
 
 ```
-cargo run --release --quiet
-lox >>> var x = 10;
-lox >>> fun f(n) { return n + 1; }
-lox >>> f(x);
-11
+$ cargo run --release --quiet
+============================================
+Welcome to lox! using tree-walk interpreter.
+============================================
+
+>>> var x = 42;
+>>> fun f(n) { return n + 1; }
+>>> f(x);
+43
 ```
