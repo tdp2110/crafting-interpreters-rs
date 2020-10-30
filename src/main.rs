@@ -242,57 +242,54 @@ impl Debugger {
     }
 
     fn list(&self) {
-        let ip = self.interpreter.frame().ip;
-        /*
-        if self.interpreter.line == 0 || ip == 0 {
-            println!("program has not started.");
-            return;
-        }*/
+        if let Some(frame) = self.interpreter.maybe_frame() {
+            let ip = frame.ip;
 
-        if self.interpreter.is_done() {
-            println!("program completed");
-            return;
+            if self.interpreter.is_done() {
+                println!("program completed");
+                return;
+            }
+
+            let maxdist = 4;
+
+            self.lines
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| {
+                    if self.interpreter.line < *idx {
+                        *idx - self.interpreter.line < maxdist
+                    } else {
+                        self.interpreter.line - *idx < maxdist
+                    }
+                })
+                .for_each(|(idx, line)| {
+                    let prefix = if idx + 1 == self.interpreter.line {
+                        "==>"
+                    } else {
+                        "   "
+                    };
+                    println!("{} {:<4} {}", prefix, idx + 1, line)
+                });
+
+            println!();
+
+            let chunk = &self.interpreter.frame().closure.function.chunk;
+            let dissed_code = bytecode_interpreter::disassemble_code(&chunk);
+            dissed_code
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| {
+                    if ip < *idx {
+                        *idx - ip < maxdist
+                    } else {
+                        ip - *idx < maxdist
+                    }
+                })
+                .for_each(|(idx, line)| {
+                    let prefix = if idx == ip { "==>" } else { "   " };
+                    println!("{} {}", prefix, line);
+                });
         }
-
-        let maxdist = 4;
-
-        self.lines
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| {
-                if self.interpreter.line < *idx {
-                    *idx - self.interpreter.line < maxdist
-                } else {
-                    self.interpreter.line - *idx < maxdist
-                }
-            })
-            .for_each(|(idx, line)| {
-                let prefix = if idx + 1 == self.interpreter.line {
-                    "==>"
-                } else {
-                    "   "
-                };
-                println!("{} {:<4} {}", prefix, idx + 1, line)
-            });
-
-        println!();
-
-        let chunk = &self.interpreter.frame().closure.function.chunk;
-        let dissed_code = bytecode_interpreter::disassemble_code(&chunk);
-        dissed_code
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| {
-                if ip < *idx {
-                    *idx - ip < maxdist
-                } else {
-                    ip - *idx < maxdist
-                }
-            })
-            .for_each(|(idx, line)| {
-                let prefix = if idx == ip { "==>" } else { "   " };
-                println!("{} {}", prefix, line);
-            });
     }
 
     fn read_command(input: &str) -> DebugCommand {

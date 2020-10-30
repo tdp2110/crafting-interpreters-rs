@@ -781,8 +781,12 @@ impl Interpreter {
         &mut self.frames[frames_len - 1]
     }
 
+    pub fn maybe_frame(&self) -> Option<&CallFrame> {
+        self.frames.last()
+    }
+
     pub fn frame(&self) -> &CallFrame {
-        &self.frames[self.frames.len() - 1]
+        self.maybe_frame().unwrap()
     }
 
     fn invoke_from_class(
