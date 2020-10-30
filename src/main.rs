@@ -1,10 +1,13 @@
 extern crate clap;
+extern crate ctrlc;
 
 use clap::{App, Arg};
 
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 mod builtins;
 mod bytecode;
@@ -72,7 +75,7 @@ struct Debugger {
     interpreter: bytecode_interpreter::Interpreter,
     lines: Vec<String>,
     last_command: Option<DebugCommand>,
-    paused: bool,
+    interrupted: Arc<AtomicBool>,
     breakpoints: HashSet<usize>,
 }
 
@@ -98,20 +101,29 @@ impl Debugger {
         let lines: Vec<String> = input.lines().map(|s| s.to_string()).collect();
         let mut interpreter = bytecode_interpreter::Interpreter::default();
         interpreter.prepare_interpret(func);
+
+        let interrupted = Arc::new(AtomicBool::new(true));
+        let interrupted_clone = interrupted.clone();
+
+        ctrlc::set_handler(move || {
+            interrupted_clone.store(true, Ordering::Release);
+        })
+        .expect("Error setting Ctrl-C handler");
+
         Debugger {
             interpreter,
             lines,
             last_command: None,
-            paused: true,
+            interrupted,
             breakpoints: Default::default(),
         }
     }
 
     fn debug(&mut self) {
         loop {
-            if !self.interpreter.is_done() && !self.paused {
+            if !self.interpreter.is_done() && !self.interrupted.load(Ordering::Acquire) {
                 if self.breakpoints.contains(&self.interpreter.line) {
-                    self.paused = true;
+                    self.interrupted.store(true, Ordering::Release);
                     self.breakpoints.remove(&self.interpreter.line);
                     println!("reached breakpoint at line {}", self.interpreter.line);
                 } else {
@@ -199,7 +211,7 @@ impl Debugger {
             }
             DebugCommand::List => self.list(),
             DebugCommand::Go => {
-                self.paused = false;
+                self.interrupted.store(false, Ordering::Release);
                 let line = self.interpreter.line;
                 self.run_until_off_line(line);
             }
@@ -231,10 +243,11 @@ impl Debugger {
 
     fn list(&self) {
         let ip = self.interpreter.frame().ip;
+        /*
         if self.interpreter.line == 0 || ip == 0 {
             println!("program has not started.");
             return;
-        }
+        }*/
 
         if self.interpreter.is_done() {
             println!("program completed");
@@ -302,6 +315,7 @@ impl Debugger {
                         return DebugCommand::Break(lineno);
                     }
                 }
+                println!("unknown command: {}", input);
                 DebugCommand::Unknown
             }
         }
