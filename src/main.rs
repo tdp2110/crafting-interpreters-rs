@@ -34,6 +34,15 @@ fn run_repl() {
          Welcome to lox! using tree-walk interpreter.\n\
          ============================================\n"
     );
+
+    {
+        let interrupt_clone = interpreter.interrupted.clone();
+        ctrlc::set_handler(move || {
+            interrupt_clone.store(true, Ordering::Release);
+        })
+        .expect("Error setting Ctrl-C handler");
+    }
+
     loop {
         print!(">>> ");
         io::stdout().flush().unwrap();
@@ -103,12 +112,15 @@ impl Debugger {
         interpreter.prepare_interpret(func);
 
         let interrupted = Arc::new(AtomicBool::new(true));
-        let interrupted_clone = interrupted.clone();
 
-        ctrlc::set_handler(move || {
-            interrupted_clone.store(true, Ordering::Release);
-        })
-        .expect("Error setting Ctrl-C handler");
+        {
+            let interrupted_clone = interrupted.clone();
+
+            ctrlc::set_handler(move || {
+                interrupted_clone.store(true, Ordering::Release);
+            })
+            .expect("Error setting Ctrl-C handler");
+        }
 
         Debugger {
             interpreter,

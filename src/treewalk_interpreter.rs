@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::expr;
@@ -435,6 +437,7 @@ pub struct Interpreter {
     pub retval: Option<Value>,
     pub output: Vec<String>,
     pub enclosing_function: Option<u64>,
+    pub interrupted: Arc<AtomicBool>,
 }
 
 impl Default for Interpreter {
@@ -475,12 +478,14 @@ impl Default for Interpreter {
             retval: None,
             output: Vec::new(),
             enclosing_function: None,
+            interrupted: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 impl Interpreter {
     pub fn interpret(&mut self, stmts: &[expr::Stmt]) -> Result<(), String> {
+        self.interrupted.store(false, Ordering::Release);
         for stmt in stmts {
             self.execute(stmt)?
         }
@@ -505,7 +510,7 @@ impl Interpreter {
         Value::LoxInstance(class_name.clone(), inst_id)
     }
 
-    pub fn execute(&mut self, stmt: &expr::Stmt) -> Result<(), String> {
+    fn execute(&mut self, stmt: &expr::Stmt) -> Result<(), String> {
         if self.retval.is_some() {
             return Ok(());
         }
@@ -662,7 +667,7 @@ impl Interpreter {
         }
     }
 
-    pub fn lookup(&self, sym: &expr::Symbol) -> Result<&Value, String> {
+    fn lookup(&self, sym: &expr::Symbol) -> Result<&Value, String> {
         match self.env.get(sym) {
             Ok(val) => Ok(val),
             Err(_) => self.globals.get(sym),
@@ -677,7 +682,11 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret_expr(&mut self, expr: &expr::Expr) -> Result<Value, String> {
+    fn interpret_expr(&mut self, expr: &expr::Expr) -> Result<Value, String> {
+        if self.interrupted.load(Ordering::Acquire) {
+            return Ok(Value::Nil);
+        }
+
         match expr {
             expr::Expr::This(source_location) => match self.lookup(&Interpreter::this_symbol(source_location.line, source_location.col)) {
                 Ok(val) => Ok(val.clone()),
