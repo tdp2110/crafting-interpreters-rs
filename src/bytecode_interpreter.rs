@@ -258,7 +258,7 @@ impl Interpreter {
                 }
             })
             .collect();
-        lines.join("\n")
+        format!("Backtrace (most recent call last):\n\n{}", lines.join("\n"))
     }
 
     pub fn format_upval(&self, val: &value::Upvalue) -> String {

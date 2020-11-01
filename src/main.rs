@@ -187,13 +187,19 @@ fn main() {
                             debugger::Debugger::new(func, input).debug();
                             std::process::exit(0);
                         }
-                        let res = bytecode_interpreter::Interpreter::default().interpret(func);
+                        let mut interpreter = bytecode_interpreter::Interpreter::default();
+                        let res = interpreter.interpret(func);
                         match res {
                             Ok(()) => {
                                 std::process::exit(0);
                             }
-                            Err(err) => {
-                                println!("{:?}", err);
+                            Err(bytecode_interpreter::InterpreterError::Runtime(err)) => {
+                                println!(
+                                    "Runtime error: {}\n\n{}",
+                                    err,
+                                    interpreter.format_backtrace()
+                                );
+
                                 std::process::exit(1);
                             }
                         }
