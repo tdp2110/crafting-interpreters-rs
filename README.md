@@ -124,18 +124,17 @@ inserted breakpoint at line 4
 (loxdb) g
 reached breakpoint at line 4
 (loxdb) list
-    1    fun b() { c(); }
-    2    fun c() {
-==> 3      c("too", "many");
-    4    }
-    5
-    6    a();
+    2    fun b() { c(); }
+    3    fun c() {
+==> 4      c("too", "many");
+    5    }
+    6
+    7    a();
 
-    0000   OP_GET_GLOBAL String("c") (idx=0)                  line 4
-==> 0001   OP_CONSTANT too (idx=1)                            line 4
+==> 0000   OP_GET_GLOBAL String("c") (idx=0)                  line 4
+    0001   OP_CONSTANT too (idx=1)                            line 4
     0002   OP_CONSTANT many (idx=2)                           line 4
     0003   OP_CALL 2                                          line 4
-    0004   OP_POP                                             line 4
 (loxdb) bt
 [line 7] in script
 [line 1] in a()

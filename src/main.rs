@@ -167,10 +167,13 @@ impl Debugger {
     fn debug(&mut self) {
         loop {
             if !self.interpreter.is_done() && !self.interrupted.load(Ordering::Acquire) {
-                if self.breakpoints.contains(&self.interpreter.line) {
+                if self.breakpoints.contains(&self.interpreter.next_line()) {
                     self.interrupted.store(true, Ordering::Release);
-                    self.breakpoints.remove(&self.interpreter.line);
-                    println!("reached breakpoint at line {}", self.interpreter.line);
+                    self.breakpoints.remove(&self.interpreter.next_line());
+                    println!(
+                        "reached breakpoint at line {}",
+                        self.interpreter.next_line()
+                    );
                 } else {
                     self.execute_command(DebugCommand::Step, false);
                     continue;
@@ -257,7 +260,7 @@ impl Debugger {
             DebugCommand::List => self.list(),
             DebugCommand::Go => {
                 self.interrupted.store(false, Ordering::Release);
-                let line = self.interpreter.line;
+                let line = self.interpreter.next_line();
                 self.run_until_off_line(line);
             }
             DebugCommand::Break(lineno) => {
@@ -280,7 +283,7 @@ impl Debugger {
 
     fn run_until_off_line(&mut self, line: usize) {
         loop {
-            if self.interpreter.is_done() || self.interpreter.line != line {
+            if self.interpreter.is_done() || self.interpreter.next_line() != line {
                 break;
             }
             self.execute_command(DebugCommand::Step, false);
@@ -339,14 +342,15 @@ impl Debugger {
                 .iter()
                 .enumerate()
                 .filter(|(idx, _)| {
-                    if self.interpreter.line < *idx {
-                        *idx - self.interpreter.line < maxdist
+                    let next_line = self.interpreter.next_line();
+                    if next_line < *idx {
+                        *idx - next_line < maxdist
                     } else {
-                        self.interpreter.line - *idx < maxdist
+                        next_line - *idx < maxdist
                     }
                 })
                 .for_each(|(idx, line)| {
-                    let prefix = if idx + 1 == self.interpreter.line {
+                    let prefix = if idx + 1 == self.interpreter.next_line() {
                         "==>"
                     } else {
                         "   "

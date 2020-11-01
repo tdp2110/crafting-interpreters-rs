@@ -131,7 +131,6 @@ pub struct Interpreter {
     pub upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
     heap: gc::Heap,
     gray_stack: Vec<gc::HeapId>,
-    pub line: usize,
 }
 
 impl Default for Interpreter {
@@ -144,7 +143,6 @@ impl Default for Interpreter {
             upvalues: Default::default(),
             heap: Default::default(),
             gray_stack: Default::default(),
-            line: 0,
         };
         res.stack.reserve(256);
         res.frames.reserve(64);
@@ -207,8 +205,12 @@ pub struct CallFrame {
 }
 
 impl CallFrame {
-    fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
-        let res = self.closure.function.chunk.code[self.ip].clone();
+    fn next_op(&self) -> (bytecode::Op, bytecode::Lineno) {
+        self.closure.function.chunk.code[self.ip].clone()
+    }
+
+    fn next_op_and_advance(&mut self) -> (bytecode::Op, bytecode::Lineno) {
+        let res = self.next_op();
         self.ip += 1;
         res
     }
@@ -311,13 +313,11 @@ impl Interpreter {
     }
 
     pub fn step(&mut self) -> Result<(), InterpreterError> {
-        let op = self.next_op();
+        let op = self.next_op_and_advance();
 
         if self.heap.should_collect() {
             self.collect_garbage();
         }
-
-        self.line = op.1.value;
 
         match op {
             (bytecode::Op::Return, _) => {
@@ -1120,8 +1120,16 @@ impl Interpreter {
         &self.stack[self.stack.len() - n - 1]
     }
 
-    fn next_op(&mut self) -> (bytecode::Op, bytecode::Lineno) {
-        self.frame_mut().next_op()
+    pub fn next_line(&self) -> usize {
+        self.next_op().1.value
+    }
+
+    pub fn next_op(&self) -> (bytecode::Op, bytecode::Lineno) {
+        self.frame().next_op()
+    }
+
+    fn next_op_and_advance(&mut self) -> (bytecode::Op, bytecode::Lineno) {
+        self.frame_mut().next_op_and_advance()
     }
 
     fn read_constant(&mut self, idx: usize) -> value::Value {
