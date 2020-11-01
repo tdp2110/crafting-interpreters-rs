@@ -3,6 +3,7 @@ extern crate ctrlc;
 
 use clap::{App, Arg};
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead, Write};
@@ -26,6 +27,10 @@ static SHOW_AST_STR: &str = "ast";
 static DISASSEMBLE_STR: &str = "disassemble";
 static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
+
+macro_rules! vec_of_strings {
+    ($($x:expr),*) => (vec![$($x.to_string()),*]);
+}
 
 fn run_repl() {
     let mut interpreter: treewalk_interpreter::Interpreter = Default::default();
@@ -86,6 +91,8 @@ struct Debugger {
     last_command: Option<DebugCommand>,
     interrupted: Arc<AtomicBool>,
     breakpoints: HashSet<usize>,
+    command_map: HashMap<String, DebugCommand>,
+    command_list: Vec<(Vec<String>, DebugCommand)>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -102,6 +109,7 @@ enum DebugCommand {
     Go,
     Break(usize),
     Backtrace,
+    Help,
     Unknown,
 }
 
@@ -122,12 +130,37 @@ impl Debugger {
             .expect("Error setting Ctrl-C handler");
         }
 
+        let command_list = vec![
+            (vec_of_strings!["dis"], DebugCommand::Dis),
+            (vec_of_strings!["op"], DebugCommand::Op),
+            (vec_of_strings!["step", "s"], DebugCommand::Step),
+            (vec_of_strings!["quit", "q"], DebugCommand::Quit),
+            (vec_of_strings!["stack"], DebugCommand::Stack),
+            (vec_of_strings!["globals"], DebugCommand::Globals),
+            (vec_of_strings!["upvals"], DebugCommand::Upvals),
+            (vec_of_strings!["list"], DebugCommand::List),
+            (vec_of_strings![""], DebugCommand::RepeatOrNil),
+            (vec_of_strings!["go", "g"], DebugCommand::Go),
+            (vec_of_strings!["backtrace", "bt"], DebugCommand::Backtrace),
+            (vec_of_strings!["help", "h"], DebugCommand::Help),
+        ];
+
+        let command_map = command_list.iter().fold(HashMap::new(), |mut acc, elt| {
+            let (command_strings, command) = elt;
+            for command_string in command_strings {
+                acc.insert(command_string.clone(), command.clone());
+            }
+            acc
+        });
+
         Debugger {
             interpreter,
             lines,
             last_command: None,
             interrupted,
             breakpoints: Default::default(),
+            command_map,
+            command_list,
         }
     }
 
@@ -157,7 +190,7 @@ impl Debugger {
             }
             let line = line.trim();
 
-            let command = Debugger::read_command(&line);
+            let command = self.read_command(&line);
             if self.execute_command(command, true) {
                 break;
             }
@@ -239,7 +272,8 @@ impl Debugger {
             DebugCommand::Backtrace => {
                 println!("{}", self.interpreter.format_backtrace());
             }
-            DebugCommand::Unknown => println!("\nunknown command"),
+            DebugCommand::Help => self.print_help(),
+            DebugCommand::Unknown => {}
         }
         false
     }
@@ -250,6 +284,43 @@ impl Debugger {
                 break;
             }
             self.execute_command(DebugCommand::Step, false);
+        }
+    }
+
+    fn print_help(&self) {
+        println!("Debugger commands:");
+        for (command_strings, command) in &self.command_list {
+            if *command != DebugCommand::RepeatOrNil {
+                println!(
+                    "  {:<15} -- {}",
+                    command_strings.join(", "),
+                    Debugger::describe_command(*command)
+                );
+            }
+        }
+    }
+
+    fn describe_command(cmd: DebugCommand) -> String {
+        match cmd {
+            DebugCommand::Dis => "Disassemble for current frame.".to_string(),
+            DebugCommand::Op => "Show the current opcode.".to_string(),
+            DebugCommand::Step => "Step to next opcode.".to_string(),
+            DebugCommand::Quit => "Quit the debugger.".to_string(),
+            DebugCommand::Stack => "Show the stack.".to_string(),
+            DebugCommand::Globals => "Show the globals.".to_string(),
+            DebugCommand::Upvals => "Show the upvalues.".to_string(),
+            DebugCommand::List => {
+                "List the source and disassembly around current line/op.".to_string()
+            }
+            DebugCommand::RepeatOrNil => panic!(),
+            DebugCommand::Go => {
+                "Execute until program termination, a breakpoint is hit, or program is interrupted."
+                    .to_string()
+            }
+            DebugCommand::Break(lineno) => format!("Set a breakpoint at line {}.", lineno),
+            DebugCommand::Backtrace => "Show backtrace.".to_string(),
+            DebugCommand::Help => "Show debugger commands.".to_string(),
+            DebugCommand::Unknown => panic!(),
         }
     }
 
@@ -304,20 +375,10 @@ impl Debugger {
         }
     }
 
-    fn read_command(input: &str) -> DebugCommand {
-        match input {
-            "dis" => DebugCommand::Dis,
-            "op" => DebugCommand::Op,
-            "step" | "s" => DebugCommand::Step,
-            "quit" | "q" => DebugCommand::Quit,
-            "stack" => DebugCommand::Stack,
-            "globals" => DebugCommand::Globals,
-            "upvals" => DebugCommand::Upvals,
-            "list" => DebugCommand::List,
-            "" => DebugCommand::RepeatOrNil,
-            "go" | "g" => DebugCommand::Go,
-            "backtrace" | "bt" => DebugCommand::Backtrace,
-            _ => {
+    fn read_command(&self, input: &str) -> DebugCommand {
+        match self.command_map.get(input) {
+            Some(cmd) => *cmd,
+            None => {
                 let words: Vec<_> = input.split_whitespace().collect();
                 if words.len() == 2 && words[0] == "b" {
                     if let Ok(lineno) = words[1].parse::<usize>() {
