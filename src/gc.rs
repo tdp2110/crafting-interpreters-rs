@@ -96,6 +96,17 @@ impl Default for Heap {
 }
 
 impl Heap {
+    pub fn summarize_stats(&self) -> String {
+        format!(
+            "Heap stats: bytes_allocated {}\n\
+                             next_gc {}\n\
+                             num_values: {}",
+            self.bytes_allocated,
+            self.next_gc,
+            self.values.len()
+        )
+    }
+
     pub fn manage_str(&mut self, s: String) -> HeapId {
         self.bytes_allocated += s.len();
         let id = self.generate_id();

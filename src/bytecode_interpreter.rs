@@ -129,7 +129,7 @@ pub struct Interpreter {
     output: Vec<String>,
     pub globals: HashMap<String, value::Value>,
     pub upvalues: Vec<Rc<RefCell<value::Upvalue>>>,
-    heap: gc::Heap,
+    pub heap: gc::Heap,
     gray_stack: Vec<gc::HeapId>,
 }
 

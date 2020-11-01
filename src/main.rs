@@ -109,6 +109,7 @@ enum DebugCommand {
     Go,
     Break(usize),
     Backtrace,
+    Heap,
     Help,
     Unknown,
 }
@@ -142,6 +143,7 @@ impl Debugger {
             (vec_of_strings![""], DebugCommand::RepeatOrNil),
             (vec_of_strings!["go", "g"], DebugCommand::Go),
             (vec_of_strings!["backtrace", "bt"], DebugCommand::Backtrace),
+            (vec_of_strings!["heap"], DebugCommand::Heap),
             (vec_of_strings!["help", "h"], DebugCommand::Help),
         ];
 
@@ -275,6 +277,7 @@ impl Debugger {
             DebugCommand::Backtrace => {
                 println!("{}", self.interpreter.format_backtrace());
             }
+            DebugCommand::Heap => println!("{}", self.interpreter.heap.summarize_stats()),
             DebugCommand::Help => self.print_help(),
             DebugCommand::Unknown => {}
         }
@@ -322,6 +325,7 @@ impl Debugger {
             }
             DebugCommand::Break(lineno) => format!("Set a breakpoint at line {}.", lineno),
             DebugCommand::Backtrace => "Show backtrace.".to_string(),
+            DebugCommand::Heap => "Show heap statistics.".to_string(),
             DebugCommand::Help => "Show debugger commands.".to_string(),
             DebugCommand::Unknown => panic!(),
         }
