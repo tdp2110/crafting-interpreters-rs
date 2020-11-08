@@ -110,9 +110,11 @@ impl Callable for LoxFunction {
 
         interpreter.env = env;
         interpreter.enclosing_function = Some(self.id);
+        interpreter.backtrace.push((0, self.name.name.clone()));
         interpreter.interpret(&self.body)?;
 
         let retval = interpreter.retval.clone();
+        interpreter.backtrace.pop();
         interpreter.enclosing_function = saved_enclosing_function;
         interpreter.env = saved_env;
         interpreter.retval = saved_retval;
@@ -332,13 +334,6 @@ impl fmt::Display for Value {
     }
 }
 
-pub fn interpret(stmts: &[expr::Stmt]) -> Result<String, String> {
-    let mut interpreter: Interpreter = Default::default();
-    interpreter.interpret(stmts)?;
-
-    Ok(interpreter.output.join("\n"))
-}
-
 #[derive(Debug, Clone)]
 pub struct SourceLocation {
     line: usize,
@@ -438,6 +433,7 @@ pub struct Interpreter {
     pub output: Vec<String>,
     pub enclosing_function: Option<u64>,
     pub interrupted: Arc<AtomicBool>,
+    pub backtrace: Vec<(u64, String)>,
 }
 
 impl Default for Interpreter {
@@ -470,15 +466,16 @@ impl Default for Interpreter {
 
         Interpreter {
             counter: 0,
-            lox_functions: HashMap::new(),
-            lox_instances: HashMap::new(),
-            lox_classes: HashMap::new(),
+            lox_functions: Default::default(),
+            lox_instances: Default::default(),
+            lox_classes: Default::default(),
             env: Default::default(),
             globals,
             retval: None,
-            output: Vec::new(),
+            output: Default::default(),
             enclosing_function: None,
             interrupted: Arc::new(AtomicBool::new(false)),
+            backtrace: vec![(0, "script".to_string())],
         }
     }
 }
@@ -490,6 +487,15 @@ impl Interpreter {
             self.execute(stmt)?
         }
         Ok(())
+    }
+
+    pub fn format_backtrace(&self) -> String {
+        let lines: Vec<_> = self
+            .backtrace
+            .iter()
+            .map(|(_, funname)| format!("[line ??] in {}", funname))
+            .collect();
+        format!("Backtrace (most recent call last):\n\n{}", lines.join("\n"))
     }
 
     fn alloc_id(&mut self) -> u64 {

@@ -147,14 +147,20 @@ fn main() {
                                         std::process::exit(0);
                                     }
 
-                                    let interpret_result = treewalk_interpreter::interpret(&stmts);
+                                    let mut interpreter: treewalk_interpreter::Interpreter =
+                                        Default::default();
+                                    let interpret_result = interpreter.interpret(&stmts);
 
                                     match interpret_result {
                                         Ok(_) => {
                                             std::process::exit(0);
                                         }
                                         Err(err) => {
-                                            println!("Treewalk Interpreter Error: {}", err);
+                                            println!(
+                                                "Runtime Error: {}\n\n{}",
+                                                err,
+                                                interpreter.format_backtrace()
+                                            );
                                             std::process::exit(-1);
                                         }
                                     }

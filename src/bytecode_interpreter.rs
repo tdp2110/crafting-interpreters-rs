@@ -898,8 +898,8 @@ impl Interpreter {
     ) -> Result<(), InterpreterError> {
         if arg_count != native_func.arity {
             return Err(InterpreterError::Runtime(format!(
-                "Expected {} arguments but found {}.",
-                native_func.arity, arg_count
+                "Native function {} expected {} arguments but found {}.",
+                native_func.name, native_func.arity, arg_count
             )));
         }
 
