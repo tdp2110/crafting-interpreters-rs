@@ -35,6 +35,8 @@ cargo run --release --quiet -- fib.lox
 ```
 
 On the same laptop, this shows a timing of 401 milliseconds.
+For comparison, on the same laptop, [the tiger compiler](https://github.com/tdp2110/HaskellTiger)
+computes the same answer in `0.00s user 0.00s system 4% cpu 0.077 total` (not counting compilation :)).
 
 Now consider hello_world.lox
 
