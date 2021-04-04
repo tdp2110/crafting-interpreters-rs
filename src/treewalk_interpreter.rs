@@ -997,7 +997,12 @@ mod tests {
     fn evaluate(code: &str) -> Result<String, String> {
         let tokens = scanner::scan_tokens(code.to_string()).unwrap();
         let stmts = parser::parse(tokens)?;
-        treewalk_interpreter::interpret(&stmts)
+        let mut interp = treewalk_interpreter::Interpreter::default();
+        let res = interp.interpret(&stmts);
+        match res {
+            Ok(()) => Ok(interp.output.join("\n")),
+            Err(err) => Err(err),
+        }
     }
 
     #[test]
