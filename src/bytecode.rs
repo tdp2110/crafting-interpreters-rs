@@ -85,7 +85,7 @@ impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Constant::Number(n) => write!(f, "{}", n),
-            Constant::String(s) => write!(f, "{}", s),
+            Constant::String(s) => write!(f, "\"{}\"", s),
             Constant::Function(Closure {
                 function:
                     Function {

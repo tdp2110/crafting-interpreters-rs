@@ -93,10 +93,10 @@ Giving
 ```
 ============ hello_world.lox ============
 ------------ constants -----------
-0    hello world!
+0    "hello world!"
 
 ------------ code -----------------
-0000   OP_CONSTANT hello world! (idx=0)                   line 1
+0000   OP_CONSTANT "hello world!" (idx=0)                 line 1
 0001   OP_PRINT                                           line 1
 0002   OP_NIL                                             line 1
 0003   OP_RETURN                                          line 1
