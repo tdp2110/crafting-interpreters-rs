@@ -44,12 +44,11 @@ impl Drop for LineReader {
 impl LineReader {
     pub fn readline(&mut self) -> Result<String, rustyline::error::ReadlineError> {
         let res = self.rl.readline(">>> ");
-        match &res {
-            Ok(line) => {
-                self.rl.add_history_entry(line.as_str());
-            }
-            _ => {}
+
+        if let Ok(line) = &res {
+            self.rl.add_history_entry(line.as_str());
         }
+
         res
     }
 }
