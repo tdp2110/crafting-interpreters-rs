@@ -1,5 +1,4 @@
 use rustyline::error::ReadlineError;
-use rustyline::Editor;
 
 use crate::expr;
 use crate::parser;
@@ -24,10 +23,40 @@ fn mk_interpreter() -> treewalk_interpreter::Interpreter {
     interpreter
 }
 
+struct LineReader {
+    rl: rustyline::Editor<()>,
+}
+
+impl Default for LineReader {
+    fn default() -> LineReader {
+        let mut rl = rustyline::Editor::<()>::new();
+        rl.load_history(HISTORY_FILE).ok();
+        LineReader { rl }
+    }
+}
+
+impl Drop for LineReader {
+    fn drop(&mut self) {
+        self.rl.save_history(HISTORY_FILE).unwrap();
+    }
+}
+
+impl LineReader {
+    pub fn readline(&mut self) -> Result<String, rustyline::error::ReadlineError> {
+        let res = self.rl.readline(">>> ");
+        match &res {
+            Ok(line) => {
+                self.rl.add_history_entry(line.as_str());
+            }
+            _ => {}
+        }
+        res
+    }
+}
+
 pub fn run() {
     let mut interpreter = mk_interpreter();
-    let mut rl = Editor::<()>::new();
-    rl.load_history(HISTORY_FILE).ok();
+    let mut line_reader = LineReader::default();
     println!(
         "============================================\n\
          Welcome to lox! using tree-walk interpreter.\n\
@@ -35,33 +64,30 @@ pub fn run() {
     );
 
     loop {
-        let readline = rl.readline(">> ");
+        let readline = line_reader.readline();
 
         match readline {
-            Ok(line) => {
-                rl.add_history_entry(line.as_str());
-                match scanner::scan_tokens(line) {
-                    Ok(tokens) => match parser::parse(tokens) {
-                        Ok(stmts) => {
-                            let stmts2: Vec<expr::Stmt> = stmts
-                                .iter()
-                                .map(|stmt| match stmt {
-                                    expr::Stmt::Expr(expr) => expr::Stmt::Print(expr.clone()),
-                                    _ => stmt.clone(),
-                                })
-                                .collect();
-                            match interpreter.interpret(&stmts2) {
-                                Ok(()) => {}
-                                Err(err) => println!("Runtime error: {}", err),
-                            }
+            Ok(line) => match scanner::scan_tokens(line) {
+                Ok(tokens) => match parser::parse(tokens) {
+                    Ok(stmts) => {
+                        let stmts2: Vec<expr::Stmt> = stmts
+                            .iter()
+                            .map(|stmt| match stmt {
+                                expr::Stmt::Expr(expr) => expr::Stmt::Print(expr.clone()),
+                                _ => stmt.clone(),
+                            })
+                            .collect();
+                        match interpreter.interpret(&stmts2) {
+                            Ok(()) => {}
+                            Err(err) => println!("Runtime error: {}", err),
                         }
-                        Err(err) => println!("\nParse error: {}", err),
-                    },
-                    Err(err) => {
-                        println!("\nScanner error: {}", err);
                     }
+                    Err(err) => println!("\nParse error: {}", err),
+                },
+                Err(err) => {
+                    println!("\nScanner error: {}", err);
                 }
-            }
+            },
             Err(ReadlineError::Interrupted) => break,
             Err(ReadlineError::Eof) => break,
             Err(err) => {
@@ -70,5 +96,4 @@ pub fn run() {
             }
         }
     }
-    rl.save_history(HISTORY_FILE).unwrap();
 }
