@@ -12,6 +12,7 @@ mod compiler;
 mod debugger;
 mod expr;
 mod gc;
+mod line_reader;
 mod parser;
 mod repl;
 mod scanner;
