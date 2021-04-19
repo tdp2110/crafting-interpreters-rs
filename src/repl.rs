@@ -10,15 +10,8 @@ use std::sync::atomic::Ordering;
 
 static HISTORY_FILE: &str = ".repl-history.txt";
 
-pub fn run() {
-    let mut interpreter: treewalk_interpreter::Interpreter = Default::default();
-    let mut rl = Editor::<()>::new();
-    rl.load_history(HISTORY_FILE).ok();
-    println!(
-        "============================================\n\
-         Welcome to lox! using tree-walk interpreter.\n\
-         ============================================\n"
-    );
+fn mk_interpreter() -> treewalk_interpreter::Interpreter {
+    let interpreter: treewalk_interpreter::Interpreter = Default::default();
 
     {
         let interrupt_clone = interpreter.interrupted.clone();
@@ -27,6 +20,19 @@ pub fn run() {
         })
         .expect("Error setting Ctrl-C handler");
     }
+
+    interpreter
+}
+
+pub fn run() {
+    let mut interpreter = mk_interpreter();
+    let mut rl = Editor::<()>::new();
+    rl.load_history(HISTORY_FILE).ok();
+    println!(
+        "============================================\n\
+         Welcome to lox! using tree-walk interpreter.\n\
+         ============================================\n"
+    );
 
     loop {
         let readline = rl.readline(">> ");
