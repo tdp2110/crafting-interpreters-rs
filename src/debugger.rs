@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, BufRead, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::bytecode;
 use crate::bytecode_interpreter;
+use crate::line_reader;
 
 macro_rules! vec_of_strings {
     ($($x:expr),*) => (vec![$($x.to_string()),*]);
@@ -93,6 +93,8 @@ impl Debugger {
     }
 
     pub fn debug(&mut self) {
+        let mut line_reader = line_reader::LineReader::new(".debugger-history.txt", "(loxdb) ");
+
         loop {
             if !self.interpreter.is_done() && !self.interrupted.load(Ordering::Acquire) {
                 if self.breakpoints.contains(&self.interpreter.next_line()) {
@@ -108,25 +110,21 @@ impl Debugger {
                 }
             }
 
-            print!("(loxdb) ");
-            io::stdout().flush().unwrap();
-            let mut line = String::new();
-            let stdin = io::stdin();
-            let nchar = stdin
-                .lock()
-                .read_line(&mut line)
-                .expect("Could not read line");
-            if nchar == 0 {
-                break;
-            }
-            let line = line.trim();
+            let readline = line_reader.readline();
 
-            let command = self.read_command(&line);
-            if self.execute_command(command, true) {
-                break;
-            }
-            if command != DebugCommand::RepeatOrNil {
-                self.last_command = Some(command);
+            match readline {
+                line_reader::LineReadStatus::Line(line) => {
+                    let line = line.trim();
+
+                    let command = self.read_command(&line);
+                    if self.execute_command(command, true) {
+                        break;
+                    }
+                    if command != DebugCommand::RepeatOrNil {
+                        self.last_command = Some(command);
+                    }
+                }
+                line_reader::LineReadStatus::Done => break,
             }
         }
     }

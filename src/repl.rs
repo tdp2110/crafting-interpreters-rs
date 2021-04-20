@@ -6,8 +6,6 @@ use crate::treewalk_interpreter;
 
 use std::sync::atomic::Ordering;
 
-static HISTORY_FILE: &str = ".repl-history.txt";
-
 fn mk_interpreter() -> treewalk_interpreter::Interpreter {
     let interpreter: treewalk_interpreter::Interpreter = Default::default();
 
@@ -24,7 +22,7 @@ fn mk_interpreter() -> treewalk_interpreter::Interpreter {
 
 pub fn run() {
     let mut interpreter = mk_interpreter();
-    let mut line_reader = line_reader::LineReader::new(HISTORY_FILE.to_string());
+    let mut line_reader = line_reader::LineReader::new(".repl-history.txt", ">>> ");
     println!(
         "============================================\n\
          Welcome to lox! using tree-walk interpreter.\n\
