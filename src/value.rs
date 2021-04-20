@@ -37,7 +37,7 @@ pub struct Closure {
 pub struct NativeFunction {
     pub arity: u8,
     pub name: String,
-    pub func: fn(&gc::Heap, Vec<Value>) -> Result<Value, String>,
+    pub func: fn(&gc::Heap, &Vec<Value>) -> Result<Value, String>,
 }
 
 #[derive(Clone)]
