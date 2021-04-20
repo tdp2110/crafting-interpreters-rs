@@ -45,7 +45,11 @@ pub fn run() {
                             .collect();
                         match interpreter.interpret(&stmts2) {
                             Ok(()) => {}
-                            Err(err) => println!("Runtime error: {}", err),
+                            Err(err) => println!(
+                                "Runtime error: {}\n\n{}",
+                                err,
+                                interpreter.format_backtrace()
+                            ),
                         }
                     }
                     Err(err) => println!("\nParse error: {}", err),
