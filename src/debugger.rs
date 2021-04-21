@@ -40,6 +40,16 @@ enum DebugCommand {
     Unknown,
 }
 
+enum ShouldBreak {
+    True,
+    False,
+}
+
+enum Verbosity {
+    Verbose,
+    None,
+}
+
 impl Debugger {
     pub fn new(func: bytecode::Function, input: String) -> Debugger {
         let lines: Vec<String> = input.lines().map(|s| s.to_string()).collect();
@@ -105,7 +115,7 @@ impl Debugger {
                         self.interpreter.next_line()
                     );
                 } else {
-                    self.execute_command(DebugCommand::Step, false);
+                    self.execute_command(DebugCommand::Step, Verbosity::None);
                     continue;
                 }
             }
@@ -117,7 +127,7 @@ impl Debugger {
                     let line = line.trim();
 
                     let command = self.read_command(&line);
-                    if self.execute_command(command, true) {
+                    if let ShouldBreak::True = self.execute_command(command, Verbosity::Verbose) {
                         break;
                     }
                     if command != DebugCommand::RepeatOrNil {
@@ -129,8 +139,7 @@ impl Debugger {
         }
     }
 
-    // returns true if should break, false otherwise
-    fn execute_command(&mut self, command: DebugCommand, verbose_step: bool) -> bool {
+    fn execute_command(&mut self, command: DebugCommand, verbosity: Verbosity) -> ShouldBreak {
         match command {
             DebugCommand::Dis => {
                 let func = &self.interpreter.frame().closure.function;
@@ -144,11 +153,11 @@ impl Debugger {
             DebugCommand::Step => {
                 if self.interpreter.is_done() {
                     println!("cannot step a completed program");
-                    return true;
+                    return ShouldBreak::True;
                 }
                 match self.interpreter.step() {
                     Ok(()) => {
-                        if verbose_step {
+                        if let Verbosity::Verbose = verbosity {
                             self.list()
                         }
                     }
@@ -160,7 +169,7 @@ impl Debugger {
                 }
             }
             DebugCommand::Quit => {
-                return true;
+                return ShouldBreak::True;
             }
             DebugCommand::Stack => {
                 for val in self.interpreter.stack.iter().rev() {
@@ -195,7 +204,7 @@ impl Debugger {
             }
             DebugCommand::RepeatOrNil => {
                 if let Some(last_command) = self.last_command {
-                    self.execute_command(last_command, verbose_step);
+                    self.execute_command(last_command, verbosity);
                 }
             }
             DebugCommand::Backtrace => {
@@ -205,7 +214,7 @@ impl Debugger {
             DebugCommand::Help => self.print_help(),
             DebugCommand::Unknown => {}
         }
-        false
+        ShouldBreak::False
     }
 
     fn run_until_off_line(&mut self, line: usize) {
@@ -213,7 +222,7 @@ impl Debugger {
             if self.interpreter.is_done() || self.interpreter.next_line() != line {
                 break;
             }
-            self.execute_command(DebugCommand::Step, false);
+            self.execute_command(DebugCommand::Step, Verbosity::None);
         }
     }
 
