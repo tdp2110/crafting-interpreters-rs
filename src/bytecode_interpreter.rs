@@ -99,7 +99,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) -> String {
     lines.join("\n")
 }
 
-fn dis_builtin(heap: &gc::Heap, args: &Vec<value::Value>) -> Result<value::Value, String> {
+fn dis_builtin(heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
     // arity checking is done in the interpreter
     match &args[0] {
         value::Value::Function(closure_handle) => {

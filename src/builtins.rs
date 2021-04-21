@@ -7,7 +7,7 @@ use crate::value;
 Arity checking is done in the interpreter prior to calling a builtin function.
 */
 
-pub fn exp(_heap: &gc::Heap, args: &Vec<value::Value>) -> Result<value::Value, String> {
+pub fn exp(_heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
     match args[0] {
         value::Value::Number(num) => Ok(value::Value::Number(num.exp())),
         _ => Err(format!(
@@ -17,7 +17,7 @@ pub fn exp(_heap: &gc::Heap, args: &Vec<value::Value>) -> Result<value::Value, S
     }
 }
 
-pub fn sqrt(_heap: &gc::Heap, args: &Vec<value::Value>) -> Result<value::Value, String> {
+pub fn sqrt(_heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
     match args[0] {
         value::Value::Number(num) => Ok(value::Value::Number(num.sqrt())),
         _ => Err(format!(
@@ -27,7 +27,7 @@ pub fn sqrt(_heap: &gc::Heap, args: &Vec<value::Value>) -> Result<value::Value, 
     }
 }
 
-pub fn clock(_heap: &gc::Heap, _args: &Vec<value::Value>) -> Result<value::Value, String> {
+pub fn clock(_heap: &gc::Heap, _args: &[value::Value]) -> Result<value::Value, String> {
     let start = SystemTime::now();
     let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
 
