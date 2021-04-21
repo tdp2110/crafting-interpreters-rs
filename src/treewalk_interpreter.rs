@@ -176,7 +176,7 @@ impl Callable for LoxClass {
 
 impl LoxClass {
     fn init(&self, interpreter: &Interpreter) -> Option<LoxFunction> {
-        match self.methods.get(&String::from("init")) {
+        match self.methods.get(&String::from(INIT)) {
             Some(initializer_id) => match interpreter.lox_functions.get(initializer_id) {
                 Some(initializer) => Some(initializer.clone()),
                 None => panic!(
