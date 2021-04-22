@@ -113,7 +113,7 @@ fn main() {
                                     }
                                 }
                                 Err(err) => {
-                                    println!("parse error: {}", err);
+                                    println!("parse error: {:?}", err);
                                     std::process::exit(-1)
                                 }
                             }

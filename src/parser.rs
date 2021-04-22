@@ -1,6 +1,8 @@
 use crate::expr;
 use crate::scanner;
 
+use std::fmt;
+
 struct Parser {
     tokens: Vec<scanner::Token>,
     current: usize,
@@ -17,7 +19,126 @@ impl Default for Parser {
     }
 }
 
-pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, String> {
+pub enum Error {
+    UnexpectedToken(scanner::Token),
+    TokenMismatch {
+        expected: scanner::TokenType,
+        found: scanner::Token,
+        maybe_on_err_string: Option<String>,
+    },
+    MaxParamsExceeded {
+        kind: FunctionKind,
+        line: usize,
+        col: i64,
+    },
+    ReturnNotInFun {
+        line: usize,
+        col: i64,
+    },
+    InvalidAssignment {
+        line: usize,
+        col: i64,
+    },
+    TooManyArguments {
+        line: usize,
+        col: i64,
+    },
+    ExpectedExpression {
+        token_type: scanner::TokenType,
+        line: usize,
+        col: i64,
+    },
+    InvalidTokenInUnaryOp {
+        token_type: scanner::TokenType,
+        line: usize,
+        col: i64,
+    },
+    InvalidTokenInBinaryOp {
+        token_type: scanner::TokenType,
+        line: usize,
+        col: i64,
+    },
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self {
+            Error::UnexpectedToken(tok) => write!(
+                f,
+                "Unexpected token {:?} at line={},col={}",
+                tok.ty, tok.line, tok.col
+            ),
+            Error::TokenMismatch {
+                maybe_on_err_string,
+                expected,
+                found,
+            } => {
+                write!(
+                    f,
+                    "Expected token {:?} but found {:?} at line={},col={}",
+                    expected, found.ty, found.line, found.col
+                )?;
+                if let Some(on_err_string) = maybe_on_err_string {
+                    write!(f, ": {}", on_err_string)?;
+                }
+                fmt::Result::Ok(())
+            }
+            Error::MaxParamsExceeded { kind, line, col } => write!(
+                f,
+                "Cannot have more than 255 parameters in a {:?} declaration. Line={},col={}",
+                kind, line, col
+            ),
+            Error::ReturnNotInFun { line, col } => write!(
+                f,
+                "return statement not enclosed in a FunDecl at line={},col={}",
+                line, col
+            ),
+            Error::InvalidAssignment { line, col } => {
+                write!(f, "invalid assignment target at line={},col={}", line, col)
+            }
+            Error::TooManyArguments { line, col } => write!(
+                f,
+                "Cannot have more than 255 arguments to a function call. Line={},col={}",
+                line, col
+            ),
+            Error::ExpectedExpression {
+                token_type,
+                line,
+                col,
+            } => write!(
+                f,
+                "Expected expression, but found token {:?} at line={},col={}",
+                token_type, line, col
+            ),
+            Error::InvalidTokenInUnaryOp {
+                token_type,
+                line,
+                col,
+            } => write!(
+                f,
+                "invalid token in unary op {:?} at line={},col={}",
+                token_type, line, col
+            ),
+            Error::InvalidTokenInBinaryOp {
+                token_type,
+                line,
+                col,
+            } => write!(
+                f,
+                "invalid token in binary op {:?} at line={},col={}",
+                token_type, line, col
+            ),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum FunctionKind {
+    Function,
+    Method,
+}
+
+pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, Error> {
     let mut p = Parser {
         tokens,
         ..Default::default()
@@ -28,10 +149,7 @@ pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, String> {
         Ok(stmts_or_err) => {
             if !p.is_at_end() {
                 let tok = &p.tokens[p.current];
-                Err(format!(
-                    "unexpected token of type {:?} at line={},col={}",
-                    tok.ty, tok.line, tok.col
-                ))
+                Err(Error::UnexpectedToken(tok.clone()))
             } else {
                 Ok(stmts_or_err)
             }
@@ -102,7 +220,7 @@ primary → "true" | "false" | "nil" | "this"
 
 */
 impl Parser {
-    pub fn parse(&mut self) -> Result<Vec<expr::Stmt>, String> {
+    pub fn parse(&mut self) -> Result<Vec<expr::Stmt>, Error> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -113,13 +231,13 @@ impl Parser {
         Ok(statements)
     }
 
-    fn declaration(&mut self) -> Result<expr::Stmt, String> {
+    fn declaration(&mut self) -> Result<expr::Stmt, Error> {
         if self.matches(scanner::TokenType::Var) {
             return self.var_decl();
         }
 
         if self.matches(scanner::TokenType::Fun) {
-            return Ok(expr::Stmt::FunDecl(self.fun_decl("function")?));
+            return Ok(expr::Stmt::FunDecl(self.fun_decl(FunctionKind::Function)?));
         }
 
         if self.matches(scanner::TokenType::Class) {
@@ -129,7 +247,7 @@ impl Parser {
         self.statement()
     }
 
-    fn class_decl(&mut self) -> Result<expr::Stmt, String> {
+    fn class_decl(&mut self) -> Result<expr::Stmt, Error> {
         let name_tok = self
             .consume(scanner::TokenType::Identifier, "Expected class name")?
             .clone();
@@ -156,7 +274,7 @@ impl Parser {
 
         let mut methods = Vec::new();
         while !self.check(scanner::TokenType::RightBrace) && !self.is_at_end() {
-            methods.push(self.fun_decl("method")?);
+            methods.push(self.fun_decl(FunctionKind::Method)?);
         }
         let methods = methods;
 
@@ -172,11 +290,11 @@ impl Parser {
         }))
     }
 
-    fn fun_decl(&mut self, kind: &str) -> Result<expr::FunDecl, String> {
+    fn fun_decl(&mut self, kind: FunctionKind) -> Result<expr::FunDecl, Error> {
         let name_tok = self
             .consume(
                 scanner::TokenType::Identifier,
-                format!("Expected {}  name", kind).as_ref(),
+                format!("Expected {:?} name", kind).as_ref(),
             )?
             .clone();
 
@@ -188,7 +306,7 @@ impl Parser {
 
         self.consume(
             scanner::TokenType::LeftParen,
-            format!("Expected ( after {} name", kind).as_ref(),
+            format!("Expected ( after {:?} name", kind).as_ref(),
         )?;
 
         let mut parameters = Vec::new();
@@ -197,10 +315,11 @@ impl Parser {
             loop {
                 if parameters.len() >= 255 {
                     let peek_tok = self.peek();
-                    return Err(format!(
-                        "Cannot have more than 255 parameters in a {} declaration. Line={},col={}",
-                        kind, peek_tok.line, peek_tok.col
-                    ));
+                    return Err(Error::MaxParamsExceeded {
+                        kind,
+                        line: peek_tok.line,
+                        col: peek_tok.col,
+                    });
                 }
 
                 let tok = self
@@ -240,7 +359,7 @@ impl Parser {
         })
     }
 
-    fn var_decl(&mut self) -> Result<expr::Stmt, String> {
+    fn var_decl(&mut self) -> Result<expr::Stmt, Error> {
         let name_token = self
             .consume(scanner::TokenType::Identifier, "Expected variable name")?
             .clone();
@@ -266,7 +385,7 @@ impl Parser {
         ))
     }
 
-    fn statement(&mut self) -> Result<expr::Stmt, String> {
+    fn statement(&mut self) -> Result<expr::Stmt, Error> {
         if self.matches(scanner::TokenType::Print) {
             return self.print_statement();
         }
@@ -294,14 +413,14 @@ impl Parser {
         self.expression_statement()
     }
 
-    fn return_statement(&mut self) -> Result<expr::Stmt, String> {
+    fn return_statement(&mut self) -> Result<expr::Stmt, Error> {
         let prev_tok = self.previous().clone();
 
         if !self.in_fundec {
-            return Err(format!(
-                "return statement not enclosed in a FunDecl at line={},col={}",
-                prev_tok.line, prev_tok.col
-            ));
+            return Err(Error::ReturnNotInFun {
+                line: prev_tok.line,
+                col: prev_tok.col,
+            });
         }
 
         let maybe_retval = if !self.matches(scanner::TokenType::Semicolon) {
@@ -326,7 +445,7 @@ impl Parser {
         ))
     }
 
-    fn for_statement(&mut self) -> Result<expr::Stmt, String> {
+    fn for_statement(&mut self) -> Result<expr::Stmt, Error> {
         self.consume(scanner::TokenType::LeftParen, "Expected ( after for.")?;
 
         let mut maybe_initializer: Option<expr::Stmt> = None;
@@ -380,7 +499,7 @@ impl Parser {
         Ok(body)
     }
 
-    fn while_statement(&mut self) -> Result<expr::Stmt, String> {
+    fn while_statement(&mut self) -> Result<expr::Stmt, Error> {
         self.consume(scanner::TokenType::LeftParen, "Expected ( after while")?;
         let cond = self.expression()?;
         self.consume(
@@ -391,7 +510,7 @@ impl Parser {
         Ok(expr::Stmt::While(cond, body))
     }
 
-    fn if_statement(&mut self) -> Result<expr::Stmt, String> {
+    fn if_statement(&mut self) -> Result<expr::Stmt, Error> {
         self.consume(scanner::TokenType::LeftParen, "Expected ( after if.")?;
         let cond = self.expression()?;
         self.consume(
@@ -408,7 +527,7 @@ impl Parser {
         Ok(expr::Stmt::If(cond, then_branch, maybe_else_branch))
     }
 
-    fn block(&mut self) -> Result<Vec<expr::Stmt>, String> {
+    fn block(&mut self) -> Result<Vec<expr::Stmt>, Error> {
         let mut stmts = Vec::new();
 
         while !self.check(scanner::TokenType::RightBrace) && !self.is_at_end() {
@@ -420,23 +539,23 @@ impl Parser {
         Ok(stmts)
     }
 
-    fn print_statement(&mut self) -> Result<expr::Stmt, String> {
+    fn print_statement(&mut self) -> Result<expr::Stmt, Error> {
         let expr = self.expression()?;
         self.consume(scanner::TokenType::Semicolon, "Expected ; after value")?;
         Ok(expr::Stmt::Print(expr))
     }
 
-    fn expression_statement(&mut self) -> Result<expr::Stmt, String> {
+    fn expression_statement(&mut self) -> Result<expr::Stmt, Error> {
         let expr = self.expression()?;
         self.consume(scanner::TokenType::Semicolon, "Expected ; after value")?;
         Ok(expr::Stmt::Expr(expr))
     }
 
-    fn expression(&mut self) -> Result<expr::Expr, String> {
+    fn expression(&mut self) -> Result<expr::Expr, Error> {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Result<expr::Expr, String> {
+    fn assignment(&mut self) -> Result<expr::Expr, Error> {
         let expr = self.or()?;
 
         if self.matches(scanner::TokenType::Equal) {
@@ -448,17 +567,17 @@ impl Parser {
             } else if let expr::Expr::Get(e, attr) = expr {
                 return Ok(expr::Expr::Set(e, attr, Box::new(value)));
             } else {
-                return Err(format!(
-                    "invalid assignment target at line={},col={}",
-                    equals.line, equals.col
-                ));
+                return Err(Error::InvalidAssignment {
+                    line: equals.line,
+                    col: equals.col,
+                });
             }
         }
 
         Ok(expr)
     }
 
-    fn or(&mut self) -> Result<expr::Expr, String> {
+    fn or(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.and()?;
 
         while self.matches(scanner::TokenType::Or) {
@@ -469,7 +588,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn and(&mut self) -> Result<expr::Expr, String> {
+    fn and(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.equality()?;
 
         while self.matches(scanner::TokenType::And) {
@@ -480,7 +599,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<expr::Expr, String> {
+    fn comparison(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.addition()?;
 
         while self.match_one_of(vec![
@@ -504,7 +623,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn addition(&mut self) -> Result<expr::Expr, String> {
+    fn addition(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.multiplication()?;
 
         while self.match_one_of(vec![scanner::TokenType::Minus, scanner::TokenType::Plus]) {
@@ -523,7 +642,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn multiplication(&mut self) -> Result<expr::Expr, String> {
+    fn multiplication(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.unary()?;
 
         while self.match_one_of(vec![scanner::TokenType::Slash, scanner::TokenType::Star]) {
@@ -542,7 +661,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<expr::Expr, String> {
+    fn unary(&mut self) -> Result<expr::Expr, Error> {
         if self.match_one_of(vec![scanner::TokenType::Bang, scanner::TokenType::Minus]) {
             let operator_token = self.previous().clone();
             let right = Box::new(self.unary()?);
@@ -556,7 +675,7 @@ impl Parser {
         self.call()
     }
 
-    fn call(&mut self) -> Result<expr::Expr, String> {
+    fn call(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.primary()?;
 
         loop {
@@ -584,17 +703,17 @@ impl Parser {
         Ok(expr)
     }
 
-    fn finish_call(&mut self, callee: expr::Expr) -> Result<expr::Expr, String> {
+    fn finish_call(&mut self, callee: expr::Expr) -> Result<expr::Expr, Error> {
         let mut arguments = Vec::new();
 
         if !self.check(scanner::TokenType::RightParen) {
             loop {
                 if arguments.len() >= 255 {
                     let peek_tok = self.peek();
-                    return Err(format!(
-                        "Cannot have more than 255 arguments to a function call. Line={},col={}",
-                        peek_tok.line, peek_tok.col
-                    ));
+                    return Err(Error::TooManyArguments {
+                        line: peek_tok.line,
+                        col: peek_tok.col,
+                    });
                 }
                 arguments.push(self.expression()?);
                 if !self.matches(scanner::TokenType::Comma) {
@@ -618,7 +737,7 @@ impl Parser {
         ))
     }
 
-    fn primary(&mut self) -> Result<expr::Expr, String> {
+    fn primary(&mut self) -> Result<expr::Expr, Error> {
         if self.matches(scanner::TokenType::False) {
             return Ok(expr::Expr::Literal(expr::Literal::False));
         }
@@ -707,33 +826,29 @@ impl Parser {
             return Ok(expr::Expr::Grouping(expr));
         }
 
-        Err(format!(
-            "Expected expression, but found token {:?} at line={},col={}",
-            self.peek().ty,
-            self.peek().line,
-            self.peek().col
-        ))
+        Err(Error::ExpectedExpression {
+            token_type: self.peek().ty,
+            line: self.peek().line,
+            col: self.peek().col,
+        })
     }
 
     fn consume(
         &mut self,
         tok: scanner::TokenType,
         on_err_str: &str,
-    ) -> Result<&scanner::Token, String> {
+    ) -> Result<&scanner::Token, Error> {
         if self.check(tok) {
             return Ok(self.advance());
         }
-        Err(format!(
-            "Expected token {:?}, but found token {:?} at line={},col={}: {}",
-            tok,
-            self.peek().ty,
-            self.peek().line,
-            self.peek().col,
-            on_err_str
-        ))
+        Err(Error::TokenMismatch {
+            expected: tok,
+            found: self.peek().clone(),
+            maybe_on_err_string: Some(on_err_str.into()),
+        })
     }
 
-    fn op_token_to_unary_op(tok: &scanner::Token) -> Result<expr::UnaryOp, String> {
+    fn op_token_to_unary_op(tok: &scanner::Token) -> Result<expr::UnaryOp, Error> {
         match tok.ty {
             scanner::TokenType::Minus => Ok(expr::UnaryOp {
                 ty: expr::UnaryOpTy::Minus,
@@ -745,14 +860,15 @@ impl Parser {
                 line: tok.line,
                 col: tok.col,
             }),
-            _ => Err(format!(
-                "invalid token in unary op {:?} at line={},col={}",
-                tok.ty, tok.line, tok.col
-            )),
+            _ => Err(Error::InvalidTokenInUnaryOp {
+                token_type: tok.ty,
+                line: tok.line,
+                col: tok.col,
+            }),
         }
     }
 
-    fn equality(&mut self) -> Result<expr::Expr, String> {
+    fn equality(&mut self) -> Result<expr::Expr, Error> {
         let mut expr = self.comparison()?;
 
         while self.match_one_of(vec![
@@ -775,7 +891,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn op_token_to_binop(tok: &scanner::Token) -> Result<expr::BinaryOp, String> {
+    fn op_token_to_binop(tok: &scanner::Token) -> Result<expr::BinaryOp, Error> {
         match tok.ty {
             scanner::TokenType::EqualEqual => Ok(expr::BinaryOp {
                 ty: expr::BinaryOpTy::EqualEqual,
@@ -827,10 +943,11 @@ impl Parser {
                 line: tok.line,
                 col: tok.col,
             }),
-            _ => Err(format!(
-                "invalid token in binary operation {:?} at line={},col={}",
-                tok.ty, tok.line, tok.col
-            )),
+            _ => Err(Error::InvalidTokenInBinaryOp {
+                token_type: tok.ty,
+                line: tok.line,
+                col: tok.col,
+            }),
         }
     }
 

@@ -996,12 +996,17 @@ mod tests {
 
     fn evaluate(code: &str) -> Result<String, String> {
         let tokens = scanner::scan_tokens(code.to_string()).unwrap();
-        let stmts = parser::parse(tokens)?;
-        let mut interp = treewalk_interpreter::Interpreter::default();
-        let res = interp.interpret(&stmts);
-        match res {
-            Ok(()) => Ok(interp.output.join("\n")),
-            Err(err) => Err(err),
+
+        match parser::parse(tokens) {
+            Ok(stmts) => {
+                let mut interp = treewalk_interpreter::Interpreter::default();
+                let res = interp.interpret(&stmts);
+                match res {
+                    Ok(()) => Ok(interp.output.join("\n")),
+                    Err(err) => Err(err),
+                }
+            }
+            Err(err) => Err(format!("{:?}", err)),
         }
     }
 

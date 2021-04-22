@@ -52,7 +52,7 @@ pub fn run() {
                             ),
                         }
                     }
-                    Err(err) => println!("\nParse error: {}", err),
+                    Err(err) => println!("\nParse error: {:?}", err),
                 },
                 Err(err) => {
                     println!("\nScanner error: {}", err);
