@@ -6,6 +6,9 @@ use crate::treewalk_interpreter;
 
 use std::sync::atomic::Ordering;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
+
 fn mk_interpreter() -> treewalk_interpreter::Interpreter {
     let interpreter: treewalk_interpreter::Interpreter = Default::default();
 
@@ -84,9 +87,12 @@ pub fn run() {
     let mut interpreter = mk_interpreter();
     let mut line_reader = line_reader::LineReader::new(".repl-history.txt", ">>> ");
     println!(
-        "============================================\n\
-         Welcome to lox! using tree-walk interpreter.\n\
-         ============================================\n"
+        "===================================================\n\
+         Welcome to lox {}! Using tree-walk interpreter.\n\
+         \n\
+         Authors: {}\n\
+         ===================================================\n",
+        VERSION, AUTHORS
     );
 
     loop {

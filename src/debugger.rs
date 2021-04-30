@@ -7,6 +7,9 @@ use crate::bytecode;
 use crate::bytecode_interpreter;
 use crate::line_reader;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
+
 macro_rules! vec_of_strings {
     ($($x:expr),*) => (vec![$($x.to_string()),*]);
 }
@@ -103,6 +106,15 @@ impl Debugger {
     }
 
     pub fn debug(&mut self) {
+        println!(
+            "===================================================\n\
+             Welcome to loxdb {}, the lox debugger! \n\
+             Authors: {}\n\
+             \n\
+             Enter \"help\" (or \"h\") for list of commands.\n\
+             ===================================================\n",
+            VERSION, AUTHORS
+        );
         let mut line_reader = line_reader::LineReader::new(".debugger-history.txt", "(loxdb) ");
 
         loop {
