@@ -2997,4 +2997,21 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
+    #[test]
+    fn test_empty_list_building() {
+        let func_or_err = Compiler::compile(String::from("print([]);"));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["[]"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
 }

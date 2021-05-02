@@ -1736,4 +1736,14 @@ mod tests {
             Err(err) => panic!(err),
         }
     }
+
+    #[test]
+    fn test_empty_list_construction() {
+        let res = evaluate("print([]);");
+
+        match res {
+            Ok(output) => assert_eq!(output, "[]"),
+            Err(err) => panic!(err),
+        }
+    }
 }
