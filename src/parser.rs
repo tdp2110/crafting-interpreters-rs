@@ -216,7 +216,8 @@ arguments → expression ( "," expression )* ;
 
 primary → "true" | "false" | "nil" | "this"
         | NUMBER | STRING | IDENTIFIER | "(" expression ")"
-        | "super" "." IDENTIFIER ;
+        | "super" "." IDENTIFIER
+        | "[" arguments? "]" ;
 
 */
 impl Parser {
@@ -824,6 +825,22 @@ impl Parser {
                 return Err(err);
             }
             return Ok(expr::Expr::Grouping(expr));
+        }
+        if self.matches(scanner::TokenType::LeftBracket) {
+            let mut list_elements = Vec::new();
+
+            if !self.check(scanner::TokenType::RightBracket) {
+                loop {
+                    list_elements.push(self.expression()?);
+                    if !self.matches(scanner::TokenType::Comma) {
+                        break;
+                    }
+                }
+            }
+
+            self.consume(scanner::TokenType::RightBracket, "Expected ].")?;
+
+            return Ok(expr::Expr::List(list_elements));
         }
 
         Err(Error::ExpectedExpression {

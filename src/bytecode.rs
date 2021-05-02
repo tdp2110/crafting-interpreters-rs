@@ -59,6 +59,7 @@ pub enum Op {
     Inherit,
     GetSuper(usize),
     SuperInvoke(/*method_name*/ String, /*arg count*/ u8),
+    BuildList(usize),
 }
 
 #[derive(Default, Clone, Debug)]

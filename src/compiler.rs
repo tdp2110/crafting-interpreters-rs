@@ -100,6 +100,7 @@ enum ParseFn {
     Dot,
     This,
     Super,
+    List,
 }
 
 struct ParseRule {
@@ -1050,6 +1051,27 @@ impl Compiler {
         Ok(())
     }
 
+    fn list(&mut self, _can_assign: bool) -> Result<(), String> {
+        let arg_count = self.list_elements()?;
+        self.emit_op(bytecode::Op::BuildList(arg_count), self.previous().line);
+        Ok(())
+    }
+
+    fn list_elements(&mut self) -> Result<usize, String> {
+        let mut num_elements: usize = 0;
+        if !self.check(scanner::TokenType::RightBracket) {
+            loop {
+                self.expression()?;
+                num_elements += 1;
+                if !self.matches(scanner::TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(scanner::TokenType::RightBracket, "Expected ']'.")?;
+        Ok(num_elements)
+    }
+
     fn argument_list(&mut self) -> Result<u8, String> {
         let mut arg_count: u8 = 0;
         if !self.check(scanner::TokenType::RightParen) {
@@ -1160,6 +1182,7 @@ impl Compiler {
             ParseFn::Dot => self.dot(can_assign),
             ParseFn::This => self.this(can_assign),
             ParseFn::Super => self.super_(can_assign),
+            ParseFn::List => self.list(can_assign),
         }
     }
 
@@ -1235,6 +1258,16 @@ impl Compiler {
                 precedence: Precedence::None,
             },
             scanner::TokenType::RightBrace => ParseRule {
+                prefix: None,
+                infix: None,
+                precedence: Precedence::None,
+            },
+            scanner::TokenType::LeftBracket => ParseRule {
+                prefix: Some(ParseFn::List),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            scanner::TokenType::RightBracket => ParseRule {
                 prefix: None,
                 infix: None,
                 precedence: Precedence::None,

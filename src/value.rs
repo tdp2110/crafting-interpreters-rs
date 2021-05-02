@@ -69,6 +69,7 @@ pub enum Value {
     Class(gc::HeapId),
     NativeFunction(NativeFunction),
     Nil,
+    List(gc::HeapId),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -82,6 +83,7 @@ pub enum Type {
     BoundMethod,
     Instance,
     Nil,
+    List,
 }
 
 pub fn type_of(value: &Value) -> Type {
@@ -95,5 +97,6 @@ pub fn type_of(value: &Value) -> Type {
         Value::Class(_) => Type::Class,
         Value::Instance(_) => Type::Instance,
         Value::Nil => Type::Nil,
+        Value::List(_) => Type::List,
     }
 }
