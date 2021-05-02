@@ -6,8 +6,8 @@ use crate::treewalk_interpreter;
 
 use std::sync::atomic::Ordering;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-const AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 fn mk_interpreter() -> treewalk_interpreter::Interpreter {
     let interpreter: treewalk_interpreter::Interpreter = Default::default();

@@ -12,6 +12,7 @@ pub enum Expr {
     Logical(Box<Expr>, LogicalOp, Box<Expr>),
     Set(Box<Expr>, Symbol, Box<Expr>),
     Super(SourceLocation, Symbol),
+    List(Vec<Expr>),
 }
 
 #[derive(Debug, Clone, Copy)]

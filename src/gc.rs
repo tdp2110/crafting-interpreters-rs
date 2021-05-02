@@ -9,12 +9,19 @@ enum GCData {
     Class(value::Class),
     Instance(value::Instance),
     BoundMethod(value::BoundMethod),
+    List(Vec<value::Value>),
 }
 
 impl GCData {
     fn as_str(&self) -> Option<&String> {
         match self {
             GCData::String(s) => Some(s),
+            _ => None,
+        }
+    }
+    fn as_list(&self) -> Option<&Vec<value::Value>> {
+        match self {
+            GCData::List(elements) => Some(elements),
             _ => None,
         }
     }
@@ -114,6 +121,13 @@ impl Heap {
         id
     }
 
+    pub fn manage_list(&mut self, elements: Vec<value::Value>) -> HeapId {
+        self.bytes_allocated += elements.len();
+        let id = self.generate_id();
+        self.values.insert(id, GCVal::from(GCData::List(elements)));
+        id
+    }
+
     pub fn manage_closure(&mut self, c: value::Closure) -> HeapId {
         self.bytes_allocated += c.function.chunk.code.len();
         self.bytes_allocated += c.function.chunk.constants.len();
@@ -171,6 +185,10 @@ impl Heap {
             .unwrap()
     }
 
+    pub fn get_list_elements(&self, id: HeapId) -> &Vec<value::Value> {
+        self.values.get(&id).unwrap().data.as_list().unwrap()
+    }
+
     pub fn get_class(&self, id: HeapId) -> &value::Class {
         self.values.get(&id).unwrap().data.as_class().unwrap()
     }
@@ -218,6 +236,7 @@ impl Heap {
             GCData::Class(class) => self.class_children(class),
             GCData::Instance(instance) => self.instance_children(instance),
             GCData::BoundMethod(method) => self.bound_method_children(method),
+            GCData::List(elements) => self.list_children(elements),
         }
     }
 
@@ -235,6 +254,18 @@ impl Heap {
 
         for field in instance.fields.values() {
             if let Some(id) = self.extract_id(field) {
+                res.push(id)
+            }
+        }
+
+        res
+    }
+
+    pub fn list_children(&self, elements: &[value::Value]) -> Vec<HeapId> {
+        let mut res = Vec::new();
+
+        for element in elements {
+            if let Some(id) = self.extract_id(element) {
                 res.push(id)
             }
         }

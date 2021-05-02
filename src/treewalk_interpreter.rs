@@ -267,6 +267,7 @@ pub enum Value {
     ),
     LoxClass(expr::Symbol, /*id*/ u64),
     LoxInstance(expr::Symbol, /*id*/ u64),
+    List(Vec<Value>),
 }
 
 fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Callable>> {
@@ -304,6 +305,7 @@ pub enum Type {
     LoxFunction,
     LoxClass,
     LoxInstance,
+    List,
 }
 
 pub fn type_of(val: &Value) -> Type {
@@ -316,6 +318,7 @@ pub fn type_of(val: &Value) -> Type {
         Value::LoxFunction(_, _, _) => Type::LoxFunction,
         Value::LoxClass(_, _) => Type::LoxClass,
         Value::LoxInstance(_, _) => Type::LoxInstance,
+        Value::List(_) => Type::List,
     }
 }
 
@@ -330,6 +333,16 @@ impl fmt::Display for Value {
             Value::LoxFunction(sym, _, _) => write!(f, "LoxFunction({})", sym.name),
             Value::LoxClass(sym, _) => write!(f, "LoxClass({})", sym.name),
             Value::LoxInstance(sym, _) => write!(f, "LoxInstance({})", sym.name),
+            Value::List(elements) => {
+                write!(f, "[")?;
+                elements.split_last().map(|(last_elt, rest)| {
+                    rest.iter()
+                        .map(|elt| write!(f, "{}, ", elt))
+                        .collect::<Result<_, _>>()?;
+                    write!(f, "{}", last_elt)
+                });
+                write!(f, "]")
+            }
         }
     }
 }
@@ -777,6 +790,19 @@ impl Interpreter {
                     source_location.line, source_location.col
                 )),
             },
+            expr::Expr::List(elements) => self.list(elements)
+        }
+    }
+
+    fn list(&mut self, element_exprs: &[expr::Expr]) -> Result<Value, String> {
+        let maybe_elements: Result<Vec<_>, _> = element_exprs
+            .iter()
+            .map(|expr| self.interpret_expr(expr))
+            .collect();
+
+        match maybe_elements {
+            Ok(args) => Ok(Value::List(args)),
+            Err(err) => Err(err),
         }
     }
 
@@ -964,6 +990,10 @@ impl Interpreter {
             )),
             (_, Value::Nil) => Err(format!(
                 "invalid application of unary op {:?} to nil at line={},col={}",
+                op.ty, op.line, op.col
+            )),
+            (_, Value::List(_)) => Err(format!(
+                "invalid application of unary op {:?} to list at line={},col={}",
                 op.ty, op.line, op.col
             )),
         }
@@ -1693,6 +1723,16 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "'hello world'"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_list_construction() {
+        let res = evaluate("print([1,2,3]);");
+
+        match res {
+            Ok(output) => assert_eq!(output, "[1, 2, 3]"),
             Err(err) => panic!(err),
         }
     }

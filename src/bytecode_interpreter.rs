@@ -66,6 +66,7 @@ pub fn disassemble_code(chunk: &bytecode::Chunk) -> Vec<String> {
             bytecode::Op::SuperInvoke(method_name, arg_count) => {
                 format!("OP_SUPER_INOKE {} nargs={}", method_name, arg_count)
             }
+            bytecode::Op::BuildList(size) => format!("OP_BUILD_LIST {}", size),
         };
 
         lines.push(format!(
@@ -292,6 +293,17 @@ impl Interpreter {
                 format!("<bound method of {} instance>", class_name)
             }
             value::Value::Nil => "nil".to_string(),
+            value::Value::List(list_id) => {
+                let elements = self.get_list_elements(*list_id);
+                format!(
+                    "[{}]",
+                    elements
+                        .iter()
+                        .map(|element| self.format_val(element))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )
+            }
         }
     }
 
@@ -749,6 +761,15 @@ impl Interpreter {
                 };
                 self.invoke_from_class(superclass_id, &method_name, arg_count)?;
             }
+            (bytecode::Op::BuildList(size), _) => {
+                let mut list_elements = Vec::new();
+                for _ in 0..size {
+                    list_elements.push(self.pop_stack())
+                }
+                list_elements.reverse();
+                self.stack
+                    .push(value::Value::List(self.heap.manage_list(list_elements)));
+            }
         }
         Ok(())
     }
@@ -981,7 +1002,8 @@ impl Interpreter {
             value::Value::Class(_) => false,
             value::Value::Instance(_) => false,
             value::Value::BoundMethod(_) => false,
-            value::Value::String(s) => self.get_str(*s).is_empty(),
+            value::Value::String(id) => self.get_str(*id).is_empty(),
+            value::Value::List(id) => self.get_list_elements(*id).is_empty(),
         }
     }
 
@@ -1180,6 +1202,10 @@ impl Interpreter {
         self.heap.get_bound_method(method_handle)
     }
 
+    fn get_list_elements(&self, list_handle: gc::HeapId) -> &Vec<value::Value> {
+        self.heap.get_list_elements(list_handle)
+    }
+
     fn get_instance(&self, instance_handle: gc::HeapId) -> &value::Instance {
         self.heap.get_instance(instance_handle)
     }
@@ -1254,6 +1280,7 @@ impl Interpreter {
             value::Value::Class(id) => Some(*id),
             value::Value::NativeFunction(_) => None,
             value::Value::Nil => None,
+            value::Value::List(_) => None,
         }
     }
 
@@ -2947,6 +2974,23 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["hello world"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_list_building() {
+        let func_or_err = Compiler::compile(String::from("print([1,2,3]);"));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3]"]),
                     Err(err) => panic!(err),
                 }
             }
