@@ -933,6 +933,11 @@ impl Interpreter {
             (Value::String(s1), expr::BinaryOpTy::Plus, Value::String(s2)) => {
                 Ok(Value::String(format!("{}{}", s1, s2)))
             }
+            (Value::List(xs), expr::BinaryOpTy::Plus, Value::List(ys)) => {
+                let mut res = xs.clone();
+                res.extend(ys.clone());
+                Ok(Value::List(res))
+            }
             (_, expr::BinaryOpTy::EqualEqual, _) => {
                 Ok(Value::Bool(Interpreter::equals(&lhs, &rhs)))
             }
@@ -1743,6 +1748,16 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[]"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_list_concat() {
+        let res = evaluate("print([1,2,3] + [4,5,6]);");
+
+        match res {
+            Ok(output) => assert_eq!(output, "[1, 2, 3, 4, 5, 6]"),
             Err(err) => panic!(err),
         }
     }

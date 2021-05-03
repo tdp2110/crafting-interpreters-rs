@@ -438,6 +438,14 @@ impl Interpreter {
                                 self.get_str(*s1)
                             ))));
                     }
+                    (value::Value::List(id1), value::Value::List(id2)) => {
+                        self.pop_stack();
+                        self.pop_stack();
+                        let mut res = self.get_list_elements(*id2).clone();
+                        res.extend(self.get_list_elements(*id1).clone());
+                        self.stack
+                            .push(value::Value::List(self.heap.manage_list(res)));
+                    }
                     _ => {
                         return Err(InterpreterError::Runtime(format!(
                             "invalid operands of type {:?} and {:?} in add expression: \
@@ -3008,6 +3016,23 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[]"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_list_concat() {
+        let func_or_err = Compiler::compile(String::from("print([1,2,3] + [4,5,6]);"));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3, 4, 5, 6]"]),
                     Err(err) => panic!(err),
                 }
             }
