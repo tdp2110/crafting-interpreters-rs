@@ -18,7 +18,7 @@ trait Callable {
 pub struct NativeFunction {
     pub name: String,
     pub arity: u8,
-    pub callable: fn(&[Value]) -> Result<Value, String>,
+    pub callable: fn(&mut Interpreter, &[Value]) -> Result<Value, String>,
 }
 
 impl fmt::Debug for NativeFunction {
@@ -31,8 +31,8 @@ impl Callable for NativeFunction {
     fn arity(&self, _interpreter: &Interpreter) -> u8 {
         self.arity
     }
-    fn call(&self, _interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
-        (self.callable)(args)
+    fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
+        (self.callable)(interpreter, args)
     }
 }
 
@@ -458,7 +458,7 @@ impl Default for Interpreter {
                 Some(Value::NativeFunction(NativeFunction {
                     name: String::from("clock"),
                     arity: 0,
-                    callable: |_| {
+                    callable: |_, _| {
                         let start = SystemTime::now();
                         let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
 
@@ -477,10 +477,44 @@ impl Default for Interpreter {
                 Some(Value::NativeFunction(NativeFunction {
                     name: String::from("len"),
                     arity: 1,
-                    callable: |values| match &values[0] {
+                    callable: |_, values| match &values[0] {
                         Value::String(s) => Ok(Value::Number(s.len() as f64)),
                         Value::List(elts) => Ok(Value::Number(elts.len() as f64)),
                         val => Err(format!("Object of type {:?} has no len.", type_of(val))),
+                    },
+                })),
+                SourceLocation {
+                    line: 1337,
+                    col: 1337,
+                },
+            ),
+        );
+        globals_venv.insert(
+            String::from("forEach"),
+            (
+                Some(Value::NativeFunction(NativeFunction {
+                    name: String::from("forEach"),
+                    arity: 2,
+                    callable: |interpreter, values| match &values[0] {
+                        Value::List(elts) => {
+                            let maybe_callable = as_callable(interpreter, &values[1]);
+                            match maybe_callable {
+                                Some(callable) => {
+                                    for elt in elts {
+                                        callable.call(interpreter, &vec![elt.clone()])?;
+                                    }
+                                    Ok(Value::Nil)
+                                }
+                                None => Err(format!(
+                                    "The second argument to for_each must be callable. Found {:?}.",
+                                    type_of(&values[1])
+                                )),
+                            }
+                        }
+                        val => Err(format!(
+                            "Can't call for_each on value of type {:?}.",
+                            type_of(val)
+                        )),
                     },
                 })),
                 SourceLocation {
@@ -1791,6 +1825,19 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "0\n3\n0\n4"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_for_each() {
+        let res = evaluate(
+            "fun f(arg) { print arg; } \n\
+             forEach([1,2,3,4], f);",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "1\n2\n3\n4"),
             Err(err) => panic!(err),
         }
     }
