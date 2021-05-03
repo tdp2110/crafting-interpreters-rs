@@ -1,4 +1,5 @@
 use crate::bytecode;
+use crate::bytecode_interpreter;
 use crate::gc;
 
 use std::cell::RefCell;
@@ -37,7 +38,7 @@ pub struct Closure {
 pub struct NativeFunction {
     pub arity: u8,
     pub name: String,
-    pub func: fn(&gc::Heap, &[Value]) -> Result<Value, String>,
+    pub func: fn(&mut bytecode_interpreter::Interpreter, &[Value]) -> Result<Value, String>,
 }
 
 #[derive(Clone)]

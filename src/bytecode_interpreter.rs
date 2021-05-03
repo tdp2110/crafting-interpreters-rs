@@ -100,11 +100,11 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) -> String {
     lines.join("\n")
 }
 
-fn dis_builtin(heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
+fn dis_builtin(interp: &mut Interpreter, args: &[value::Value]) -> Result<value::Value, String> {
     // arity checking is done in the interpreter
     match &args[0] {
         value::Value::Function(closure_handle) => {
-            let closure = heap.get_closure(*closure_handle);
+            let closure = interp.heap.get_closure(*closure_handle);
             disassemble_chunk(&closure.function.chunk, "");
             Ok(value::Value::Nil)
         }
@@ -186,6 +186,14 @@ impl Default for Interpreter {
                 arity: 1,
                 name: String::from("len"),
                 func: builtins::len,
+            }),
+        );
+        res.globals.insert(
+            String::from("forEach"),
+            value::Value::NativeFunction(value::NativeFunction {
+                arity: 2,
+                name: String::from("forEach"),
+                func: builtins::for_each,
             }),
         );
 
@@ -870,7 +878,7 @@ impl Interpreter {
         None
     }
 
-    fn call_value(
+    pub fn call_value(
         &mut self,
         val_to_call: value::Value,
         arg_count: u8,
@@ -881,7 +889,7 @@ impl Interpreter {
                 Ok(())
             }
             value::Value::NativeFunction(native_func) => {
-                self.native_call(native_func, arg_count)?;
+                self.call_native_func(native_func, arg_count)?;
                 Ok(())
             }
             value::Value::Class(class_id) => {
@@ -928,7 +936,7 @@ impl Interpreter {
         }
     }
 
-    fn native_call(
+    fn call_native_func(
         &mut self,
         native_func: value::NativeFunction,
         arg_count: u8,
@@ -948,7 +956,7 @@ impl Interpreter {
         let args = args;
         self.pop_stack(); // native function value
 
-        let res = (native_func.func)(&self.heap, &args);
+        let res = (native_func.func)(self, &args);
 
         match res {
             Ok(result) => {
@@ -3063,6 +3071,26 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["0", "3", "0", "4"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_for_each() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun f(arg) { print arg; } \n\
+             forEach([1,2,3,4], f);",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["1", "2", "3", "4"]),
                     Err(err) => panic!(err),
                 }
             }

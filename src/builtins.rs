@@ -1,13 +1,16 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::gc;
+use crate::bytecode_interpreter;
 use crate::value;
 
 /*
 Arity checking is done in the interpreter prior to calling a builtin function.
 */
 
-pub fn exp(_heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
+pub fn exp(
+    _interp: &mut bytecode_interpreter::Interpreter,
+    args: &[value::Value],
+) -> Result<value::Value, String> {
     match args[0] {
         value::Value::Number(num) => Ok(value::Value::Number(num.exp())),
         _ => Err(format!(
@@ -17,7 +20,10 @@ pub fn exp(_heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, Stri
     }
 }
 
-pub fn sqrt(_heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
+pub fn sqrt(
+    _interp: &mut bytecode_interpreter::Interpreter,
+    args: &[value::Value],
+) -> Result<value::Value, String> {
     match args[0] {
         value::Value::Number(num) => Ok(value::Value::Number(num.sqrt())),
         _ => Err(format!(
@@ -27,21 +33,53 @@ pub fn sqrt(_heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, Str
     }
 }
 
-pub fn clock(_heap: &gc::Heap, _args: &[value::Value]) -> Result<value::Value, String> {
+pub fn clock(
+    _interp: &mut bytecode_interpreter::Interpreter,
+    _args: &[value::Value],
+) -> Result<value::Value, String> {
     let start = SystemTime::now();
     let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
 
     Ok(value::Value::Number(since_the_epoch.as_millis() as f64))
 }
 
-pub fn len(heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
+pub fn len(
+    interp: &mut bytecode_interpreter::Interpreter,
+    args: &[value::Value],
+) -> Result<value::Value, String> {
     match &args[0] {
-        value::Value::String(id) => Ok(value::Value::Number(heap.get_str(*id).len() as f64)),
+        value::Value::String(id) => Ok(value::Value::Number(interp.heap.get_str(*id).len() as f64)),
         value::Value::List(id) => Ok(value::Value::Number(
-            heap.get_list_elements(*id).len() as f64
+            interp.heap.get_list_elements(*id).len() as f64,
         )),
         val => Err(format!(
             "Ojbect of type {:?} has no len.",
+            value::type_of(val)
+        )),
+    }
+}
+
+pub fn for_each(
+    interp: &mut bytecode_interpreter::Interpreter,
+    args: &[value::Value],
+) -> Result<value::Value, String> {
+    match &args[0] {
+        value::Value::List(id) => {
+            let list_elements = interp.heap.get_list_elements(*id).clone();
+            let val_to_call = args[1].clone();
+            for element in list_elements.iter().rev() {
+                interp.stack.push(val_to_call.clone());
+                interp.stack.push(element.clone());
+                if let Err(bytecode_interpreter::InterpreterError::Runtime(err)) =
+                    interp.call_value(val_to_call.clone(), 1)
+                {
+                    return Err(err);
+                }
+            }
+            Ok(value::Value::Nil)
+        }
+        val => Err(format!(
+            "Can't call forEach on value of type {:?}.",
             value::type_of(val)
         )),
     }

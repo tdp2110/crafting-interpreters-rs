@@ -512,7 +512,7 @@ impl Default for Interpreter {
                             }
                         }
                         val => Err(format!(
-                            "Can't call for_each on value of type {:?}.",
+                            "Can't call forEach on value of type {:?}.",
                             type_of(val)
                         )),
                     },
