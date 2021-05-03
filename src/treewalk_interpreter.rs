@@ -471,6 +471,24 @@ impl Default for Interpreter {
                 },
             ),
         );
+        globals_venv.insert(
+            String::from("len"),
+            (
+                Some(Value::NativeFunction(NativeFunction {
+                    name: String::from("len"),
+                    arity: 1,
+                    callable: |values| match &values[0] {
+                        Value::String(s) => Ok(Value::Number(s.len() as f64)),
+                        Value::List(elts) => Ok(Value::Number(elts.len() as f64)),
+                        val => Err(format!("Object of type {:?} has no len.", type_of(val))),
+                    },
+                })),
+                SourceLocation {
+                    line: 1337,
+                    col: 1337,
+                },
+            ),
+        );
 
         let globals = Environment {
             enclosing: None,
@@ -1758,6 +1776,21 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[1, 2, 3, 4, 5, 6]"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_len() {
+        let res = evaluate(
+            "print(len(\"\")); \n\
+             print(len(\"cat\")); \n\
+             print(len([])); \n\
+             print(len([1,2,3,4]));",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "0\n3\n0\n4"),
             Err(err) => panic!(err),
         }
     }

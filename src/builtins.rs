@@ -33,3 +33,16 @@ pub fn clock(_heap: &gc::Heap, _args: &[value::Value]) -> Result<value::Value, S
 
     Ok(value::Value::Number(since_the_epoch.as_millis() as f64))
 }
+
+pub fn len(heap: &gc::Heap, args: &[value::Value]) -> Result<value::Value, String> {
+    match &args[0] {
+        value::Value::String(id) => Ok(value::Value::Number(heap.get_str(*id).len() as f64)),
+        value::Value::List(id) => Ok(value::Value::Number(
+            heap.get_list_elements(*id).len() as f64
+        )),
+        val => Err(format!(
+            "Ojbect of type {:?} has no len.",
+            value::type_of(val)
+        )),
+    }
+}

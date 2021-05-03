@@ -180,6 +180,14 @@ impl Default for Interpreter {
                 func: builtins::sqrt,
             }),
         );
+        res.globals.insert(
+            String::from("len"),
+            value::Value::NativeFunction(value::NativeFunction {
+                arity: 1,
+                name: String::from("len"),
+                func: builtins::len,
+            }),
+        );
 
         res
     }
@@ -3033,6 +3041,28 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3, 4, 5, 6]"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_len() {
+        let func_or_err = Compiler::compile(String::from(
+            "print(len(\"\")); \n\
+             print(len(\"cat\")); \n\
+             print(len([])); \n\
+             print(len([1,2,3,4]));",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["0", "3", "0", "4"]),
                     Err(err) => panic!(err),
                 }
             }
