@@ -523,6 +523,41 @@ impl Default for Interpreter {
                 },
             ),
         );
+        globals_venv.insert(
+            String::from("map"),
+            (
+                Some(Value::NativeFunction(NativeFunction {
+                    name: String::from("map"),
+                    arity: 2,
+                    callable: |interpreter, values| match &values[1] {
+                        Value::List(elts) => {
+                            let maybe_callable = as_callable(interpreter, &values[0]);
+                            match maybe_callable {
+                                Some(callable) => {
+                                    let mut res = Vec::new();
+                                    for elt in elts {
+                                        res.push(callable.call(interpreter, &vec![elt.clone()])?);
+                                    }
+                                    Ok(Value::List(res))
+                                }
+                                None => Err(format!(
+                                    "The second argument to for_each must be callable. Found {:?}.",
+                                    type_of(&values[1])
+                                )),
+                            }
+                        }
+                        val => Err(format!(
+                            "Can't call forEach on value of type {:?}.",
+                            type_of(val)
+                        )),
+                    },
+                })),
+                SourceLocation {
+                    line: 1337,
+                    col: 1337,
+                },
+            ),
+        );
 
         let globals = Environment {
             enclosing: None,
@@ -1838,6 +1873,19 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "1\n2\n3\n4"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_map() {
+        let res = evaluate(
+            "fun incr(x) { return x + 1; } \n\
+             print(map(incr, [1,2,3,4]));",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "[2, 3, 4, 5]"),
             Err(err) => panic!(err),
         }
     }

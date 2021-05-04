@@ -66,13 +66,13 @@ pub fn for_each(
     match &args[0] {
         value::Value::List(id) => {
             let list_elements = interp.heap.get_list_elements(*id).clone();
-            let val_to_call = args[1].clone();
+            let callable = args[1].clone();
             for element in list_elements.iter() {
-                interp.stack.push(val_to_call.clone());
+                interp.stack.push(callable.clone());
                 interp.stack.push(element.clone());
                 let frame_idx = interp.frames.len();
                 if let Err(bytecode_interpreter::InterpreterError::Runtime(err)) =
-                    interp.call_value(val_to_call.clone(), 1)
+                    interp.call_value(callable.clone(), 1)
                 {
                     return Err(err);
                 }
@@ -89,6 +89,47 @@ pub fn for_each(
                 }
             }
             Ok(value::Value::Nil)
+        }
+        val => Err(format!(
+            "Can't call forEach on value of type {:?}.",
+            value::type_of(val)
+        )),
+    }
+}
+
+pub fn map(
+    interp: &mut bytecode_interpreter::Interpreter,
+    args: &[value::Value],
+) -> Result<value::Value, String> {
+    match &args[1] {
+        value::Value::List(id) => {
+            let list_elements = interp.heap.get_list_elements(*id).clone();
+            let callable = args[0].clone();
+            let mut res_elements = Vec::new();
+            for element in list_elements.iter() {
+                interp.stack.push(callable.clone());
+                interp.stack.push(element.clone());
+                let frame_idx = interp.frames.len();
+                if let Err(bytecode_interpreter::InterpreterError::Runtime(err)) =
+                    interp.call_value(callable.clone(), 1)
+                {
+                    return Err(err);
+                }
+
+                loop {
+                    if interp.frames.len() == frame_idx {
+                        break;
+                    }
+
+                    if let Err(bytecode_interpreter::InterpreterError::Runtime(err)) = interp.step()
+                    {
+                        return Err(err);
+                    }
+                }
+
+                res_elements.push(interp.pop_stack());
+            }
+            Ok(value::Value::List(interp.heap.manage_list(res_elements)))
         }
         val => Err(format!(
             "Can't call forEach on value of type {:?}.",

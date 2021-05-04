@@ -196,6 +196,14 @@ impl Default for Interpreter {
                 func: builtins::for_each,
             }),
         );
+        res.globals.insert(
+            String::from("map"),
+            value::Value::NativeFunction(value::NativeFunction {
+                arity: 2,
+                name: String::from("map"),
+                func: builtins::map,
+            }),
+        );
 
         res
     }
@@ -1150,7 +1158,7 @@ impl Interpreter {
         }
     }
 
-    fn pop_stack(&mut self) -> value::Value {
+    pub fn pop_stack(&mut self) -> value::Value {
         match self.stack.pop() {
             Some(val) => val,
             None => panic!("attempted to pop empty stack!"),
@@ -3090,6 +3098,26 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["1", "2", "3", "4"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_map() {
+        let func_or_err = Compiler::compile(String::from(
+            "fun f(arg) { return arg + 1; } \n\
+             print(map(f, [1,2,3,4]));",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["[2, 3, 4, 5]"]),
                     Err(err) => panic!(err),
                 }
             }
