@@ -67,13 +67,25 @@ pub fn for_each(
         value::Value::List(id) => {
             let list_elements = interp.heap.get_list_elements(*id).clone();
             let val_to_call = args[1].clone();
-            for element in list_elements.iter().rev() {
+            for element in list_elements.iter() {
                 interp.stack.push(val_to_call.clone());
                 interp.stack.push(element.clone());
+                let frame_idx = interp.frames.len();
                 if let Err(bytecode_interpreter::InterpreterError::Runtime(err)) =
                     interp.call_value(val_to_call.clone(), 1)
                 {
                     return Err(err);
+                }
+
+                loop {
+                    if interp.frames.len() == frame_idx {
+                        break;
+                    }
+
+                    if let Err(bytecode_interpreter::InterpreterError::Runtime(err)) = interp.step()
+                    {
+                        return Err(err);
+                    }
                 }
             }
             Ok(value::Value::Nil)

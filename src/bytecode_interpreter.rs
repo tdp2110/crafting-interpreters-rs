@@ -125,7 +125,7 @@ enum Binop {
 }
 
 pub struct Interpreter {
-    frames: Vec<CallFrame>,
+    pub frames: Vec<CallFrame>,
     pub stack: Vec<value::Value>,
     output: Vec<String>,
     pub globals: HashMap<String, value::Value>,
@@ -329,9 +329,8 @@ impl Interpreter {
                 return Ok(());
             }
 
-            match self.step() {
-                Ok(()) => {}
-                Err(err) => return Err(err),
+            if let Err(err) = self.step() {
+                return Err(err);
             }
         }
     }
