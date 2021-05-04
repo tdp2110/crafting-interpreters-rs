@@ -253,7 +253,7 @@ impl Heap {
         res.push(instance.class_id);
 
         for field in instance.fields.values() {
-            if let Some(id) = self.extract_id(field) {
+            if let Some(id) = Heap::extract_id(field) {
                 res.push(id)
             }
         }
@@ -265,7 +265,7 @@ impl Heap {
         let mut res = Vec::new();
 
         for element in elements {
-            if let Some(id) = self.extract_id(element) {
+            if let Some(id) = Heap::extract_id(element) {
                 res.push(id)
             }
         }
@@ -279,18 +279,25 @@ impl Heap {
             .iter()
             .map(|upval| match &*upval.borrow() {
                 value::Upvalue::Open(_) => None,
-                value::Upvalue::Closed(value) => self.extract_id(&value),
+                value::Upvalue::Closed(value) => Heap::extract_id(&value),
             })
             .flatten()
             .collect();
         res
     }
 
-    pub fn extract_id(&self, val: &value::Value) -> Option<HeapId> {
+    pub fn extract_id(val: &value::Value) -> Option<HeapId> {
         match val {
+            value::Value::Number(_) => None,
+            value::Value::Bool(_) => None,
             value::Value::String(id) => Some(*id),
             value::Value::Function(id) => Some(*id),
-            _ => None,
+            value::Value::Instance(id) => Some(*id),
+            value::Value::BoundMethod(id) => Some(*id),
+            value::Value::Class(id) => Some(*id),
+            value::Value::NativeFunction(_) => None,
+            value::Value::Nil => None,
+            value::Value::List(id) => Some(*id),
         }
     }
 

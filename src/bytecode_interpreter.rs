@@ -712,7 +712,7 @@ impl Interpreter {
                 if let value::Value::String(method_name_id) = self.read_constant(idx) {
                     let method_name = self.heap.get_str(method_name_id).clone();
                     let maybe_method = self.peek_by(0).clone();
-                    let maybe_method_id = self.heap.extract_id(&maybe_method).unwrap();
+                    let maybe_method_id = gc::Heap::extract_id(&maybe_method).unwrap();
                     let maybe_class = self.peek_by(1).clone();
                     match maybe_class {
                         value::Value::Class(class_id) => {
@@ -1273,7 +1273,7 @@ impl Interpreter {
         let stack_vals_to_mark: Vec<gc::HeapId> = self
             .stack
             .iter()
-            .map(Interpreter::extract_id)
+            .map(gc::Heap::extract_id)
             .flatten()
             .collect();
 
@@ -1287,7 +1287,7 @@ impl Interpreter {
         let globals_to_mark: Vec<gc::HeapId> = self
             .globals
             .values()
-            .map(Interpreter::extract_id)
+            .map(gc::Heap::extract_id)
             .flatten()
             .collect();
 
@@ -1297,21 +1297,6 @@ impl Interpreter {
             .chain(globals_to_mark.iter())
         {
             self.mark_value(*val);
-        }
-    }
-
-    fn extract_id(val: &value::Value) -> Option<gc::HeapId> {
-        match val {
-            value::Value::Number(_) => None,
-            value::Value::Bool(_) => None,
-            value::Value::String(id) => Some(*id),
-            value::Value::Function(id) => Some(*id),
-            value::Value::Instance(id) => Some(*id),
-            value::Value::BoundMethod(id) => Some(*id),
-            value::Value::Class(id) => Some(*id),
-            value::Value::NativeFunction(_) => None,
-            value::Value::Nil => None,
-            value::Value::List(_) => None,
         }
     }
 
