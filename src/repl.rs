@@ -35,8 +35,33 @@ fn eval_tokens(
         Ok(stmts) => {
             let stmts2: Vec<expr::Stmt> = stmts
                 .iter()
-                .map(|stmt| match stmt {
-                    expr::Stmt::Expr(expr) => expr::Stmt::Print(expr.clone()),
+                .enumerate()
+                .map(|(idx, stmt)| match stmt {
+                    expr::Stmt::Expr(expr) => {
+                        let var_sym = expr::Symbol {
+                            // hack!!! we should find a fresh varname from somewhere
+                            name: format!("isurehopethisisntusedelsewhere{}", idx).to_string(),
+                            line: 0,
+                            col: 0,
+                        };
+                        let var_expr = expr::Expr::Variable(var_sym.clone());
+                        expr::Stmt::Block(vec![
+                            expr::Stmt::VarDecl(var_sym.clone(), Some(expr.clone())),
+                            expr::Stmt::If(
+                                expr::Expr::Binary(
+                                    Box::new(var_expr.clone()),
+                                    expr::BinaryOp {
+                                        ty: expr::BinaryOpTy::NotEqual,
+                                        line: 0,
+                                        col: 0,
+                                    },
+                                    Box::new(expr::Expr::Literal(expr::Literal::Nil)),
+                                ),
+                                Box::new(expr::Stmt::Print(var_expr.clone())),
+                                None,
+                            ),
+                        ])
+                    }
                     _ => stmt.clone(),
                 })
                 .collect();
