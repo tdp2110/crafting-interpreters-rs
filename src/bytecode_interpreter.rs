@@ -892,7 +892,7 @@ impl Interpreter {
     ) -> Result<(), InterpreterError> {
         match val_to_call {
             value::Value::Function(func) => {
-                self.call(func, arg_count)?;
+                self.prepare_call(func, arg_count)?;
                 Ok(())
             }
             value::Value::NativeFunction(native_func) => {
@@ -918,7 +918,7 @@ impl Interpreter {
                         };
 
                     if let Some(method_id) = maybe_method_id {
-                        return self.call(method_id, arg_count);
+                        return self.prepare_call(method_id, arg_count);
                     }
                 }
 
@@ -997,10 +997,17 @@ impl Interpreter {
         let stack_len = self.stack.len();
         self.stack[stack_len - arg_count_usize - 1] =
             value::Value::Instance(bound_method.instance_id);
-        self.call(closure_id, arg_count)
+        self.prepare_call(closure_id, arg_count)
     }
 
-    fn call(&mut self, closure_handle: gc::HeapId, arg_count: u8) -> Result<(), InterpreterError> {
+    /*
+    Set up a few call frame so that on the next interpreter step we'll start executing code inside the function.
+     */
+    fn prepare_call(
+        &mut self,
+        closure_handle: gc::HeapId,
+        arg_count: u8,
+    ) -> Result<(), InterpreterError> {
         let closure = self.get_closure(closure_handle).clone();
         let func = &closure.function;
         if arg_count != func.arity {
