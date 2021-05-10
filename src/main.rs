@@ -25,6 +25,26 @@ static SHOW_AST_STR: &str = "ast";
 static DISASSEMBLE_STR: &str = "disassemble";
 static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
+static LITERAL_INPUT: &str = "c";
+
+fn get_input(matches: &clap::ArgMatches<'_>) -> Option<String> {
+    if let Some(literal_input) = matches.value_of(LITERAL_INPUT) {
+        return Some(literal_input.to_string());
+    }
+    if let Some(input_file) = matches.value_of(INPUT_STR) {
+        match fs::read_to_string(input_file) {
+            Ok(input) => {
+                return Some(input);
+            }
+            Err(err) => {
+                println!("Error reading {}: {}", input_file, err);
+                std::process::exit(-1);
+            }
+        }
+    }
+
+    None
+}
 
 fn main() {
     let matches = App::new("loxi")
@@ -67,105 +87,101 @@ fn main() {
                 .takes_value(false)
                 .help("run the tree-walk interpreter instead of the bytecode interpreter"),
         )
+        .arg(
+            Arg::with_name(LITERAL_INPUT)
+                .long("-c")
+                .takes_value(true)
+                .help("provide a literal string of Lox code"),
+        )
         .get_matches();
 
-    if let Some(input_file) = matches.value_of(INPUT_STR) {
-        let maybe_input = fs::read_to_string(input_file);
+    if let Some(input) = get_input(&matches) {
+        if matches.is_present(SHOW_TOKENS_STR)
+            || matches.is_present(SHOW_AST_STR)
+            || matches.is_present(TREEWALK_STR)
+        {
+            match scanner::scan_tokens(input) {
+                Ok(tokens) => {
+                    if matches.is_present(SHOW_TOKENS_STR) {
+                        println!("{:#?}", tokens);
+                        std::process::exit(0);
+                    }
 
-        match maybe_input {
-            Ok(input) => {
-                if matches.is_present(SHOW_TOKENS_STR)
-                    || matches.is_present(SHOW_AST_STR)
-                    || matches.is_present(TREEWALK_STR)
-                {
-                    match scanner::scan_tokens(input) {
-                        Ok(tokens) => {
-                            if matches.is_present(SHOW_TOKENS_STR) {
-                                println!("tokens: {:#?}", tokens);
+                    let stmts_maybe = parser::parse(tokens);
+
+                    match stmts_maybe {
+                        Ok(stmts) => {
+                            if matches.is_present(SHOW_AST_STR) {
+                                println!("{:#?}", stmts);
                                 std::process::exit(0);
                             }
 
-                            let stmts_maybe = parser::parse(tokens);
+                            let mut interpreter: treewalk_interpreter::Interpreter =
+                                Default::default();
+                            let interpret_result = interpreter.interpret(&stmts);
 
-                            match stmts_maybe {
-                                Ok(stmts) => {
-                                    if matches.is_present(SHOW_AST_STR) {
-                                        println!("AST: {:#?}", stmts);
-                                        std::process::exit(0);
-                                    }
-
-                                    let mut interpreter: treewalk_interpreter::Interpreter =
-                                        Default::default();
-                                    let interpret_result = interpreter.interpret(&stmts);
-
-                                    match interpret_result {
-                                        Ok(_) => {
-                                            std::process::exit(0);
-                                        }
-                                        Err(err) => {
-                                            println!(
-                                                "Runtime Error: {}\n\n{}",
-                                                err,
-                                                interpreter.format_backtrace()
-                                            );
-                                            std::process::exit(-1);
-                                        }
-                                    }
+                            match interpret_result {
+                                Ok(_) => {
+                                    std::process::exit(0);
                                 }
                                 Err(err) => {
-                                    println!("parse error: {:?}", err);
-                                    std::process::exit(-1)
+                                    println!(
+                                        "Runtime Error: {}\n\n{}",
+                                        err,
+                                        interpreter.format_backtrace()
+                                    );
+                                    std::process::exit(-1);
                                 }
                             }
                         }
                         Err(err) => {
-                            println!("lexical error: {}", err);
-                            std::process::exit(-1);
+                            println!("parse error: {:?}", err);
+                            std::process::exit(-1)
                         }
                     }
                 }
+                Err(err) => {
+                    println!("lexical error: {}", err);
+                    std::process::exit(-1);
+                }
+            }
+        }
 
-                let func_or_err = compiler::Compiler::compile(input.clone());
+        let func_or_err = compiler::Compiler::compile(input.clone());
 
-                match func_or_err {
-                    Ok(func) => {
-                        if matches.is_present(DISASSEMBLE_STR) {
-                            println!(
-                                "{}",
-                                bytecode_interpreter::disassemble_chunk(&func.chunk, input_file)
-                            );
-                            std::process::exit(0);
-                        }
-                        if matches.is_present(DEBUG_STR) {
-                            debugger::Debugger::new(func, input).debug();
-                            std::process::exit(0);
-                        }
-                        let mut interpreter = bytecode_interpreter::Interpreter::default();
-                        let res = interpreter.interpret(func);
-                        match res {
-                            Ok(()) => {
-                                std::process::exit(0);
-                            }
-                            Err(bytecode_interpreter::InterpreterError::Runtime(err)) => {
-                                println!(
-                                    "Runtime error: {}\n\n{}",
-                                    err,
-                                    interpreter.format_backtrace()
-                                );
-
-                                std::process::exit(1);
-                            }
-                        }
+        match func_or_err {
+            Ok(func) => {
+                if matches.is_present(DISASSEMBLE_STR) {
+                    println!(
+                        "{}",
+                        bytecode_interpreter::disassemble_chunk(&func.chunk, &"".to_string())
+                    );
+                    std::process::exit(0);
+                }
+                if matches.is_present(DEBUG_STR) {
+                    debugger::Debugger::new(func, input).debug();
+                    std::process::exit(0);
+                }
+                let mut interpreter = bytecode_interpreter::Interpreter::default();
+                let res = interpreter.interpret(func);
+                match res {
+                    Ok(()) => {
+                        std::process::exit(0);
                     }
-                    Err(err) => {
-                        println!("{}", err);
+                    Err(bytecode_interpreter::InterpreterError::Runtime(err)) => {
+                        println!(
+                            "Runtime error: {}\n\n{}",
+                            err,
+                            interpreter.format_backtrace()
+                        );
+
                         std::process::exit(1);
                     }
                 }
             }
             Err(err) => {
-                println!("Error reading {}: {}", input_file, err);
-                std::process::exit(-1);
+                println!("{}", err);
+                std::process::exit(1);
             }
         }
     } else {
