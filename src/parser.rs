@@ -211,7 +211,7 @@ comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
 addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
 multiplication → unary ( ( "/" | "*" ) unary )* ;
 unary → ( "!" | "-" ) unary | call ;
-call → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+call → primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
 arguments → expression ( "," expression )* ;
 
 primary → "true" | "false" | "nil" | "this"
@@ -697,6 +697,20 @@ impl Parser {
                         col: name_tok.col,
                     },
                 );
+            } else if self.matches(scanner::TokenType::LeftBracket) {
+                let slice_expr = self.expression()?;
+                let token = self.consume(
+                    scanner::TokenType::RightBracket,
+                    "Expected ] after subscript index",
+                )?;
+                expr = expr::Expr::Subscript {
+                    value: Box::new(expr),
+                    slice: Box::new(slice_expr),
+                    source_location: expr::SourceLocation {
+                        line: token.line,
+                        col: token.col,
+                    },
+                };
             } else {
                 break;
             }

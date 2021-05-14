@@ -295,7 +295,7 @@ fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Calla
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Type {
     Number,
     String,
@@ -877,7 +877,46 @@ impl Interpreter {
                     source_location.line, source_location.col
                 )),
             },
-            expr::Expr::List(elements) => self.list(elements)
+            expr::Expr::List(elements) => self.list(elements),
+            expr::Expr::Subscript{value, slice, source_location} => {
+                self.subscript(value, slice, source_location)
+            }
+        }
+    }
+
+    fn subscript(
+        &mut self,
+        value_expr: &expr::Expr,
+        slice_expr: &expr::Expr,
+        source_location: &expr::SourceLocation,
+    ) -> Result<Value, String> {
+        let value = self.interpret_expr(value_expr)?;
+        let value_type = type_of(&value);
+        let slice = self.interpret_expr(slice_expr)?;
+        if let Value::List(elements) = value {
+            if let Value::Number(index_float) = slice {
+                let index_int = index_float as i64;
+                if 0 <= index_int && index_int < elements.len() as i64 {
+                    return Ok(elements[index_int as usize].clone());
+                }
+                if index_int < 0 && -index_int <= elements.len() as i64 {
+                    return Ok(elements[(elements.len() as i64 + index_int) as usize].clone());
+                }
+                return Err(format!(
+                    "List subscript index out of range at {:?}",
+                    source_location
+                ));
+            } else {
+                return Err(format!(
+                    "Invalid value of type {:?} in subscript expression",
+                    value_type,
+                ));
+            }
+        } else {
+            Err(format!(
+                "Invalid value of type {:?} in subscript expr.",
+                type_of(&value),
+            ))
         }
     }
 
@@ -1886,6 +1925,23 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[2, 3, 4, 5]"),
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_list_subscripts() {
+        let res = evaluate(
+            "var xs = [0,1]; \n\
+             print(xs[0]); \n\
+             print(xs[1]); \n\
+             print(xs[-1]); \n\
+             print(xs[-2]); \n\
+             ",
+        );
+
+        match res {
+            Ok(output) => assert_eq!(output, "0\n1\n1\n0"),
             Err(err) => panic!(err),
         }
     }

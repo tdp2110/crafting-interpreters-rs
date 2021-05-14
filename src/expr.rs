@@ -13,6 +13,11 @@ pub enum Expr {
     Set(Box<Expr>, Symbol, Box<Expr>),
     Super(SourceLocation, Symbol),
     List(Vec<Expr>),
+    Subscript {
+        value: Box<Expr>,
+        slice: Box<Expr>,
+        source_location: SourceLocation,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
