@@ -54,7 +54,7 @@ cargo run --release --quiet -- hello_world.lox --show-tokens
 Which gives output
 
 ```
-tokens: [
+[
     Token { ty: Print, lexeme: "print", literal: None, line: 1, col: 4},
     Token { ty: String, lexeme: ""hello world!"", literal: Some(Str("hello world!")), line: 1, col: 19},
     Token { ty: Semicolon, lexeme: ";", literal: None, line: 1, col: 20},
@@ -71,7 +71,7 @@ cargo run --release --quiet -- hello_world.lox --show-ast
 Which gives
 
 ```
-AST: [
+[
     Print(
         Literal(
             String(
