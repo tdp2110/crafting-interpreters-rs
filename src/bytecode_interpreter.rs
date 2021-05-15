@@ -67,6 +67,7 @@ pub fn disassemble_code(chunk: &bytecode::Chunk) -> Vec<String> {
                 format!("OP_SUPER_INOKE {} nargs={}", method_name, arg_count)
             }
             bytecode::Op::BuildList(size) => format!("OP_BUILD_LIST {}", size),
+            bytecode::Op::Subscr => "OP_SUBSCR".to_string(),
         };
 
         lines.push(format!(
@@ -801,8 +802,48 @@ impl Interpreter {
                 self.stack
                     .push(value::Value::List(self.heap.manage_list(list_elements)));
             }
+            (bytecode::Op::Subscr, lineno) => {
+                let subscript = self.pop_stack();
+                let value_to_subscript = self.pop_stack();
+                let res = self.subscript(value_to_subscript, subscript, lineno)?;
+                self.stack.push(res);
+            }
         }
         Ok(())
+    }
+
+    fn subscript(
+        &mut self,
+        value: value::Value,
+        subscript: value::Value,
+        lineno: bytecode::Lineno,
+    ) -> Result<value::Value, InterpreterError> {
+        if let value::Value::List(id) = value {
+            if let value::Value::Number(index_float) = subscript {
+                let elements = self.get_list_elements(id);
+                let index_int = index_float as i64;
+                if 0 <= index_int && index_int < elements.len() as i64 {
+                    return Ok(elements[index_int as usize].clone());
+                }
+                if index_int < 0 && -index_int <= elements.len() as i64 {
+                    return Ok(elements[(elements.len() as i64 + index_int) as usize].clone());
+                }
+                return Err(InterpreterError::Runtime(format!(
+                    "List subscript index out of range at {}",
+                    lineno.value
+                )));
+            } else {
+                return Err(InterpreterError::Runtime(format!(
+                    "Invalid subscript of type {:?} in subscript expression",
+                    value::type_of(&value)
+                )));
+            }
+        } else {
+            return Err(InterpreterError::Runtime(format!(
+                "Invalid value of type {:?} in subscript expression",
+                value::type_of(&value)
+            )));
+        }
     }
 
     fn invoke(&mut self, method_name: &str, arg_count: u8) -> Result<(), InterpreterError> {
@@ -3110,6 +3151,30 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[2, 3, 4, 5]"]),
+                    Err(err) => panic!(err),
+                }
+            }
+            Err(err) => panic!(err),
+        }
+    }
+
+    #[test]
+    fn test_list_subscript() {
+        let func_or_err = Compiler::compile(String::from(
+            "var xs = [0,1]; \n\
+             print(xs[0]); \n\
+             print(xs[1]); \n\
+             print(xs[-1]); \n\
+             print(xs[-2]); \n\
+             ",
+        ));
+
+        match func_or_err {
+            Ok(func) => {
+                let mut interp = Interpreter::default();
+                let res = interp.interpret(func);
+                match res {
+                    Ok(()) => assert_eq!(interp.output, vec!["0", "1", "1", "0"]),
                     Err(err) => panic!(err),
                 }
             }

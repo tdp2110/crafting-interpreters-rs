@@ -908,7 +908,7 @@ impl Interpreter {
                 ));
             } else {
                 return Err(format!(
-                    "Invalid value of type {:?} in subscript expression",
+                    "Invalid subscript of type {:?} in subscript expression",
                     value_type,
                 ));
             }

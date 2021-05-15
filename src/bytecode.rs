@@ -60,6 +60,7 @@ pub enum Op {
     GetSuper(usize),
     SuperInvoke(/*method_name*/ String, /*arg count*/ u8),
     BuildList(usize),
+    Subscr,
 }
 
 #[derive(Default, Clone, Debug)]

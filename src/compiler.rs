@@ -101,6 +101,7 @@ enum ParseFn {
     This,
     Super,
     List,
+    Subscript,
 }
 
 struct ParseRule {
@@ -1051,6 +1052,16 @@ impl Compiler {
         Ok(())
     }
 
+    fn subscr(&mut self, _can_assign: bool) -> Result<(), String> {
+        self.expression()?;
+        self.consume(
+            scanner::TokenType::RightBracket,
+            "Expected ] after subscript",
+        )?;
+        self.emit_op(bytecode::Op::Subscr, self.previous().line);
+        Ok(())
+    }
+
     fn list(&mut self, _can_assign: bool) -> Result<(), String> {
         let arg_count = self.list_elements()?;
         self.emit_op(bytecode::Op::BuildList(arg_count), self.previous().line);
@@ -1183,6 +1194,7 @@ impl Compiler {
             ParseFn::This => self.this(can_assign),
             ParseFn::Super => self.super_(can_assign),
             ParseFn::List => self.list(can_assign),
+            ParseFn::Subscript => self.subscr(can_assign),
         }
     }
 
@@ -1264,8 +1276,8 @@ impl Compiler {
             },
             scanner::TokenType::LeftBracket => ParseRule {
                 prefix: Some(ParseFn::List),
-                infix: None,
-                precedence: Precedence::None,
+                infix: Some(ParseFn::Subscript),
+                precedence: Precedence::Call,
             },
             scanner::TokenType::RightBracket => ParseRule {
                 prefix: None,

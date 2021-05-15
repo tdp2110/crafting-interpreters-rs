@@ -701,7 +701,7 @@ impl Parser {
                 let slice_expr = self.expression()?;
                 let token = self.consume(
                     scanner::TokenType::RightBracket,
-                    "Expected ] after subscript index",
+                    "Expected ] after subscript",
                 )?;
                 expr = expr::Expr::Subscript {
                     value: Box::new(expr),
