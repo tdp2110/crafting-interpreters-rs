@@ -40,13 +40,13 @@ fn eval_tokens(
                     expr::Stmt::Expr(expr) => {
                         let var_sym = expr::Symbol {
                             // hack!!! we should find a fresh varname from somewhere
-                            name: format!("isurehopethisisntusedelsewhere{}", idx).to_string(),
+                            name: format!("isurehopethisisntusedelsewhere{}", idx),
                             line: 0,
                             col: 0,
                         };
                         let var_expr = expr::Expr::Variable(var_sym.clone());
                         expr::Stmt::Block(vec![
-                            expr::Stmt::VarDecl(var_sym.clone(), Some(expr.clone())),
+                            expr::Stmt::VarDecl(var_sym, Some(expr.clone())),
                             expr::Stmt::If(
                                 expr::Expr::Binary(
                                     Box::new(var_expr.clone()),
@@ -57,7 +57,7 @@ fn eval_tokens(
                                     },
                                     Box::new(expr::Expr::Literal(expr::Literal::Nil)),
                                 ),
-                                Box::new(expr::Stmt::Print(var_expr.clone())),
+                                Box::new(expr::Stmt::Print(var_expr)),
                                 None,
                             ),
                         ])

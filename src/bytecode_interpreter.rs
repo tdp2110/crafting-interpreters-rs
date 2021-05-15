@@ -828,21 +828,21 @@ impl Interpreter {
                 if index_int < 0 && -index_int <= elements.len() as i64 {
                     return Ok(elements[(elements.len() as i64 + index_int) as usize].clone());
                 }
-                return Err(InterpreterError::Runtime(format!(
+                Err(InterpreterError::Runtime(format!(
                     "List subscript index out of range at {}",
                     lineno.value
-                )));
+                )))
             } else {
-                return Err(InterpreterError::Runtime(format!(
+                Err(InterpreterError::Runtime(format!(
                     "Invalid subscript of type {:?} in subscript expression",
                     value::type_of(&value)
-                )));
+                )))
             }
         } else {
-            return Err(InterpreterError::Runtime(format!(
+            Err(InterpreterError::Runtime(format!(
                 "Invalid value of type {:?} in subscript expression",
                 value::type_of(&value)
-            )));
+            )))
         }
     }
 

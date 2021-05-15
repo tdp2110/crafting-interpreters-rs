@@ -501,7 +501,7 @@ impl Default for Interpreter {
                             match maybe_callable {
                                 Some(callable) => {
                                     for elt in elts {
-                                        callable.call(interpreter, &vec![elt.clone()])?;
+                                        callable.call(interpreter, &[elt.clone()])?;
                                     }
                                     Ok(Value::Nil)
                                 }
@@ -536,7 +536,7 @@ impl Default for Interpreter {
                                 Some(callable) => {
                                     let mut res = Vec::new();
                                     for elt in elts {
-                                        res.push(callable.call(interpreter, &vec![elt.clone()])?);
+                                        res.push(callable.call(interpreter, &[elt.clone()])?);
                                     }
                                     Ok(Value::List(res))
                                 }
@@ -902,15 +902,15 @@ impl Interpreter {
                 if index_int < 0 && -index_int <= elements.len() as i64 {
                     return Ok(elements[(elements.len() as i64 + index_int) as usize].clone());
                 }
-                return Err(format!(
+                Err(format!(
                     "List subscript index out of range at {:?}",
                     source_location
-                ));
+                ))
             } else {
-                return Err(format!(
+                Err(format!(
                     "Invalid subscript of type {:?} in subscript expression",
                     value_type,
-                ));
+                ))
             }
         } else {
             Err(format!(
