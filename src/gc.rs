@@ -1,7 +1,6 @@
 use crate::value;
 
 use std::collections::HashMap;
-use std::iter::FromIterator;
 
 enum GCData {
     String(String),
@@ -245,12 +244,11 @@ impl Heap {
     }
 
     pub fn class_children(&self, class: &value::Class) -> Vec<HeapId> {
-        Vec::from_iter(class.methods.values().copied())
+        class.methods.values().copied().collect()
     }
 
     pub fn instance_children(&self, instance: &value::Instance) -> Vec<HeapId> {
-        let mut res = Vec::new();
-        res.push(instance.class_id);
+        let mut res = vec![instance.class_id];
 
         for field in instance.fields.values() {
             if let Some(id) = Heap::extract_id(field) {

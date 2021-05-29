@@ -952,11 +952,11 @@ impl Interpreter {
                 self.stack[stack_len - 1 - arg_count_usize] = new_instance;
 
                 {
-                    let maybe_method_id =
-                        match self.get_class(class_id).methods.get(&"init".to_string()) {
-                            Some(method_id) => Some(*method_id),
-                            None => None,
-                        };
+                    let maybe_method_id = self
+                        .get_class(class_id)
+                        .methods
+                        .get(&"init".to_string())
+                        .copied();
 
                     if let Some(method_id) = maybe_method_id {
                         return self.prepare_call(method_id, arg_count);
@@ -1368,7 +1368,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1378,7 +1378,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1388,7 +1388,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1398,7 +1398,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1419,7 +1419,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1440,7 +1440,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1450,7 +1450,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1460,7 +1460,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1485,7 +1485,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1512,7 +1512,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1533,7 +1533,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1559,7 +1559,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1587,7 +1587,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1681,7 +1681,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1709,7 +1709,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1737,7 +1737,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1765,7 +1765,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1791,7 +1791,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1820,7 +1820,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1849,7 +1849,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1878,7 +1878,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1907,7 +1907,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1936,7 +1936,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1965,7 +1965,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1994,7 +1994,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2023,7 +2023,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2039,7 +2039,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2055,7 +2055,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2071,7 +2071,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2087,7 +2087,7 @@ mod tests {
 
         match func_or_err {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2124,7 +2124,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2155,7 +2155,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2184,7 +2184,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2195,7 +2195,7 @@ mod tests {
                 return 1;
             }
             return n * fact(n - 1);
-        };
+        }
 
         let func_or_err = Compiler::compile(String::from(
             "fun fact(n) {\n\
@@ -2219,7 +2219,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2251,7 +2251,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2284,7 +2284,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2314,7 +2314,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2345,7 +2345,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2378,7 +2378,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2411,7 +2411,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2435,7 +2435,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2460,7 +2460,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2486,7 +2486,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2511,7 +2511,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2538,7 +2538,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2567,7 +2567,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2597,7 +2597,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2626,7 +2626,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2659,7 +2659,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2686,7 +2686,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2713,7 +2713,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2747,7 +2747,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2777,7 +2777,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2808,7 +2808,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2842,7 +2842,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2874,7 +2874,7 @@ mod tests {
                     }
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2898,7 +2898,7 @@ mod tests {
                     ),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2932,10 +2932,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["A method"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -2970,10 +2970,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["A method"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3016,10 +3016,10 @@ mod tests {
                             "Finish with icing"
                         ]
                     ),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3038,10 +3038,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["hello world"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3055,10 +3055,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3]"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3072,10 +3072,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[]"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3089,10 +3089,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3, 4, 5, 6]"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3111,10 +3111,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["0", "3", "0", "4"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3131,10 +3131,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["1", "2", "3", "4"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3151,10 +3151,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["[2, 3, 4, 5]"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -3175,10 +3175,10 @@ mod tests {
                 let res = interp.interpret(func);
                 match res {
                     Ok(()) => assert_eq!(interp.output, vec!["0", "1", "1", "0"]),
-                    Err(err) => panic!(err),
+                    Err(err) => panic!("{}", err),
                 }
             }
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 }

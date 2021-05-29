@@ -336,9 +336,7 @@ impl fmt::Display for Value {
             Value::List(elements) => {
                 write!(f, "[")?;
                 elements.split_last().map(|(last_elt, rest)| {
-                    rest.iter()
-                        .map(|elt| write!(f, "{}, ", elt))
-                        .collect::<Result<_, _>>()?;
+                    rest.iter().try_for_each(|elt| write!(f, "{}, ", elt))?;
                     write!(f, "{}", last_elt)
                 });
                 write!(f, "]")
@@ -717,10 +715,10 @@ impl Interpreter {
             }
             expr::Stmt::If(cond, if_true, maybe_if_false) => {
                 if Interpreter::is_truthy(&self.interpret_expr(cond)?) {
-                    return Ok(self.execute(if_true)?);
+                    return self.execute(if_true);
                 }
                 if let Some(if_false) = maybe_if_false {
-                    return Ok(self.execute(if_false)?);
+                    return self.execute(if_false);
                 }
                 Ok(())
             }
@@ -1178,7 +1176,7 @@ mod tests {
                 return 1;
             }
             return n * fact(n - 1);
-        };
+        }
 
         let res = evaluate(
             "fun fact(n) { \n\
@@ -1191,7 +1189,7 @@ mod tests {
         );
         match res {
             Ok(output) => assert_eq!(output, format!("{}", fact(10))),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1200,7 +1198,7 @@ mod tests {
         let res = evaluate("1 + \"string\";");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => assert!(err.starts_with("invalid operands in binary operator")),
         }
     }
@@ -1210,7 +1208,7 @@ mod tests {
         let res = evaluate("-\"cat\";");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => {
                 assert!(err
                     .starts_with("invalid application of unary op Minus to object of type String"))
@@ -1223,7 +1221,7 @@ mod tests {
         let res = evaluate("return 1;");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => assert!(err.starts_with("return statement not enclosed in a FunDecl at")),
         }
     }
@@ -1234,7 +1232,7 @@ mod tests {
 
         match res {
             Ok(_) => {}
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1249,7 +1247,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "0\n1\n2\n3\n4"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1271,7 +1269,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "'Hi, Dear Reader!'\n6"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1284,7 +1282,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "nil"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1297,7 +1295,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "nil"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1338,7 +1336,7 @@ mod tests {
                  'global b'\n\
                  'global c'"
             ),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1348,7 +1346,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "nil"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1367,7 +1365,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "3"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1384,7 +1382,7 @@ mod tests {
         );
         match res {
             Ok(output) => assert_eq!(output, "5"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1402,7 +1400,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "LoxClass(DevonshireCream)"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1421,7 +1419,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "LoxInstance(DevonshireCream)"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1436,7 +1434,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1453,7 +1451,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'baz\'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1471,7 +1469,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'Crunch crunch crunch!\'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1492,7 +1490,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'The German chocolate cake is delicious!\'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1515,7 +1513,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "LoxInstance(Thing)"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1537,7 +1535,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1556,7 +1554,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1578,7 +1576,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42\n1337\n1337"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1603,7 +1601,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42\n100"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1620,7 +1618,7 @@ mod tests {
         );
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => assert_eq!(
                 err,
                 "TypeError: init should only return nil (perhaps implicitly), not Number"
@@ -1633,7 +1631,7 @@ mod tests {
         let res = evaluate("class Oops < Oops {}");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => assert!(err.starts_with("A class cannot inerit from itself")),
         }
     }
@@ -1643,7 +1641,7 @@ mod tests {
         let res = evaluate("var x = 42; class Oops < x {}");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => assert!(err.starts_with("Only classes should appear as superclasses.")),
         }
     }
@@ -1663,7 +1661,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'cat\'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1683,7 +1681,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "\'cat\'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1706,7 +1704,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1727,7 +1725,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1736,7 +1734,7 @@ mod tests {
         let res = evaluate("super + 1");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => assert!(err.starts_with("Expected token Dot")),
         }
     }
@@ -1746,7 +1744,7 @@ mod tests {
         let res = evaluate("fun f() { return super.g(); }\nprint f();");
 
         match res {
-            Ok(output) => panic!(output),
+            Ok(output) => panic!("{}", output),
             Err(err) => {
                 assert!(err.starts_with("Super expression not enclosed in a method definition"))
             }
@@ -1779,7 +1777,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "'A method'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1810,7 +1808,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "'A method'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1839,7 +1837,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1854,7 +1852,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "'hello world'"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1864,7 +1862,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[1, 2, 3]"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1874,7 +1872,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[]"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1884,7 +1882,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[1, 2, 3, 4, 5, 6]"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1899,7 +1897,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "0\n3\n0\n4"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1912,7 +1910,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "1\n2\n3\n4"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1925,7 +1923,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "[2, 3, 4, 5]"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 
@@ -1942,7 +1940,7 @@ mod tests {
 
         match res {
             Ok(output) => assert_eq!(output, "0\n1\n1\n0"),
-            Err(err) => panic!(err),
+            Err(err) => panic!("{}", err),
         }
     }
 }

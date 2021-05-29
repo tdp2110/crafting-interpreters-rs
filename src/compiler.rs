@@ -257,15 +257,19 @@ impl Compiler {
     }
 
     fn function(&mut self, function_type: FunctionType) -> Result<(), String> {
-        let mut level = Level::default();
-        level.function_type = function_type;
-        level.function = bytecode::Function::default();
-        level.function.name =
-            if let Some(scanner::Literal::Identifier(funname)) = &self.previous().literal {
-                funname.clone()
-            } else {
-                panic!("expected identifier");
-            };
+        let level = Level {
+            function_type,
+            function: bytecode::Function {
+                name: if let Some(scanner::Literal::Identifier(funname)) = &self.previous().literal
+                {
+                    funname.clone()
+                } else {
+                    panic!("expected identifier");
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         self.push_level(level);
 
         if function_type != FunctionType::Function {
