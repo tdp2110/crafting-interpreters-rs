@@ -1169,6 +1169,15 @@ mod tests {
         }
     }
 
+    fn check_output(code: &str, expected_output: &str) {
+        let res = evaluate(code);
+
+        match res {
+            Ok(output) => assert_eq!(output, expected_output),
+            Err(err) => panic!("{}", err),
+        }
+    }
+
     #[test]
     fn test_fact() {
         fn fact(n: i32) -> i32 {
@@ -1178,7 +1187,7 @@ mod tests {
             return n * fact(n - 1);
         }
 
-        let res = evaluate(
+        check_output(
             "fun fact(n) { \n\
                if (n <= 1) {\n\
                    return 1; \n\
@@ -1186,11 +1195,8 @@ mod tests {
                return n * fact(n - 1); \n\
              } \n\
              print fact(10); ",
-        );
-        match res {
-            Ok(output) => assert_eq!(output, format!("{}", fact(10))),
-            Err(err) => panic!("{}", err),
-        }
+            &format!("{}", fact(10)),
+        )
     }
 
     #[test]
@@ -1238,22 +1244,18 @@ mod tests {
 
     #[test]
     fn test_for() {
-        let res = evaluate(
+        check_output(
             "for (var i = 0; i < 5; i = i + 1) \n\
              { \n\
                  print(i); \n\
              }",
+            "0\n1\n2\n3\n4",
         );
-
-        match res {
-            Ok(output) => assert_eq!(output, "0\n1\n2\n3\n4"),
-            Err(err) => panic!("{}", err),
-        }
     }
 
     #[test]
     fn test_lox_funcs() {
-        let res = evaluate(
+        check_output(
             "fun sayHi(first, last) {\n\
                return \"Hi, \" + first + \" \" + last + \"!\";\n\
              }\n\
@@ -1265,43 +1267,31 @@ mod tests {
              }\n\
              \n\
              print add(1,2,3);",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "'Hi, Dear Reader!'\n6"),
-            Err(err) => panic!("{}", err),
-        }
+            "'Hi, Dear Reader!'\n6",
+        )
     }
 
     #[test]
     fn test_implict_nil_return_1() {
-        let res = evaluate(
+        check_output(
             "fun f() { return; }\n\
              print f();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "nil"),
-            Err(err) => panic!("{}", err),
-        }
+            "nil",
+        )
     }
 
     #[test]
     fn test_implict_nil_return_2() {
-        let res = evaluate(
+        check_output(
             "fun f() { }\n\
              print f();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "nil"),
-            Err(err) => panic!("{}", err),
-        }
+            "nil",
+        )
     }
 
     #[test]
     fn test_scopes() {
-        let res = evaluate(
+        check_output(
             "var a = \"global a\";\
                             var b = \"global b\";\n\
                             var c = \"global c\";\n\
@@ -1321,38 +1311,26 @@ mod tests {
                             print a;\n\
                             print b;\n\
                             print c;\n",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(
-                output,
-                "'inner a'\n\
-                 'outer b'\n\
-                 'global c'\n\
-                 'outer a'\n\
-                 'outer b'\n\
-                 'global c'\n\
-                 'global a'\n\
-                 'global b'\n\
-                 'global c'"
-            ),
-            Err(err) => panic!("{}", err),
-        }
+            "'inner a'\n\
+             'outer b'\n\
+             'global c'\n\
+             'outer a'\n\
+             'outer b'\n\
+             'global c'\n\
+             'global a'\n\
+             'global b'\n\
+             'global c'",
+        )
     }
 
     #[test]
     fn test_implicit_return_nil() {
-        let res = evaluate("fun f() {} print f();");
-
-        match res {
-            Ok(output) => assert_eq!(output, "nil"),
-            Err(err) => panic!("{}", err),
-        }
+        check_output("fun f() {} print f();", "nil")
     }
 
     #[test]
     fn test_closures_1() {
-        let res = evaluate(
+        check_output(
             "fun f(n) {\n\
                var m = 2;\n\
                fun g(p) {\n\
@@ -1361,17 +1339,13 @@ mod tests {
                return g(n);\n\
              }\n\
              print f(1);",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "3"),
-            Err(err) => panic!("{}", err),
-        }
+            "3",
+        )
     }
 
     #[test]
     fn test_closures_2() {
-        let res = evaluate(
+        check_output(
             "fun mkfun(n) {\n\
                fun f(m) {\n\
                  return m + n;\n\
@@ -1379,16 +1353,13 @@ mod tests {
                return f;\n\
                }\n\
              print mkfun(2)(3);",
-        );
-        match res {
-            Ok(output) => assert_eq!(output, "5"),
-            Err(err) => panic!("{}", err),
-        }
+            "5",
+        )
     }
 
     #[test]
     fn test_classes_1() {
-        let res = evaluate(
+        check_output(
             "class DevonshireCream {\n\
                serveOn() {\n\
                  return \"Scones\";\n\
@@ -1396,17 +1367,13 @@ mod tests {
              }\n\
              \n\
              print DevonshireCream;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "LoxClass(DevonshireCream)"),
-            Err(err) => panic!("{}", err),
-        }
+            "LoxClass(DevonshireCream)",
+        )
     }
 
     #[test]
     fn test_classes_2() {
-        let res = evaluate(
+        check_output(
             "class DevonshireCream {\n\
                serveOn() {\n\
                  return \"Scones\";\n\
@@ -1415,49 +1382,37 @@ mod tests {
              \n\
              var inst = DevonshireCream();\n\
              print inst;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "LoxInstance(DevonshireCream)"),
-            Err(err) => panic!("{}", err),
-        }
+            "LoxInstance(DevonshireCream)",
+        )
     }
 
     #[test]
     fn test_setattr_1() {
-        let res = evaluate(
+        check_output(
             "class Foo {}\n\
              var foo = Foo();\n\
              foo.attr = 42;\n\
              print foo.attr;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!("{}", err),
-        }
+            "42",
+        )
     }
 
     #[test]
     fn test_setattr_2() {
-        let res = evaluate(
+        check_output(
             "class Bar {}\n\
              class Foo {}\n\
              var foo = Foo();\n\
              foo.bar = Bar();\n\
              foo.bar.baz = \"baz\";\n\
              print foo.bar.baz;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "\'baz\'"),
-            Err(err) => panic!("{}", err),
-        }
+            "\'baz\'",
+        )
     }
 
     #[test]
     fn test_methods_1() {
-        let res = evaluate(
+        check_output(
             "class Bacon {\
                 eat() {\
                   print \"Crunch crunch crunch!\";\
@@ -1465,17 +1420,13 @@ mod tests {
               }\
               \
               Bacon().eat();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "\'Crunch crunch crunch!\'"),
-            Err(err) => panic!("{}", err),
-        }
+            "\'Crunch crunch crunch!\'",
+        )
     }
 
     #[test]
     fn test_method_this_binding_1() {
-        let res = evaluate(
+        check_output(
             "class Cake {\
                taste() {\
                  var adjective = \"delicious\";\
@@ -1486,17 +1437,13 @@ mod tests {
              var cake = Cake();\
              cake.flavor = \"German chocolate\";\
              cake.taste();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "\'The German chocolate cake is delicious!\'"),
-            Err(err) => panic!("{}", err),
-        }
+            "\'The German chocolate cake is delicious!\'",
+        )
     }
 
     #[test]
     fn test_method_this_binding_2() {
-        let res = evaluate(
+        check_output(
             "class Thing {\
                getCallback() {\
                  fun localFunction() {\
@@ -1509,17 +1456,13 @@ mod tests {
              \
              var callback = Thing().getCallback();\
              callback();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "LoxInstance(Thing)"),
-            Err(err) => panic!("{}", err),
-        }
+            "LoxInstance(Thing)",
+        )
     }
 
     #[test]
     fn test_method_this_binding_3() {
-        let res = evaluate(
+        check_output(
             "class Foo {\n
                init(x) {\n\
                  this.x = x;\n\
@@ -1531,17 +1474,13 @@ mod tests {
              \n\
              var foo = Foo(42);
              print foo.getX();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!("{}", err),
-        }
+            "42",
+        )
     }
 
     #[test]
     fn test_init_1() {
-        let res = evaluate(
+        check_output(
             "class Foo {\
                init(val) {\
                  this.val = val;\
@@ -1550,17 +1489,13 @@ mod tests {
              \
              var foo = Foo(42);\
              print foo.val;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!("{}", err),
-        }
+            "42",
+        )
     }
 
     #[test]
     fn test_explicit_call_init() {
-        let res = evaluate(
+        check_output(
             "class Foo {\
                init(val) {\
                  this.val = val;\
@@ -1572,17 +1507,13 @@ mod tests {
              var foo2 = foo1.init(1337);\
              print foo2.val;\
              print foo1.val;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42\n1337\n1337"),
-            Err(err) => panic!("{}", err),
-        }
+            "42\n1337\n1337",
+        )
     }
 
     #[test]
     fn test_early_return_init() {
-        let res = evaluate(
+        check_output(
             "class Foo {\n\
                init(val) {\n\
                  if (val > 100) {\n\
@@ -1597,12 +1528,8 @@ mod tests {
              print foo1.val;\n\
              var foo2 = Foo(200);\n\
              print foo2.val;",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42\n100"),
-            Err(err) => panic!("{}", err),
-        }
+            "42\n100",
+        )
     }
 
     #[test]
@@ -1648,7 +1575,7 @@ mod tests {
 
     #[test]
     fn method_inheritance_1() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                f() {\n\
                  return \"cat\";\n\
@@ -1657,17 +1584,13 @@ mod tests {
              class B < A {}\n\
              var b = B();\n\
              print b.f();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "\'cat\'"),
-            Err(err) => panic!("{}", err),
-        }
+            "\'cat\'",
+        )
     }
 
     #[test]
     fn method_inheritance_2() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                f() {\n\
                  return \"cat\";\n\
@@ -1677,17 +1600,13 @@ mod tests {
              class C < B {}\n\
              var c = C();\n\
              print c.f();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "\'cat\'"),
-            Err(err) => panic!("{}", err),
-        }
+            "\'cat\'",
+        )
     }
 
     #[test]
     fn method_inheritance_3() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -1700,17 +1619,13 @@ mod tests {
              }\n\
              var b = B(42);\n\
              print b.f();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!("{}", err),
-        }
+            "42",
+        )
     }
 
     #[test]
     fn method_inheritance_4() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -1721,12 +1636,8 @@ mod tests {
              var b = B();\n\
              b.attr = 42;
              print b.f();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!("{}", err),
-        }
+            "42",
+        )
     }
 
     #[test]
@@ -1753,7 +1664,7 @@ mod tests {
 
     #[test]
     fn test_super_1() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                method() {\n\
                  print \"A method\";\n\
@@ -1773,17 +1684,13 @@ mod tests {
              class C < B {}\n\
              \n\
              C().test();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "'A method'"),
-            Err(err) => panic!("{}", err),
-        }
+            "'A method'",
+        )
     }
 
     #[test]
     fn test_super_2() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                method() {\n\
                  print \"A method\";\n\
@@ -1804,17 +1711,13 @@ mod tests {
              class C < B {}\n\
              \n\
              C().test();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "'A method'"),
-            Err(err) => panic!("{}", err),
-        }
+            "'A method'",
+        )
     }
 
     #[test]
     fn test_super_3() {
-        let res = evaluate(
+        check_output(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -1833,114 +1736,75 @@ mod tests {
              }\n\
              var b = B(42);\n\
              print b.g();",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "42"),
-            Err(err) => panic!("{}", err),
-        }
+            "42",
+        )
     }
 
     #[test]
     fn test_late_binding() {
-        let res = evaluate(
+        check_output(
             "fun a() { b(); }\n\
              fun b() { print \"hello world\"; }\n\
              \n\
              a();\n",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "'hello world'"),
-            Err(err) => panic!("{}", err),
-        }
+            "'hello world'",
+        )
     }
 
     #[test]
     fn test_list_construction() {
-        let res = evaluate("print([1,2,3]);");
-
-        match res {
-            Ok(output) => assert_eq!(output, "[1, 2, 3]"),
-            Err(err) => panic!("{}", err),
-        }
+        check_output("print([1,2,3]);", "[1, 2, 3]")
     }
 
     #[test]
     fn test_empty_list_construction() {
-        let res = evaluate("print([]);");
-
-        match res {
-            Ok(output) => assert_eq!(output, "[]"),
-            Err(err) => panic!("{}", err),
-        }
+        check_output("print([]);", "[]")
     }
 
     #[test]
     fn test_list_concat() {
-        let res = evaluate("print([1,2,3] + [4,5,6]);");
-
-        match res {
-            Ok(output) => assert_eq!(output, "[1, 2, 3, 4, 5, 6]"),
-            Err(err) => panic!("{}", err),
-        }
+        check_output("print([1,2,3] + [4,5,6]);", "[1, 2, 3, 4, 5, 6]")
     }
 
     #[test]
     fn test_len() {
-        let res = evaluate(
+        check_output(
             "print(len(\"\")); \n\
              print(len(\"cat\")); \n\
              print(len([])); \n\
              print(len([1,2,3,4]));",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "0\n3\n0\n4"),
-            Err(err) => panic!("{}", err),
-        }
+            "0\n3\n0\n4",
+        )
     }
 
     #[test]
     fn test_for_each() {
-        let res = evaluate(
+        check_output(
             "fun f(arg) { print arg; } \n\
              forEach([1,2,3,4], f);",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "1\n2\n3\n4"),
-            Err(err) => panic!("{}", err),
-        }
+            "1\n2\n3\n4",
+        )
     }
 
     #[test]
     fn test_map() {
-        let res = evaluate(
+        check_output(
             "fun incr(x) { return x + 1; } \n\
              print(map(incr, [1,2,3,4]));",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "[2, 3, 4, 5]"),
-            Err(err) => panic!("{}", err),
-        }
+            "[2, 3, 4, 5]",
+        )
     }
 
     #[test]
     fn test_list_subscripts() {
-        let res = evaluate(
+        check_output(
             "var xs = [0,1]; \n\
              print(xs[0]); \n\
              print(xs[1]); \n\
              print(xs[-1]); \n\
              print(xs[-2]); \n\
              ",
-        );
-
-        match res {
-            Ok(output) => assert_eq!(output, "0\n1\n1\n0"),
-            Err(err) => panic!("{}", err),
-        }
+            "0\n1\n1\n0",
+        )
     }
 }
