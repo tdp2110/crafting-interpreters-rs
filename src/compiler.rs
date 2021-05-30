@@ -1513,53 +1513,47 @@ impl Compiler {
 mod tests {
     use crate::compiler::*;
 
-    #[test]
-    fn test_this_outside_method_1() {
-        let func_or_err = Compiler::compile(String::from("print this;"));
+    fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {
+        let func_or_err = Compiler::compile(String::from(code));
 
         match func_or_err {
             Ok(_) => panic!(),
-            Err(err) => assert!(err.starts_with("Cannot use 'this' outside of class")),
+            Err(err) => f(&err),
         }
+    }
+
+    #[test]
+    fn test_this_outside_method_1() {
+        check_error("print this;", &|err: &str| {
+            assert!(err.starts_with("Cannot use 'this' outside of class"))
+        })
     }
 
     #[test]
     fn test_this_outside_method_2() {
-        let func_or_err = Compiler::compile(String::from("fun foo() {print this;}"));
-
-        match func_or_err {
-            Ok(_) => panic!(),
-            Err(err) => assert!(err.starts_with("Cannot use 'this' outside of class")),
-        }
+        check_error("fun foo() {print this;}", &|err: &str| {
+            assert!(err.starts_with("Cannot use 'this' outside of class"))
+        })
     }
 
     #[test]
     fn test_self_ineritance_is_error() {
-        let func_or_err = Compiler::compile(String::from("class A < A {}"));
-
-        match func_or_err {
-            Ok(_) => panic!(),
-            Err(err) => assert!(err.starts_with("A class cannot inherit from itself.")),
-        }
+        check_error("class A < A {}", &|err: &str| {
+            assert!(err.starts_with("A class cannot inherit from itself."))
+        })
     }
 
     #[test]
     fn test_cant_use_super_outside_class() {
-        let func_or_err = Compiler::compile(String::from("fun f() { super.bar(); }"));
-
-        match func_or_err {
-            Ok(_) => panic!(),
-            Err(err) => assert!(err.starts_with("Can't use 'super' outside of a class")),
-        }
+        check_error("fun f() { super.bar(); }", &|err: &str| {
+            assert!(err.starts_with("Can't use 'super' outside of a class"))
+        })
     }
 
     #[test]
     fn test_cant_use_super_in_class_with_no_superclass() {
-        let func_or_err = Compiler::compile(String::from("class Foo { bar() { super.bar(); } }"));
-
-        match func_or_err {
-            Ok(_) => panic!(),
-            Err(err) => assert!(err.starts_with("Can't use 'super' in a class with no superclass")),
-        }
+        check_error("class Foo { bar() { super.bar(); } }", &|err: &str| {
+            assert!(err.starts_with("Can't use 'super' in a class with no superclass"))
+        })
     }
 }
