@@ -1178,6 +1178,15 @@ mod tests {
         }
     }
 
+    fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {
+        let res = evaluate(code);
+
+        match res {
+            Ok(output) => panic!("{}", output),
+            Err(err) => f(&err),
+        }
+    }
+
     #[test]
     fn test_fact() {
         fn fact(n: i32) -> i32 {
@@ -1201,45 +1210,30 @@ mod tests {
 
     #[test]
     fn test_invalid_binary_operands() {
-        let res = evaluate("1 + \"string\";");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => assert!(err.starts_with("invalid operands in binary operator")),
-        }
+        check_error("1 + \"string\";", &|err: &str| {
+            assert!(err.starts_with("invalid operands in binary operator"))
+        })
     }
 
     #[test]
     fn test_invalid_unary_operand() {
-        let res = evaluate("-\"cat\";");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => {
-                assert!(err
-                    .starts_with("invalid application of unary op Minus to object of type String"))
-            }
-        }
+        check_error("-\"cat\";", &|err: &str| {
+            assert!(
+                err.starts_with("invalid application of unary op Minus to object of type String")
+            )
+        })
     }
 
     #[test]
     fn return_not_enclosed_in_fundecl() {
-        let res = evaluate("return 1;");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => assert!(err.starts_with("return statement not enclosed in a FunDecl at")),
-        }
+        check_error("return 1;", &|err: &str| {
+            assert!(err.starts_with("return statement not enclosed in a FunDecl at"))
+        })
     }
 
     #[test]
     fn test_clock() {
-        let res = evaluate("print clock();");
-
-        match res {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
+        evaluate("print clock();").unwrap();
     }
 
     #[test]
@@ -1534,7 +1528,7 @@ mod tests {
 
     #[test]
     fn test_return_non_nil_in_init() {
-        let res = evaluate(
+        check_error(
             "class Foo {\n\
                init(val) {\n\
                  return 42;\n\
@@ -1542,35 +1536,27 @@ mod tests {
              }\n\
              \n\
              var foo = Foo(42);",
-        );
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => assert_eq!(
-                err,
-                "TypeError: init should only return nil (perhaps implicitly), not Number"
-            ),
-        }
+            &|err: &str| {
+                assert_eq!(
+                    err,
+                    "TypeError: init should only return nil (perhaps implicitly), not Number"
+                )
+            },
+        )
     }
 
     #[test]
     fn class_cannot_inherit_from_itself() {
-        let res = evaluate("class Oops < Oops {}");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => assert!(err.starts_with("A class cannot inerit from itself")),
-        }
+        check_error("class Oops < Oops {}", &|err: &str| {
+            assert!(err.starts_with("A class cannot inerit from itself"))
+        })
     }
 
     #[test]
     fn only_classes_can_be_superclasses() {
-        let res = evaluate("var x = 42; class Oops < x {}");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => assert!(err.starts_with("Only classes should appear as superclasses.")),
-        }
+        check_error("var x = 42; class Oops < x {}", &|err: &str| {
+            assert!(err.starts_with("Only classes should appear as superclasses."))
+        })
     }
 
     #[test]
@@ -1642,24 +1628,16 @@ mod tests {
 
     #[test]
     fn illegal_super_expressions_1() {
-        let res = evaluate("super + 1");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => assert!(err.starts_with("Expected token Dot")),
-        }
+        check_error("super + 1", &|err: &str| {
+            assert!(err.starts_with("Expected token Dot"))
+        })
     }
 
     #[test]
     fn illegal_super_expressions_2() {
-        let res = evaluate("fun f() { return super.g(); }\nprint f();");
-
-        match res {
-            Ok(output) => panic!("{}", output),
-            Err(err) => {
-                assert!(err.starts_with("Super expression not enclosed in a method definition"))
-            }
-        }
+        check_error("fun f() { return super.g(); }\nprint f();", &|err: &str| {
+            assert!(err.starts_with("Super expression not enclosed in a method definition"))
+        })
     }
 
     #[test]
