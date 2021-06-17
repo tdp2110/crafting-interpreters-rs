@@ -590,9 +590,11 @@ impl Interpreter {
             (bytecode::Op::SetGlobal(idx), lineno) => {
                 if let value::Value::String(name_id) = self.read_constant(idx) {
                     let name_str = self.get_str(name_id).clone();
-                    if self.globals.contains_key(&name_str) {
-                        let val = self.peek().clone();
-                        self.globals.insert(name_str, val);
+                    let val = self.peek().clone();
+                    if let std::collections::hash_map::Entry::Occupied(mut e) =
+                        self.globals.entry(name_str.clone())
+                    {
+                        e.insert(val);
                     } else {
                         return Err(InterpreterError::Runtime(format!(
                             "Use of undefined variable {} in setitem expression at line {}.",
