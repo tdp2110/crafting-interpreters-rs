@@ -1365,46 +1365,6 @@ mod tests {
     use crate::compiler::*;
 
     #[test]
-    fn test_compiler_1() {
-        let func_or_err = Compiler::compile(String::from("print 42 * 12;"));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
-    }
-
-    #[test]
-    fn test_compiler_2() {
-        let func_or_err = Compiler::compile(String::from("print -2 * 3 + (-4 / 2);"));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
-    }
-
-    #[test]
-    fn test_var_decl_1() {
-        let func_or_err = Compiler::compile(String::from("var x = 2;"));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
-    }
-
-    #[test]
-    fn test_var_decl_implicit_nil() {
-        let func_or_err = Compiler::compile(String::from("var x;"));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
-    }
-
-    #[test]
     fn test_var_reading_1() {
         let func_or_err = Compiler::compile(String::from("var x = 2; print x;"));
 

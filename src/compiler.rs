@@ -1523,6 +1523,26 @@ mod tests {
     }
 
     #[test]
+    fn test_compiles_1() {
+        Compiler::compile(String::from("print 42 * 12;")).unwrap();
+    }
+
+    #[test]
+    fn test_compiles_2() {
+        Compiler::compile(String::from("print -2 * 3 + (-4 / 2);")).unwrap();
+    }
+
+    #[test]
+    fn test_var_decl_compiles_1() {
+        Compiler::compile(String::from("var x = 2;")).unwrap();
+    }
+
+    #[test]
+    fn test_var_decl_implicit_nil() {
+        Compiler::compile(String::from("var x;")).unwrap();
+    }
+
+    #[test]
     fn test_this_outside_method_1() {
         check_error("print this;", &|err: &str| {
             assert!(err.starts_with("Cannot use 'this' outside of class"))
