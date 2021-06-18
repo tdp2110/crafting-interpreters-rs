@@ -1543,6 +1543,16 @@ mod tests {
     }
 
     #[test]
+    fn test_var_reading_2() {
+        Compiler::compile(String::from("var x; print x;")).unwrap();
+    }
+
+    #[test]
+    fn test_var_reading_3() {
+        Compiler::compile(String::from("var x; print x * 2 + x;")).unwrap();
+    }
+
+    #[test]
     fn test_this_outside_method_1() {
         check_error("print this;", &|err: &str| {
             assert!(err.starts_with("Cannot use 'this' outside of class"))

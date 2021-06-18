@@ -1361,196 +1361,107 @@ impl Interpreter {
 
 #[cfg(test)]
 mod tests {
+
+    macro_rules! vec_of_strings {
+    ($($x:expr),*) => (vec![$($x.to_string()),*]);
+}
+
     use crate::bytecode_interpreter::*;
     use crate::compiler::*;
 
-    #[test]
-    fn test_var_reading_1() {
-        let func_or_err = Compiler::compile(String::from("var x = 2; print x;"));
+    fn evaluate(code: &str) -> Result<Vec<String>, String> {
+        let func_or_err = Compiler::compile(String::from(code));
 
         match func_or_err {
             Ok(func) => {
                 let mut interp = Interpreter::default();
                 let res = interp.interpret(func);
                 match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["2"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
+                    Ok(()) => Ok(interp.output),
+                    Err(InterpreterError::Runtime(err)) => Err(err),
                 }
             }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn check_output(code: &str, expected_output: &[String]) {
+        let res = evaluate(code);
+
+        match res {
+            Ok(output) => assert_eq!(output, expected_output),
             Err(err) => panic!("{}", err),
         }
+    }
+
+    fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {
+        let res = evaluate(code);
+
+        match res {
+            Ok(output) => panic!("{:?}", output),
+            Err(err) => f(&err),
+        }
+    }
+
+    #[test]
+    fn test_var_reading_1() {
+        check_output("var x = 2; print x;", &vec_of_strings!["2"]);
     }
 
     #[test]
     fn test_var_reading_locals_1() {
-        let func_or_err = Compiler::compile(String::from("{var x = 2; print x;}"));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["2"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
-    }
-
-    #[test]
-    fn test_var_reading_2() {
-        let func_or_err = Compiler::compile(String::from("var x; print x;"));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
-    }
-
-    #[test]
-    fn test_var_reading_3() {
-        let func_or_err = Compiler::compile(String::from("var x; print x * 2 + x;"));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
+        check_output("{var x = 2; print x;}", &vec_of_strings!["2"]);
     }
 
     #[test]
     fn test_var_reading_4() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = 2;\n\
              var y = 3;\n\
              print x * y + 4;",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["10"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["10"],
+        );
     }
 
     #[test]
     fn test_var_reading_locals_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "{\n\
                var x = 2;\n\
                var y = 3;\n\
                print x * y + 4;\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["10"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["10"],
+        );
     }
 
     #[test]
     fn test_div_by_zero() {
-        let func_or_err = Compiler::compile(String::from("print 1 / 0;"));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["inf"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+        check_output("print 1 / 0;", &vec_of_strings!["inf"]);
     }
 
     #[test]
     fn test_setitem_globals() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var breakfast = \"beignets\";\n\
              var beverage = \"cafe au lait\";\n\
              breakfast = \"beignets with \" + beverage;\n\
              print breakfast;",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["beignets with cafe au lait"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["beignets with cafe au lait"],
+        );
     }
 
     #[test]
     fn test_setitem_locals() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "{\n\
                var breakfast = \"beignets\";\n\
                var beverage = \"cafe au lait\";\n\
                breakfast = \"beignets with \" + beverage;\n\
                print breakfast;\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["beignets with cafe au lait"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["beignets with cafe au lait"],
+        );
     }
 
     #[test]
@@ -1600,26 +1511,22 @@ mod tests {
 
     #[test]
     fn test_read_in_own_initializer() {
-        let func_or_err = Compiler::compile(String::from(
+        check_error(
             "{\n\
                var a = \"outer\";\n\
                {\n\
                  var a = a;\n\
                }\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => {
+            &|err: &str| {
                 assert!(err.starts_with("Cannot read local variable in its own initializer."))
-            }
-        }
+            },
+        )
     }
 
     #[test]
     fn test_if_stmt() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = 0;\n\
              var y = 1;\n\
              if (x) {\n\
@@ -1628,138 +1535,63 @@ mod tests {
              if (y) {\n\
                print y;\n\
              }",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["1"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["1"],
+        );
     }
 
     #[test]
     fn test_if_then_else_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = 0;\n\
              if (x) {\n\
                print \"hello\";\n\
              } else {\n\
                print \"goodbye\";\n\
              }",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["goodbye"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["goodbye"],
+        );
     }
 
     #[test]
     fn test_if_then_else_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = 1;\n\
              if (x) {\n\
                print \"hello\";\n\
              } else {\n\
                print \"goodbye\";\n\
              }",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["hello"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["hello"],
+        );
     }
 
     #[test]
     fn test_print_locals() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "{\n\
                var x = 0;\n\
                var y = 1;\n\
                print x;\n\
                print y;\n\
              }",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["0", "1"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["0", "1"],
+        );
     }
 
     #[test]
     fn test_print_globals() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = 0;\n\
              var y = 1;\n\
              print x;\n\
              print y;\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["0", "1"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["0", "1"],
+        );
     }
 
     #[test]
     fn test_and_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = false;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -1767,28 +1599,13 @@ mod tests {
              } else {\n\
                print \"dog\";\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["dog"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["dog"],
+        );
     }
 
     #[test]
     fn test_and_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = false;\n\
              var y = true;\n\
              if (x and y) {\n\
@@ -1796,28 +1613,13 @@ mod tests {
              } else {\n\
                print \"dog\";\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["dog"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["dog"],
+        );
     }
 
     #[test]
     fn test_and_3() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = true;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -1825,28 +1627,13 @@ mod tests {
              } else {\n\
                print \"dog\";\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["cat"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["cat"],
+        );
     }
 
     #[test]
     fn test_or_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = false;\n\
              var y = true;\n\
              if (y or x) {\n\
@@ -1854,28 +1641,13 @@ mod tests {
              } else {\n\
                print \"dog\";\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["cat"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["cat"],
+        );
     }
 
     #[test]
     fn test_or_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = false;\n\
              var y = true;\n\
              if (x or y) {\n\
@@ -1883,28 +1655,13 @@ mod tests {
              } else {\n\
                print \"dog\";\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["cat"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["cat"],
+        );
     }
 
     #[test]
     fn test_or_3() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = false;\n\
              var y = false;\n\
              if (y or x) {\n\
@@ -1912,28 +1669,13 @@ mod tests {
              } else {\n\
                print \"dog\";\n\
              }\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["dog"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["dog"],
+        );
     }
 
     #[test]
     fn test_while() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "{var x = 0;\n\
              var sum = 0;\n\
              while (x < 100) {\n\
@@ -1941,28 +1683,20 @@ mod tests {
                sum = sum + x;\n\
              }\n\
              print sum;}",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["5050"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["5050"],
+        );
     }
 
     #[test]
     fn test_for() {
-        let func_or_err = Compiler::compile(String::from(
+        fn fact(n: i32) -> i32 {
+            if n <= 1 {
+                return 1;
+            }
+            return n * fact(n - 1);
+        }
+
+        check_output(
             "{\n\
                var fact = 1;\n\
                for (var i = 1; i <= 10; i = i + 1) {\n\
@@ -1970,129 +1704,80 @@ mod tests {
                }\n\
                print fact;\n\
              }",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["3628800"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings![format!("{}", fact(10))],
+        );
     }
 
     #[test]
     fn test_functions_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun areWeHavingItYet() {\n\
                print \"Yes we are!\";\n\
              }\n\
              \n\
              print areWeHavingItYet;\n",
-        ));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<fn 'areWeHavingItYet'>"],
+        )
     }
 
     #[test]
     fn test_functions_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun f(x, y) {\n\
                print x + y;\n\
              }\n\
              \n\
              print f;\n",
-        ));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<fn 'f'>"],
+        )
     }
 
     #[test]
     fn test_functions_3() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun f(x, y) {\n\
                return x + y;\n\
              }\n\
              \n\
              print f;\n",
-        ));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<fn 'f'>"],
+        )
     }
 
     #[test]
     fn test_functions_4() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun f() {\n\
                return;\n\
              }\n\
              \n\
              print f();\n",
-        ));
-
-        match func_or_err {
-            Ok(_) => {}
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["nil"],
+        )
     }
 
     #[test]
     fn test_functions_5() {
-        let func_or_err = Compiler::compile(String::from("return 42;"));
-
-        match func_or_err {
-            Ok(_) => panic!(),
-            Err(err) => assert_eq!(err, "Cannot return from top-level code."),
-        }
+        check_error("return 42;", &|err: &str| {
+            assert_eq!(err, "Cannot return from top-level code.")
+        })
     }
 
     #[test]
     fn test_functions_6() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun f(x, y) {\n\
                return x + y;\n\
              }\n\
              \n\
              print f(1,2);\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["3"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["3"],
+        );
     }
 
     #[test]
     fn test_functions_7() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun g(x) {\n\
                return 2 * x;\n\
              }\n\
@@ -2102,28 +1787,13 @@ mod tests {
              }\n\
              \n\
              print f(1,2);\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["4"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["4"],
+        );
     }
 
     #[test]
     fn test_functions_8() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var x = 2;\n\
              fun f(x) {\n\
                print 2 * x;\n\
@@ -2131,23 +1801,8 @@ mod tests {
              \n\
              f(x);\n\
              print x;\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["4", "2"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["4", "2"],
+        );
     }
 
     #[test]
@@ -2159,35 +1814,20 @@ mod tests {
             return n * fact(n - 1);
         }
 
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun fact(n) {\n\
                if (n <= 1) { return 1; }\n\
                return n * fact(n - 1);\n\
              }\n\
              \n\
              print fact(10);\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec![format!("{}", fact(10))]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings![format!("{}", fact(10))],
+        );
     }
 
     #[test]
     fn test_functions_10() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun isEven(n) {\n\
                if (n = 0) { return true; }\n\
                return isOdd(n - 1);\n\
@@ -2198,28 +1838,13 @@ mod tests {
              }\n\
              \n\
              print isEven(10);\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["true"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["true"],
+        );
     }
 
     #[test]
     fn test_native_functions() {
-        let func_or_err = Compiler::compile(String::from(
+        let res = evaluate(
             "fun fib(n) {\n\
                if (n < 2) return n;\n\
                return fib(n - 2) + fib(n - 1);\n\
@@ -2229,30 +1854,23 @@ mod tests {
              print fib(5);\n\
              print clock() - start;\n\
              print 42;",
-        ));
+        );
 
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output.len(), 3);
-                        assert_eq!(interp.output[0], "5");
-                        assert_eq!(interp.output[2], "42");
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
+        match res {
+            Ok(output) => {
+                assert_eq!(output.len(), 3);
+                assert_eq!(output[0], "5");
+                assert_eq!(output[2], "42");
             }
-            Err(err) => panic!("{}", err),
+            Err(err) => {
+                panic!("{:?}", err);
+            }
         }
     }
 
     #[test]
     fn test_get_upval_on_stack() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun outer() {\n\
                var x = \"outside\";\n\
                fun inner() {\n\
@@ -2261,28 +1879,13 @@ mod tests {
                inner();\n\
              }\n\
              outer();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["outside"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["outside"],
+        );
     }
 
     #[test]
     fn test_set_upval_on_stack() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun outer() {\n\
                var x = \"before\";\n\
                fun inner() {\n\
@@ -2292,28 +1895,13 @@ mod tests {
                print x;\n\
              }\n\
              outer();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["assigned"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["assigned"],
+        );
     }
 
     #[test]
     fn test_closing_upvals_after_return() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun outer() {\n\
                var x = \"outside\";\n\
                fun inner() {\n\
@@ -2325,28 +1913,13 @@ mod tests {
             \n\
             var closure = outer();\n\
             closure();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["outside"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["outside"],
+        );
     }
 
     #[test]
     fn test_closing_upvals_after_scope() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var closure;\n\
              {\n\
                var x = \"outside\";\n\
@@ -2358,155 +1931,65 @@ mod tests {
             }\n\
             \n\
             closure();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["outside"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["outside"],
+        );
     }
 
     #[test]
     fn test_classes_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Brioche {}\n\
              print Brioche;\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["<class 'Brioche'>"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<class 'Brioche'>"],
+        );
     }
 
     #[test]
     fn test_classes_instances_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Brioche {}\n\
              var instance = Brioche();\n\
              print instance;\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["<Brioche instance>"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<Brioche instance>"],
+        );
     }
 
     #[test]
     fn test_setattr_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Foo {}\n\
              var foo = Foo();\n\
              foo.attr = 42;\n\
              print foo.attr;\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["42"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["42"],
+        );
     }
 
     #[test]
     fn test_setattr_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Toast {}\n\
              var toast = Toast();\n\
              print toast.jam = \"grape\";",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["grape"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["grape"],
+        );
     }
 
     #[test]
     fn test_setattr_3() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Pair {}\n\
              var pair = Pair();\n\
              pair.first = 1;\n\
              pair.second = 2;\n\
              print pair.first + pair.second;",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["3"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["3"],
+        );
     }
 
     #[test]
     fn test_bound_methods_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Foo {\n\
                bar() {\n\
                  return 42;
@@ -2514,28 +1997,13 @@ mod tests {
              }\n\
              var foo = Foo();\n\
              print foo.bar;",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["<bound method of Foo instance>"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<bound method of Foo instance>"],
+        );
     }
 
     #[test]
     fn test_calling_bound_methods_no_this() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Scone {\n\
                topping(first, second) {\n\
                  print \"scone with \" + first + \" and \" + second;\n\
@@ -2544,28 +2012,13 @@ mod tests {
              \n\
              var scone = Scone();\n\
              scone.topping(\"berries\", \"cream\");",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["scone with berries and cream"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["scone with berries and cream"],
+        );
     }
 
     #[test]
     fn test_calling_bound_methods_with_this_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Nested {\n\
                method() {\n\
                  print this;\n\
@@ -2573,28 +2026,13 @@ mod tests {
              }\n\
              \n\
              Nested().method();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["<Nested instance>"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<Nested instance>"],
+        );
     }
 
     #[test]
     fn test_calling_bound_methods_with_this_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Nested {\n\
                method() {\n\
                  fun function() {\n\
@@ -2606,82 +2044,37 @@ mod tests {
              }\n\
              \n\
              Nested().method();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["<Nested instance>"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["<Nested instance>"],
+        );
     }
 
     #[test]
     fn test_multiple_method_definitions() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Brunch {\n\
                bacon() {}\n\
                eggs() {}\n\
              }\n\
              print Brunch().bacon();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["nil"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["nil"],
+        );
     }
 
     #[test]
     fn test_init_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Brunch {\n\
                init(x) {this.x = x;}\n\
                eggs(y) {return this.x + y;}\n\
              }\n\
              print Brunch(2).eggs(3);",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["5"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["5"],
+        );
     }
 
     #[test]
     fn test_invoking_fields() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Oops {\n\
                init() {\n\
                  fun f() {\n\
@@ -2694,28 +2087,13 @@ mod tests {
              \n\
              var oops = Oops();\n\
              oops.field();\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["not a method"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["not a method"],
+        );
     }
 
     #[test]
     fn test_inheritance_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class A {\n\
                f() {\n\
                  return \"cat\";\n\
@@ -2724,28 +2102,13 @@ mod tests {
              class B < A {}\n\
              var b = B();\n\
              print b.f();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["cat"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["cat"],
+        );
     }
 
     #[test]
     fn test_inheritance_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class A {\n\
                f() {\n\
                  return \"cat\";\n\
@@ -2755,28 +2118,13 @@ mod tests {
              class C < B {}\n\
              var c = C();\n\
              print c.f();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["cat"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["cat"],
+        );
     }
 
     #[test]
     fn test_inheritance_3() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -2789,28 +2137,13 @@ mod tests {
              }\n\
              var b = B(42);\n\
              print b.f();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["42"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["42"],
+        );
     }
 
     #[test]
     fn test_inheritance_4() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -2821,52 +2154,24 @@ mod tests {
              var b = B();\n\
              b.attr = 42;
              print b.f();",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        assert_eq!(interp.output, vec!["42"]);
-                    }
-                    Err(err) => {
-                        panic!("{:?}", err);
-                    }
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["42"],
+        );
     }
 
     #[test]
     fn test_inheriting_non_class() {
-        let func_or_err = Compiler::compile(String::from(
+        check_error(
             "var NotClass = \"So not a class\";\n\
              class OhNo < NotClass {}\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => {
-                        panic!();
-                    }
-                    Err(InterpreterError::Runtime(err)) => assert!(
-                        err.starts_with("Superclass must be a class, found String at lineno=")
-                    ),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &|err: &str| {
+                assert!(err.starts_with("Superclass must be a class, found String at lineno="))
+            },
+        )
     }
 
     #[test]
     fn test_super_1() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class A {\n\
                method() {\n\
                  print \"A method\";\n\
@@ -2886,24 +2191,13 @@ mod tests {
              class C < B {}\n\
              \n\
              C().test();\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["A method"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["A method"],
+        )
     }
 
     #[test]
     fn test_super_2() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class A {\n\
                method() {\n\
                  print \"A method\";\n\
@@ -2924,24 +2218,13 @@ mod tests {
              class C < B {}\n\
              \n\
              C().test();\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["A method"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["A method"],
+        )
     }
 
     #[test]
     fn test_super_3() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "class Doughnut {\n\
                cook() {\n\
                  print \"Dunk in the fryer.\";\n\
@@ -2962,185 +2245,83 @@ mod tests {
              \n\
              Doughnut().cook();\n\
              Cruller().cook();\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(
-                        interp.output,
-                        vec![
-                            "Dunk in the fryer.",
-                            "Finish with sprinkles",
-                            "Dunk in the fryer.",
-                            "Finish with icing"
-                        ]
-                    ),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings![
+                "Dunk in the fryer.",
+                "Finish with sprinkles",
+                "Dunk in the fryer.",
+                "Finish with icing"
+            ],
+        )
     }
 
     #[test]
     fn test_late_binding() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun a() { b(); }\n\
              fun b() { print \"hello world\"; }\n\
              \n\
              a();\n",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["hello world"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["hello world"],
+        )
     }
 
     #[test]
     fn test_list_building() {
-        let func_or_err = Compiler::compile(String::from("print([1,2,3]);"));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3]"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+        check_output("print([1,2,3]);", &vec_of_strings!["[1, 2, 3]"])
     }
 
     #[test]
     fn test_empty_list_building() {
-        let func_or_err = Compiler::compile(String::from("print([]);"));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["[]"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+        check_output("print([]);", &vec_of_strings!["[]"])
     }
 
     #[test]
     fn test_list_concat() {
-        let func_or_err = Compiler::compile(String::from("print([1,2,3] + [4,5,6]);"));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["[1, 2, 3, 4, 5, 6]"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+        check_output(
+            "print([1,2,3] + [4,5,6]);",
+            &vec_of_strings!["[1, 2, 3, 4, 5, 6]"],
+        )
     }
 
     #[test]
     fn test_len() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "print(len(\"\")); \n\
              print(len(\"cat\")); \n\
              print(len([])); \n\
              print(len([1,2,3,4]));",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["0", "3", "0", "4"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["0", "3", "0", "4"],
+        )
     }
 
     #[test]
     fn test_for_each() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun f(arg) { print arg; } \n\
              forEach([1,2,3,4], f);",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["1", "2", "3", "4"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["1", "2", "3", "4"],
+        )
     }
 
     #[test]
     fn test_map() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "fun f(arg) { return arg + 1; } \n\
              print(map(f, [1,2,3,4]));",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["[2, 3, 4, 5]"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["[2, 3, 4, 5]"],
+        )
     }
 
     #[test]
     fn test_list_subscript() {
-        let func_or_err = Compiler::compile(String::from(
+        check_output(
             "var xs = [0,1]; \n\
              print(xs[0]); \n\
              print(xs[1]); \n\
              print(xs[-1]); \n\
              print(xs[-2]); \n\
              ",
-        ));
-
-        match func_or_err {
-            Ok(func) => {
-                let mut interp = Interpreter::default();
-                let res = interp.interpret(func);
-                match res {
-                    Ok(()) => assert_eq!(interp.output, vec!["0", "1", "1", "0"]),
-                    Err(err) => panic!("{}", err),
-                }
-            }
-            Err(err) => panic!("{}", err),
-        }
+            &vec_of_strings!["0", "1", "1", "0"],
+        )
     }
 }
