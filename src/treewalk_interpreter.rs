@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::expr;
 use std::fmt;
+use std::fmt::Write;
 
 static INIT: &str = "init";
 
@@ -267,7 +268,7 @@ pub enum Value {
     ),
     LoxClass(expr::Symbol, /*id*/ u64),
     LoxInstance(expr::Symbol, /*id*/ u64),
-    List(Vec<Value>),
+    List(/*id*/ u64),
 }
 
 fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Callable>> {
@@ -319,29 +320,6 @@ pub fn type_of(val: &Value) -> Type {
         Value::LoxClass(_, _) => Type::LoxClass,
         Value::LoxInstance(_, _) => Type::LoxInstance,
         Value::List(_) => Type::List,
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self {
-            Value::Number(n) => write!(f, "{}", n),
-            Value::String(s) => write!(f, "'{}'", s),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Nil => write!(f, "nil"),
-            Value::NativeFunction(func) => write!(f, "NativeFunction({})", func.name),
-            Value::LoxFunction(sym, _, _) => write!(f, "LoxFunction({})", sym.name),
-            Value::LoxClass(sym, _) => write!(f, "LoxClass({})", sym.name),
-            Value::LoxInstance(sym, _) => write!(f, "LoxInstance({})", sym.name),
-            Value::List(elements) => {
-                write!(f, "[")?;
-                elements.split_last().map(|(last_elt, rest)| {
-                    rest.iter().try_for_each(|elt| write!(f, "{}, ", elt))?;
-                    write!(f, "{}", last_elt)
-                });
-                write!(f, "]")
-            }
-        }
     }
 }
 
@@ -438,6 +416,7 @@ pub struct Interpreter {
     pub lox_functions: HashMap<u64, LoxFunction>,
     pub lox_instances: HashMap<u64, LoxInstance>,
     pub lox_classes: HashMap<u64, LoxClass>,
+    pub lists: HashMap<u64, Vec<Value>>,
     pub env: Environment,
     pub globals: Environment,
     pub retval: Option<Value>,
@@ -475,9 +454,12 @@ impl Default for Interpreter {
                 Some(Value::NativeFunction(NativeFunction {
                     name: String::from("len"),
                     arity: 1,
-                    callable: |_, values| match &values[0] {
+                    callable: |interp, values| match &values[0] {
                         Value::String(s) => Ok(Value::Number(s.len() as f64)),
-                        Value::List(elts) => Ok(Value::Number(elts.len() as f64)),
+                        Value::List(list_id) => {
+                            let elts = interp.get_list_elts(*list_id);
+                            Ok(Value::Number(elts.len() as f64))
+                        }
                         val => Err(format!("Object of type {:?} has no len.", type_of(val))),
                     },
                 })),
@@ -494,12 +476,13 @@ impl Default for Interpreter {
                     name: String::from("forEach"),
                     arity: 2,
                     callable: |interpreter, values| match &values[0] {
-                        Value::List(elts) => {
+                        Value::List(list_id) => {
+                            let elts = interpreter.get_list_elts(*list_id).clone();
                             let maybe_callable = as_callable(interpreter, &values[1]);
                             match maybe_callable {
                                 Some(callable) => {
                                     for elt in elts {
-                                        callable.call(interpreter, &[elt.clone()])?;
+                                        callable.call(interpreter, &[elt])?;
                                     }
                                     Ok(Value::Nil)
                                 }
@@ -528,15 +511,16 @@ impl Default for Interpreter {
                     name: String::from("map"),
                     arity: 2,
                     callable: |interpreter, values| match &values[1] {
-                        Value::List(elts) => {
+                        Value::List(list_id) => {
                             let maybe_callable = as_callable(interpreter, &values[0]);
                             match maybe_callable {
                                 Some(callable) => {
-                                    let mut res = Vec::new();
+                                    let mut res_elts = Vec::new();
+                                    let elts = interpreter.get_list_elts(*list_id).clone();
                                     for elt in elts {
-                                        res.push(callable.call(interpreter, &[elt.clone()])?);
+                                        res_elts.push(callable.call(interpreter, &[elt.clone()])?);
                                     }
-                                    Ok(Value::List(res))
+                                    Ok(interpreter.create_list(res_elts))
                                 }
                                 None => Err(format!(
                                     "The second argument to for_each must be callable. Found {:?}.",
@@ -567,6 +551,7 @@ impl Default for Interpreter {
             lox_functions: Default::default(),
             lox_instances: Default::default(),
             lox_classes: Default::default(),
+            lists: Default::default(),
             env: Default::default(),
             globals,
             retval: None,
@@ -596,10 +581,38 @@ impl Interpreter {
         format!("Backtrace (most recent call last):\n\n{}", lines.join("\n"))
     }
 
+    fn get_list_elts(&self, list_id: u64) -> &Vec<Value> {
+        if let Some(elts) = self.lists.get(&list_id) {
+            &elts
+        } else {
+            panic!(
+                "Internal interpreter error! Couldn't find list with id {}.",
+                list_id
+            );
+        }
+    }
+
+    fn get_list_elts_mut(&mut self, list_id: u64) -> &mut Vec<Value> {
+        if let Some(elts) = self.lists.get_mut(&list_id) {
+            elts
+        } else {
+            panic!(
+                "Internal interpreter error! Couldn't find list with id {}.",
+                list_id
+            );
+        }
+    }
+
     fn alloc_id(&mut self) -> u64 {
         let res = self.counter;
         self.counter += 1;
         res
+    }
+
+    fn create_list(&mut self, elts: Vec<Value>) -> Value {
+        let list_id = self.alloc_id();
+        self.lists.insert(list_id, elts);
+        Value::List(list_id)
     }
 
     fn create_instance(&mut self, class_name: &expr::Symbol, class_id: u64) -> Value {
@@ -724,8 +737,8 @@ impl Interpreter {
             }
             expr::Stmt::Print(e) => match self.interpret_expr(e) {
                 Ok(val) => {
-                    println!("{}", val);
-                    self.output.push(format!("{}", val));
+                    println!("{}", self.format_val(&val));
+                    self.output.push(self.format_val(&val));
                     Ok(())
                 }
                 Err(err) => Err(err),
@@ -878,7 +891,32 @@ impl Interpreter {
             expr::Expr::List(elements) => self.list(elements),
             expr::Expr::Subscript{value, slice, source_location} => {
                 self.subscript(value, slice, source_location)
-            }
+            },
+            expr::Expr::SetItem{lhs, slice, rhs, source_location} => self.setitem(lhs, slice, rhs, source_location)
+        }
+    }
+
+    fn setitem(
+        &mut self,
+        lhs_expr: &expr::Expr,
+        slice_expr: &expr::Expr,
+        rhs_expr: &expr::Expr,
+        source_location: &expr::SourceLocation,
+    ) -> Result<Value, String> {
+        let lhs = self.interpret_expr(lhs_expr)?;
+        let slice = self.interpret_expr(slice_expr)?;
+        let rhs = self.interpret_expr(rhs_expr)?;
+        if let Value::List(list_id) = lhs {
+            let elements = self.get_list_elts_mut(list_id);
+            let subscript_index =
+                Interpreter::subscript_to_inbound_index(elements.len(), &slice, &source_location)?;
+            elements[subscript_index] = rhs.clone();
+            Ok(rhs)
+        } else {
+            Err(format!(
+                "Invalid value of type {:?} in setitem expr.",
+                type_of(&lhs),
+            ))
         }
     }
 
@@ -889,31 +927,41 @@ impl Interpreter {
         source_location: &expr::SourceLocation,
     ) -> Result<Value, String> {
         let value = self.interpret_expr(value_expr)?;
-        let value_type = type_of(&value);
         let slice = self.interpret_expr(slice_expr)?;
-        if let Value::List(elements) = value {
-            if let Value::Number(index_float) = slice {
-                let index_int = index_float as i64;
-                if 0 <= index_int && index_int < elements.len() as i64 {
-                    return Ok(elements[index_int as usize].clone());
-                }
-                if index_int < 0 && -index_int <= elements.len() as i64 {
-                    return Ok(elements[(elements.len() as i64 + index_int) as usize].clone());
-                }
-                Err(format!(
-                    "List subscript index out of range at {:?}",
-                    source_location
-                ))
-            } else {
-                Err(format!(
-                    "Invalid subscript of type {:?} in subscript expression",
-                    value_type,
-                ))
-            }
+        if let Value::List(list_id) = value {
+            let elements = self.get_list_elts(list_id);
+            let subscript_index =
+                Interpreter::subscript_to_inbound_index(elements.len(), &slice, &source_location)?;
+            Ok(elements[subscript_index].clone())
         } else {
             Err(format!(
                 "Invalid value of type {:?} in subscript expr.",
                 type_of(&value),
+            ))
+        }
+    }
+
+    fn subscript_to_inbound_index(
+        list_len: usize,
+        slice: &Value,
+        source_location: &expr::SourceLocation,
+    ) -> Result<usize, String> {
+        if let Value::Number(index_float) = slice {
+            let index_int = *index_float as i64;
+            if 0 <= index_int && index_int < list_len as i64 {
+                return Ok(index_int as usize);
+            }
+            if index_int < 0 && -index_int <= list_len as i64 {
+                return Ok((list_len as i64 + index_int) as usize);
+            }
+            Err(format!(
+                "List subscript index out of range at {:?}",
+                source_location
+            ))
+        } else {
+            Err(format!(
+                "Invalid subscript of type {:?} in subscript expression",
+                type_of(&slice),
             ))
         }
     }
@@ -925,7 +973,7 @@ impl Interpreter {
             .collect();
 
         match maybe_elements {
-            Ok(args) => Ok(Value::List(args)),
+            Ok(args) => Ok(self.create_list(args)),
             Err(err) => Err(err),
         }
     }
@@ -1057,10 +1105,12 @@ impl Interpreter {
             (Value::String(s1), expr::BinaryOpTy::Plus, Value::String(s2)) => {
                 Ok(Value::String(format!("{}{}", s1, s2)))
             }
-            (Value::List(xs), expr::BinaryOpTy::Plus, Value::List(ys)) => {
+            (Value::List(xs_id), expr::BinaryOpTy::Plus, Value::List(ys_id)) => {
+                let xs = self.get_list_elts(*xs_id);
+                let ys = self.get_list_elts(*ys_id);
                 let mut res = xs.clone();
                 res.extend(ys.clone());
-                Ok(Value::List(res))
+                Ok(self.create_list(res))
             }
             (_, expr::BinaryOpTy::EqualEqual, _) => {
                 Ok(Value::Bool(Interpreter::equals(&lhs, &rhs)))
@@ -1143,6 +1193,32 @@ impl Interpreter {
             expr::Literal::True => Value::Bool(true),
             expr::Literal::False => Value::Bool(false),
             expr::Literal::Nil => Value::Nil,
+        }
+    }
+
+    fn format_val(&self, val: &Value) -> String {
+        match val {
+            Value::Number(n) => format!("{}", n),
+            Value::String(s) => format!("'{}'", s),
+            Value::Bool(b) => format!("{}", b),
+            Value::Nil => "nil".to_string(),
+            Value::NativeFunction(func) => format!("NativeFunction({})", func.name),
+            Value::LoxFunction(sym, _, _) => format!("LoxFunction({})", sym.name),
+            Value::LoxClass(sym, _) => format!("LoxClass({})", sym.name),
+            Value::LoxInstance(sym, _) => format!("LoxInstance({})", sym.name),
+            Value::List(list_id) => {
+                let mut res = String::new();
+                write!(&mut res, "[").unwrap();
+                let elements = self.get_list_elts(*list_id);
+                elements.split_last().map(|(last_elt, rest)| {
+                    rest.iter()
+                        .try_for_each(|elt| write!(&mut res, "{}, ", self.format_val(elt)))
+                        .unwrap();
+                    write!(&mut res, "{}", self.format_val(last_elt))
+                });
+                write!(&mut res, "]").unwrap();
+                res
+            }
         }
     }
 }
@@ -1783,6 +1859,38 @@ mod tests {
              print(xs[-2]); \n\
              ",
             "0\n1\n1\n0",
+        )
+    }
+
+    #[test]
+    fn test_list_setitem_1() {
+        check_output(
+            "var xs = [0,1]; \n\
+             xs[-1] = 42; \n\
+             print(xs);",
+            "[0, 42]",
+        )
+    }
+
+    #[test]
+    fn test_list_setitem_2() {
+        check_output(
+            "var xs = [[0,1]]; \n\
+             xs[0][1] = 42; \n\
+             print(xs);",
+            "[[0, 42]]",
+        )
+    }
+
+    #[test]
+    fn test_list_setitem_3() {
+        check_output(
+            "class Foo {}\n\
+             var foo = Foo();\n\
+             foo.attr = [0];\n\
+             foo.attr[0] = 1337;\n\
+             print foo.attr;",
+            "[1337]",
         )
     }
 }

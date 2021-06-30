@@ -18,6 +18,12 @@ pub enum Expr {
         slice: Box<Expr>,
         source_location: SourceLocation,
     },
+    SetItem {
+        lhs: Box<Expr>,
+        slice: Box<Expr>,
+        rhs: Box<Expr>,
+        source_location: SourceLocation,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -561,12 +561,24 @@ impl Parser {
 
         if self.matches(scanner::TokenType::Equal) {
             let equals = self.previous().clone();
-            let value = self.assignment()?;
+            let new_value = self.assignment()?;
 
             if let expr::Expr::Variable(sym) = &expr {
-                return Ok(expr::Expr::Assign(sym.clone(), Box::new(value)));
+                return Ok(expr::Expr::Assign(sym.clone(), Box::new(new_value)));
             } else if let expr::Expr::Get(e, attr) = expr {
-                return Ok(expr::Expr::Set(e, attr, Box::new(value)));
+                return Ok(expr::Expr::Set(e, attr, Box::new(new_value)));
+            } else if let expr::Expr::Subscript {
+                value,
+                slice,
+                source_location,
+            } = expr
+            {
+                return Ok(expr::Expr::SetItem {
+                    lhs: value,
+                    slice,
+                    rhs: Box::new(new_value),
+                    source_location,
+                });
             } else {
                 return Err(Error::InvalidAssignment {
                     line: equals.line,
