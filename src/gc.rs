@@ -24,6 +24,12 @@ impl GCData {
             _ => None,
         }
     }
+    fn as_list_mut(&mut self) -> Option<&mut Vec<value::Value>> {
+        match self {
+            GCData::List(elements) => Some(elements),
+            _ => None,
+        }
+    }
     fn as_closure(&self) -> Option<&value::Closure> {
         match self {
             GCData::Closure(c) => Some(c),
@@ -186,6 +192,15 @@ impl Heap {
 
     pub fn get_list_elements(&self, id: HeapId) -> &Vec<value::Value> {
         self.values.get(&id).unwrap().data.as_list().unwrap()
+    }
+
+    pub fn get_list_elements_mut(&mut self, id: HeapId) -> &mut Vec<value::Value> {
+        self.values
+            .get_mut(&id)
+            .unwrap()
+            .data
+            .as_list_mut()
+            .unwrap()
     }
 
     pub fn get_class(&self, id: HeapId) -> &value::Class {

@@ -61,6 +61,7 @@ pub enum Op {
     SuperInvoke(/*method_name*/ String, /*arg count*/ u8),
     BuildList(usize),
     Subscr,
+    SetItem,
 }
 
 #[derive(Default, Clone, Debug)]
