@@ -1168,9 +1168,20 @@ impl Compiler {
         }
 
         if can_assign && self.matches(scanner::TokenType::Equal) {
-            return Err(self.error("Invalid assignment target"));
+            if let Some((bytecode::Op::Subscr, _)) = self.current_chunk().code.last() {
+                self.fixup_subscript_to_setitem()?;
+            } else {
+                return Err(self.error("Invalid assignment target"));
+            }
         }
 
+        Ok(())
+    }
+
+    fn fixup_subscript_to_setitem(&mut self) -> Result<(), String> {
+        self.current_chunk().code.pop(); // pop the subscript op
+        self.expression()?; // consume right hand side
+        self.emit_op(bytecode::Op::SetItem, self.previous().line);
         Ok(())
     }
 

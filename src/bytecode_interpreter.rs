@@ -68,6 +68,7 @@ pub fn disassemble_code(chunk: &bytecode::Chunk) -> Vec<String> {
             }
             bytecode::Op::BuildList(size) => format!("OP_BUILD_LIST {}", size),
             bytecode::Op::Subscr => "OP_SUBSCR".to_string(),
+            bytecode::Op::SetItem => "OP_SETITEM".to_string(),
         };
 
         lines.push(format!(
@@ -810,8 +811,46 @@ impl Interpreter {
                 let res = self.subscript(value_to_subscript, subscript, lineno)?;
                 self.stack.push(res);
             }
+            (bytecode::Op::SetItem, lineno) => {
+                let rhs = self.pop_stack();
+                let subscript = self.pop_stack();
+                let lhs = self.pop_stack();
+                self.setitem(lhs, subscript, rhs.clone(), lineno)?;
+                self.stack.push(rhs);
+            }
         }
         Ok(())
+    }
+
+    fn setitem(
+        &mut self,
+        lhs: value::Value,
+        subscript: value::Value,
+        rhs: value::Value,
+        lineno: bytecode::Lineno,
+    ) -> Result<(), InterpreterError> {
+        if let value::Value::List(id) = lhs {
+            if let value::Value::Number(index_float) = subscript {
+                let elements = self.get_list_elements_mut(id);
+                match Interpreter::subscript_to_inbound_index(elements.len(), index_float, lineno) {
+                    Ok(index_int) => {
+                        elements[index_int] = rhs;
+                        Ok(())
+                    }
+                    Err(err) => Err(InterpreterError::Runtime(err)),
+                }
+            } else {
+                Err(InterpreterError::Runtime(format!(
+                    "Invalid subscript of type {:?} in subscript expression",
+                    value::type_of(&lhs)
+                )))
+            }
+        } else {
+            Err(InterpreterError::Runtime(format!(
+                "Invalid value of type {:?} in subscript expression",
+                value::type_of(&subscript)
+            )))
+        }
     }
 
     fn subscript(
@@ -823,17 +862,10 @@ impl Interpreter {
         if let value::Value::List(id) = value {
             if let value::Value::Number(index_float) = subscript {
                 let elements = self.get_list_elements(id);
-                let index_int = index_float as i64;
-                if 0 <= index_int && index_int < elements.len() as i64 {
-                    return Ok(elements[index_int as usize].clone());
+                match Interpreter::subscript_to_inbound_index(elements.len(), index_float, lineno) {
+                    Ok(index_int) => Ok(elements[index_int].clone()),
+                    Err(err) => Err(InterpreterError::Runtime(err)),
                 }
-                if index_int < 0 && -index_int <= elements.len() as i64 {
-                    return Ok(elements[(elements.len() as i64 + index_int) as usize].clone());
-                }
-                Err(InterpreterError::Runtime(format!(
-                    "List subscript index out of range at {}",
-                    lineno.value
-                )))
             } else {
                 Err(InterpreterError::Runtime(format!(
                     "Invalid subscript of type {:?} in subscript expression",
@@ -846,6 +878,24 @@ impl Interpreter {
                 value::type_of(&value)
             )))
         }
+    }
+
+    fn subscript_to_inbound_index(
+        list_len: usize,
+        index_float: f64,
+        lineno: bytecode::Lineno,
+    ) -> Result<usize, String> {
+        let index_int = index_float as i64;
+        if 0 <= index_int && index_int < list_len as i64 {
+            return Ok(index_int as usize);
+        }
+        if index_int < 0 && -index_int <= list_len as i64 {
+            return Ok((list_len as i64 + index_int) as usize);
+        }
+        Err(format!(
+            "List subscript index out of range at {}",
+            lineno.value
+        ))
     }
 
     fn invoke(&mut self, method_name: &str, arg_count: u8) -> Result<(), InterpreterError> {
@@ -1285,6 +1335,10 @@ impl Interpreter {
 
     fn get_list_elements(&self, list_handle: gc::HeapId) -> &Vec<value::Value> {
         self.heap.get_list_elements(list_handle)
+    }
+
+    fn get_list_elements_mut(&mut self, list_handle: gc::HeapId) -> &mut Vec<value::Value> {
+        self.heap.get_list_elements_mut(list_handle)
     }
 
     fn get_instance(&self, instance_handle: gc::HeapId) -> &value::Instance {
@@ -2322,6 +2376,38 @@ mod tests {
              print(xs[-2]); \n\
              ",
             &vec_of_strings!["0", "1", "1", "0"],
+        )
+    }
+
+    #[test]
+    fn test_list_setitem_1() {
+        check_output(
+            "var xs = [0,1]; \n\
+             xs[-1] = 42; \n\
+             print(xs);",
+            &vec_of_strings!["[0, 42]"],
+        )
+    }
+
+    #[test]
+    fn test_list_setitem_2() {
+        check_output(
+            "var xs = [[0,1]]; \n\
+             xs[0][1] = 42; \n\
+             print(xs);",
+            &vec_of_strings!["[[0, 42]]"],
+        )
+    }
+
+    #[test]
+    fn test_list_setitem_3() {
+        check_output(
+            "class Foo {}\n\
+             var foo = Foo();\n\
+             foo.attr = [0];\n\
+             foo.attr[0] = 1337;\n\
+             print foo.attr;",
+            &vec_of_strings!["[1337]"],
         )
     }
 }
