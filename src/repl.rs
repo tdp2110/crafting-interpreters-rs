@@ -2,6 +2,7 @@ use crate::expr;
 use crate::line_reader;
 use crate::parser;
 use crate::scanner;
+use crate::syntax_extensions;
 use crate::treewalk_interpreter;
 
 use std::sync::atomic::Ordering;
@@ -27,11 +28,12 @@ fn eval_tokens(
     interpreter: &mut treewalk_interpreter::Interpreter,
     mut tokens: Vec<scanner::Token>,
     recursion_depth: i64,
+    extensions: syntax_extensions::Extensions,
 ) {
     let handle_err = |err| {
         println!("\nParse error: {:?}", err);
     };
-    match parser::parse(tokens.clone()) {
+    match parser::parse(extensions.clone(), tokens.clone()) {
         Ok(stmts) => {
             let stmts2: Vec<expr::Stmt> = stmts
                 .iter()
@@ -101,14 +103,14 @@ fn eval_tokens(
             if recursion_depth > 0 {
                 handle_err(err)
             } else {
-                eval_tokens(interpreter, tokens, recursion_depth + 1)
+                eval_tokens(interpreter, tokens, recursion_depth + 1, extensions)
             }
         }
         Err(err) => handle_err(err),
     }
 }
 
-pub fn run() {
+pub fn run(extensions: syntax_extensions::Extensions) {
     let mut interpreter = mk_interpreter();
     let mut line_reader = line_reader::LineReader::new(".repl-history.txt", ">>> ");
     println!(
@@ -125,7 +127,7 @@ pub fn run() {
 
         match readline {
             line_reader::LineReadStatus::Line(line) => match scanner::scan_tokens(line) {
-                Ok(tokens) => eval_tokens(&mut interpreter, tokens, 0),
+                Ok(tokens) => eval_tokens(&mut interpreter, tokens, 0, extensions),
                 Err(err) => {
                     println!("\nScanner error: {}", err);
                 }

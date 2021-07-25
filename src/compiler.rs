@@ -1,5 +1,6 @@
 use crate::bytecode;
 use crate::scanner;
+use crate::syntax_extensions;
 
 #[derive(Debug)]
 struct Local {
@@ -26,6 +27,7 @@ pub struct Compiler {
     levels: Vec<Level>,
     level_idx: usize,
     current_class: Option<ClassCompiler>,
+    extensions: syntax_extensions::Extensions,
 }
 
 impl Default for Compiler {
@@ -36,6 +38,7 @@ impl Default for Compiler {
             levels: vec![Default::default()],
             level_idx: 0,
             current_class: None,
+            extensions: Default::default(),
         }
     }
 }
@@ -117,8 +120,14 @@ enum Resolution {
 }
 
 impl Compiler {
-    pub fn compile(input: String) -> Result<bytecode::Function, String> {
-        let mut compiler = Compiler::default();
+    pub fn compile(
+        input: String,
+        extensions: syntax_extensions::Extensions,
+    ) -> Result<bytecode::Function, String> {
+        let mut compiler = Compiler {
+            extensions,
+            ..Default::default()
+        };
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
                 compiler.tokens = tokens;
@@ -1057,6 +1066,10 @@ impl Compiler {
     }
 
     fn subscr(&mut self, _can_assign: bool) -> Result<(), String> {
+        if !self.extensions.lists {
+            return Err(format!("Unexpected '[' at line {}", self.previous().line));
+        }
+
         self.expression()?;
         self.consume(
             scanner::TokenType::RightBracket,
@@ -1067,6 +1080,10 @@ impl Compiler {
     }
 
     fn list(&mut self, _can_assign: bool) -> Result<(), String> {
+        if !self.extensions.lists {
+            return Err(format!("Unexpected '[' at line {}", self.previous().line));
+        }
+
         let arg_count = self.list_elements()?;
         self.emit_op(bytecode::Op::BuildList(arg_count), self.previous().line);
         Ok(())
@@ -1525,7 +1542,8 @@ mod tests {
     use crate::compiler::*;
 
     fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {
-        let func_or_err = Compiler::compile(String::from(code));
+        let func_or_err =
+            Compiler::compile(String::from(code), syntax_extensions::Extensions::default());
 
         match func_or_err {
             Ok(_) => panic!(),
@@ -1535,32 +1553,56 @@ mod tests {
 
     #[test]
     fn test_compiles_1() {
-        Compiler::compile(String::from("print 42 * 12;")).unwrap();
+        Compiler::compile(
+            String::from("print 42 * 12;"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_compiles_2() {
-        Compiler::compile(String::from("print -2 * 3 + (-4 / 2);")).unwrap();
+        Compiler::compile(
+            String::from("print -2 * 3 + (-4 / 2);"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_var_decl_compiles_1() {
-        Compiler::compile(String::from("var x = 2;")).unwrap();
+        Compiler::compile(
+            String::from("var x = 2;"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_var_decl_implicit_nil() {
-        Compiler::compile(String::from("var x;")).unwrap();
+        Compiler::compile(
+            String::from("var x;"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_var_reading_2() {
-        Compiler::compile(String::from("var x; print x;")).unwrap();
+        Compiler::compile(
+            String::from("var x; print x;"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_var_reading_3() {
-        Compiler::compile(String::from("var x; print x * 2 + x;")).unwrap();
+        Compiler::compile(
+            String::from("var x; print x * 2 + x;"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1596,5 +1638,59 @@ mod tests {
         check_error("class Foo { bar() { super.bar(); } }", &|err: &str| {
             assert!(err.starts_with("Can't use 'super' in a class with no superclass"))
         })
+    }
+
+    #[test]
+    fn test_setitem_illegal_target_globals() {
+        let func_or_err = Compiler::compile(
+            String::from(
+                "var x = 2;\n\
+             var y = 3;\n\
+             x * y = 5;",
+            ),
+            syntax_extensions::Extensions::default(),
+        );
+
+        match func_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => assert!(err.starts_with("Invalid assignment target")),
+        }
+    }
+
+    #[test]
+    fn test_setitem_illegal_target_locals() {
+        let func_or_err = Compiler::compile(
+            String::from(
+                "{\n\
+               var x = 2;\n\
+               var y = 3;\n\
+               x * y = 5;\n\
+             }\n",
+            ),
+            syntax_extensions::Extensions::default(),
+        );
+
+        match func_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => assert!(err.starts_with("Invalid assignment target")),
+        }
+    }
+
+    #[test]
+    fn test_redeclaration_of_locals_is_error() {
+        let func_or_err = Compiler::compile(
+            String::from(
+                "{\n\
+               var x = 2;\n\
+               var x = 3;\n\
+             }",
+            ),
+            syntax_extensions::Extensions::default(),
+        );
+
+        match func_or_err {
+            Ok(_) => panic!("expected compile error"),
+            Err(err) => assert!(err.starts_with("Redeclaration of variable")),
+        }
     }
 }

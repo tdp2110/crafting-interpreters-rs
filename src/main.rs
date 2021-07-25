@@ -16,6 +16,7 @@ mod line_reader;
 mod parser;
 mod repl;
 mod scanner;
+mod syntax_extensions;
 mod treewalk_interpreter;
 mod value;
 
@@ -26,6 +27,7 @@ static DISASSEMBLE_STR: &str = "disassemble";
 static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
 static LITERAL_INPUT: &str = "c";
+static EXTENSION_LISTS: &str = "Xlists";
 
 fn get_input(matches: &clap::ArgMatches<'_>) -> Option<String> {
     if let Some(literal_input) = matches.value_of(LITERAL_INPUT) {
@@ -93,7 +95,17 @@ fn main() {
                 .takes_value(true)
                 .help("provide a literal string of Lox code"),
         )
+        .arg(
+            Arg::with_name(EXTENSION_LISTS)
+                .long("--Xlists")
+                .takes_value(false)
+                .help("use the lists extension"),
+        )
         .get_matches();
+
+    let extensions = syntax_extensions::Extensions {
+        lists: matches.is_present(EXTENSION_LISTS),
+    };
 
     if let Some(input) = get_input(&matches) {
         if matches.is_present(SHOW_TOKENS_STR)
@@ -107,7 +119,7 @@ fn main() {
                         std::process::exit(0);
                     }
 
-                    let stmts_maybe = parser::parse(tokens);
+                    let stmts_maybe = parser::parse(extensions, tokens);
 
                     match stmts_maybe {
                         Ok(stmts) => {
@@ -147,7 +159,7 @@ fn main() {
             }
         }
 
-        let func_or_err = compiler::Compiler::compile(input.clone());
+        let func_or_err = compiler::Compiler::compile(input.clone(), extensions);
 
         match func_or_err {
             Ok(func) => {
@@ -185,6 +197,6 @@ fn main() {
             }
         }
     } else {
-        repl::run();
+        repl::run(extensions);
     }
 }

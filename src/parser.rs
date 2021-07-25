@@ -1,5 +1,6 @@
 use crate::expr;
 use crate::scanner;
+use crate::syntax_extensions;
 
 use std::fmt;
 
@@ -7,14 +8,16 @@ struct Parser {
     tokens: Vec<scanner::Token>,
     current: usize,
     in_fundec: bool,
+    extensions: syntax_extensions::Extensions,
 }
 
 impl Default for Parser {
     fn default() -> Parser {
         Parser {
-            tokens: Vec::new(),
+            tokens: Default::default(),
             current: 0,
             in_fundec: false,
+            extensions: Default::default(),
         }
     }
 }
@@ -138,9 +141,13 @@ pub enum FunctionKind {
     Method,
 }
 
-pub fn parse(tokens: Vec<scanner::Token>) -> Result<Vec<expr::Stmt>, Error> {
+pub fn parse(
+    extensions: syntax_extensions::Extensions,
+    tokens: Vec<scanner::Token>,
+) -> Result<Vec<expr::Stmt>, Error> {
     let mut p = Parser {
         tokens,
+        extensions,
         ..Default::default()
     };
     let stmts_or_err = p.parse();
@@ -567,7 +574,8 @@ impl Parser {
                 return Ok(expr::Expr::Assign(sym.clone(), Box::new(new_value)));
             } else if let expr::Expr::Get(e, attr) = expr {
                 return Ok(expr::Expr::Set(e, attr, Box::new(new_value)));
-            } else if let expr::Expr::Subscript {
+            }
+            if let expr::Expr::Subscript {
                 value,
                 slice,
                 source_location,
@@ -709,7 +717,7 @@ impl Parser {
                         col: name_tok.col,
                     },
                 );
-            } else if self.matches(scanner::TokenType::LeftBracket) {
+            } else if self.extensions.lists && self.matches(scanner::TokenType::LeftBracket) {
                 let slice_expr = self.expression()?;
                 let token = self.consume(
                     scanner::TokenType::RightBracket,
@@ -852,7 +860,7 @@ impl Parser {
             }
             return Ok(expr::Expr::Grouping(expr));
         }
-        if self.matches(scanner::TokenType::LeftBracket) {
+        if self.extensions.lists && self.matches(scanner::TokenType::LeftBracket) {
             let mut list_elements = Vec::new();
 
             if !self.check(scanner::TokenType::RightBracket) {

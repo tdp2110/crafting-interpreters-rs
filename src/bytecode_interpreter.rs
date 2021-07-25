@@ -1422,9 +1422,13 @@ mod tests {
 
     use crate::bytecode_interpreter::*;
     use crate::compiler::*;
+    use crate::syntax_extensions;
 
-    fn evaluate(code: &str) -> Result<Vec<String>, String> {
-        let func_or_err = Compiler::compile(String::from(code));
+    fn evaluate(
+        code: &str,
+        extensions: syntax_extensions::Extensions,
+    ) -> Result<Vec<String>, String> {
+        let func_or_err = Compiler::compile(String::from(code), extensions);
 
         match func_or_err {
             Ok(func) => {
@@ -1439,8 +1443,12 @@ mod tests {
         }
     }
 
-    fn check_output(code: &str, expected_output: &[String]) {
-        let res = evaluate(code);
+    fn check_output(
+        code: &str,
+        extensions: syntax_extensions::Extensions,
+        expected_output: &[String],
+    ) {
+        let res = evaluate(code, extensions);
 
         match res {
             Ok(output) => assert_eq!(output, expected_output),
@@ -1448,8 +1456,24 @@ mod tests {
         }
     }
 
-    fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {
-        let res = evaluate(code);
+    fn check_output_default(code: &str, expected_output: &[String]) {
+        check_output(
+            code,
+            syntax_extensions::Extensions::default(),
+            expected_output,
+        );
+    }
+
+    fn check_output_lists(code: &str, expected_output: &[String]) {
+        check_output(
+            code,
+            syntax_extensions::Extensions { lists: true },
+            expected_output,
+        );
+    }
+
+    fn check_error(code: &str, extensions: syntax_extensions::Extensions, f: &dyn Fn(&str) -> ()) {
+        let res = evaluate(code, extensions);
 
         match res {
             Ok(output) => panic!("{:?}", output),
@@ -1457,19 +1481,23 @@ mod tests {
         }
     }
 
+    fn check_error_default(code: &str, f: &dyn Fn(&str) -> ()) {
+        check_error(code, syntax_extensions::Extensions::default(), f);
+    }
+
     #[test]
     fn test_var_reading_1() {
-        check_output("var x = 2; print x;", &vec_of_strings!["2"]);
+        check_output_default("var x = 2; print x;", &vec_of_strings!["2"]);
     }
 
     #[test]
     fn test_var_reading_locals_1() {
-        check_output("{var x = 2; print x;}", &vec_of_strings!["2"]);
+        check_output_default("{var x = 2; print x;}", &vec_of_strings!["2"]);
     }
 
     #[test]
     fn test_var_reading_4() {
-        check_output(
+        check_output_default(
             "var x = 2;\n\
              var y = 3;\n\
              print x * y + 4;",
@@ -1479,7 +1507,7 @@ mod tests {
 
     #[test]
     fn test_var_reading_locals_2() {
-        check_output(
+        check_output_default(
             "{\n\
                var x = 2;\n\
                var y = 3;\n\
@@ -1491,12 +1519,12 @@ mod tests {
 
     #[test]
     fn test_div_by_zero() {
-        check_output("print 1 / 0;", &vec_of_strings!["inf"]);
+        check_output_default("print 1 / 0;", &vec_of_strings!["inf"]);
     }
 
     #[test]
     fn test_setitem_globals() {
-        check_output(
+        check_output_default(
             "var breakfast = \"beignets\";\n\
              var beverage = \"cafe au lait\";\n\
              breakfast = \"beignets with \" + beverage;\n\
@@ -1507,7 +1535,7 @@ mod tests {
 
     #[test]
     fn test_setitem_locals() {
-        check_output(
+        check_output_default(
             "{\n\
                var breakfast = \"beignets\";\n\
                var beverage = \"cafe au lait\";\n\
@@ -1519,53 +1547,8 @@ mod tests {
     }
 
     #[test]
-    fn test_setitem_illegal_target_globals() {
-        let func_or_err = Compiler::compile(String::from(
-            "var x = 2;\n\
-             var y = 3;\n\
-             x * y = 5;",
-        ));
-
-        match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => assert!(err.starts_with("Invalid assignment target")),
-        }
-    }
-
-    #[test]
-    fn test_setitem_illegal_target_locals() {
-        let func_or_err = Compiler::compile(String::from(
-            "{\n\
-               var x = 2;\n\
-               var y = 3;\n\
-               x * y = 5;\n\
-             }\n",
-        ));
-
-        match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => assert!(err.starts_with("Invalid assignment target")),
-        }
-    }
-
-    #[test]
-    fn test_redeclaration_of_locals_is_error() {
-        let func_or_err = Compiler::compile(String::from(
-            "{\n\
-               var x = 2;\n\
-               var x = 3;\n\
-             }",
-        ));
-
-        match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => assert!(err.starts_with("Redeclaration of variable")),
-        }
-    }
-
-    #[test]
     fn test_read_in_own_initializer() {
-        check_error(
+        check_error_default(
             "{\n\
                var a = \"outer\";\n\
                {\n\
@@ -1580,7 +1563,7 @@ mod tests {
 
     #[test]
     fn test_if_stmt() {
-        check_output(
+        check_output_default(
             "var x = 0;\n\
              var y = 1;\n\
              if (x) {\n\
@@ -1595,7 +1578,7 @@ mod tests {
 
     #[test]
     fn test_if_then_else_1() {
-        check_output(
+        check_output_default(
             "var x = 0;\n\
              if (x) {\n\
                print \"hello\";\n\
@@ -1608,7 +1591,7 @@ mod tests {
 
     #[test]
     fn test_if_then_else_2() {
-        check_output(
+        check_output_default(
             "var x = 1;\n\
              if (x) {\n\
                print \"hello\";\n\
@@ -1621,7 +1604,7 @@ mod tests {
 
     #[test]
     fn test_print_locals() {
-        check_output(
+        check_output_default(
             "{\n\
                var x = 0;\n\
                var y = 1;\n\
@@ -1634,7 +1617,7 @@ mod tests {
 
     #[test]
     fn test_print_globals() {
-        check_output(
+        check_output_default(
             "var x = 0;\n\
              var y = 1;\n\
              print x;\n\
@@ -1645,7 +1628,7 @@ mod tests {
 
     #[test]
     fn test_and_1() {
-        check_output(
+        check_output_default(
             "var x = false;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -1659,7 +1642,7 @@ mod tests {
 
     #[test]
     fn test_and_2() {
-        check_output(
+        check_output_default(
             "var x = false;\n\
              var y = true;\n\
              if (x and y) {\n\
@@ -1673,7 +1656,7 @@ mod tests {
 
     #[test]
     fn test_and_3() {
-        check_output(
+        check_output_default(
             "var x = true;\n\
              var y = true;\n\
              if (y and x) {\n\
@@ -1687,7 +1670,7 @@ mod tests {
 
     #[test]
     fn test_or_1() {
-        check_output(
+        check_output_default(
             "var x = false;\n\
              var y = true;\n\
              if (y or x) {\n\
@@ -1701,7 +1684,7 @@ mod tests {
 
     #[test]
     fn test_or_2() {
-        check_output(
+        check_output_default(
             "var x = false;\n\
              var y = true;\n\
              if (x or y) {\n\
@@ -1715,7 +1698,7 @@ mod tests {
 
     #[test]
     fn test_or_3() {
-        check_output(
+        check_output_default(
             "var x = false;\n\
              var y = false;\n\
              if (y or x) {\n\
@@ -1729,7 +1712,7 @@ mod tests {
 
     #[test]
     fn test_while() {
-        check_output(
+        check_output_default(
             "{var x = 0;\n\
              var sum = 0;\n\
              while (x < 100) {\n\
@@ -1750,7 +1733,7 @@ mod tests {
             return n * fact(n - 1);
         }
 
-        check_output(
+        check_output_default(
             "{\n\
                var fact = 1;\n\
                for (var i = 1; i <= 10; i = i + 1) {\n\
@@ -1764,7 +1747,7 @@ mod tests {
 
     #[test]
     fn test_functions_1() {
-        check_output(
+        check_output_default(
             "fun areWeHavingItYet() {\n\
                print \"Yes we are!\";\n\
              }\n\
@@ -1776,7 +1759,7 @@ mod tests {
 
     #[test]
     fn test_functions_2() {
-        check_output(
+        check_output_default(
             "fun f(x, y) {\n\
                print x + y;\n\
              }\n\
@@ -1788,7 +1771,7 @@ mod tests {
 
     #[test]
     fn test_functions_3() {
-        check_output(
+        check_output_default(
             "fun f(x, y) {\n\
                return x + y;\n\
              }\n\
@@ -1800,7 +1783,7 @@ mod tests {
 
     #[test]
     fn test_functions_4() {
-        check_output(
+        check_output_default(
             "fun f() {\n\
                return;\n\
              }\n\
@@ -1812,14 +1795,14 @@ mod tests {
 
     #[test]
     fn test_functions_5() {
-        check_error("return 42;", &|err: &str| {
+        check_error_default("return 42;", &|err: &str| {
             assert_eq!(err, "Cannot return from top-level code.")
         })
     }
 
     #[test]
     fn test_functions_6() {
-        check_output(
+        check_output_default(
             "fun f(x, y) {\n\
                return x + y;\n\
              }\n\
@@ -1831,7 +1814,7 @@ mod tests {
 
     #[test]
     fn test_functions_7() {
-        check_output(
+        check_output_default(
             "fun g(x) {\n\
                return 2 * x;\n\
              }\n\
@@ -1847,7 +1830,7 @@ mod tests {
 
     #[test]
     fn test_functions_8() {
-        check_output(
+        check_output_default(
             "var x = 2;\n\
              fun f(x) {\n\
                print 2 * x;\n\
@@ -1868,7 +1851,7 @@ mod tests {
             return n * fact(n - 1);
         }
 
-        check_output(
+        check_output_default(
             "fun fact(n) {\n\
                if (n <= 1) { return 1; }\n\
                return n * fact(n - 1);\n\
@@ -1881,7 +1864,7 @@ mod tests {
 
     #[test]
     fn test_functions_10() {
-        check_output(
+        check_output_default(
             "fun isEven(n) {\n\
                if (n = 0) { return true; }\n\
                return isOdd(n - 1);\n\
@@ -1908,6 +1891,7 @@ mod tests {
              print fib(5);\n\
              print clock() - start;\n\
              print 42;",
+            syntax_extensions::Extensions::default(),
         );
 
         match res {
@@ -1924,7 +1908,7 @@ mod tests {
 
     #[test]
     fn test_get_upval_on_stack() {
-        check_output(
+        check_output_default(
             "fun outer() {\n\
                var x = \"outside\";\n\
                fun inner() {\n\
@@ -1939,7 +1923,7 @@ mod tests {
 
     #[test]
     fn test_set_upval_on_stack() {
-        check_output(
+        check_output_default(
             "fun outer() {\n\
                var x = \"before\";\n\
                fun inner() {\n\
@@ -1955,7 +1939,7 @@ mod tests {
 
     #[test]
     fn test_closing_upvals_after_return() {
-        check_output(
+        check_output_default(
             "fun outer() {\n\
                var x = \"outside\";\n\
                fun inner() {\n\
@@ -1973,7 +1957,7 @@ mod tests {
 
     #[test]
     fn test_closing_upvals_after_scope() {
-        check_output(
+        check_output_default(
             "var closure;\n\
              {\n\
                var x = \"outside\";\n\
@@ -1991,7 +1975,7 @@ mod tests {
 
     #[test]
     fn test_classes_1() {
-        check_output(
+        check_output_default(
             "class Brioche {}\n\
              print Brioche;\n",
             &vec_of_strings!["<class 'Brioche'>"],
@@ -2000,7 +1984,7 @@ mod tests {
 
     #[test]
     fn test_classes_instances_1() {
-        check_output(
+        check_output_default(
             "class Brioche {}\n\
              var instance = Brioche();\n\
              print instance;\n",
@@ -2010,7 +1994,7 @@ mod tests {
 
     #[test]
     fn test_setattr_1() {
-        check_output(
+        check_output_default(
             "class Foo {}\n\
              var foo = Foo();\n\
              foo.attr = 42;\n\
@@ -2021,7 +2005,7 @@ mod tests {
 
     #[test]
     fn test_setattr_2() {
-        check_output(
+        check_output_default(
             "class Toast {}\n\
              var toast = Toast();\n\
              print toast.jam = \"grape\";",
@@ -2031,7 +2015,7 @@ mod tests {
 
     #[test]
     fn test_setattr_3() {
-        check_output(
+        check_output_default(
             "class Pair {}\n\
              var pair = Pair();\n\
              pair.first = 1;\n\
@@ -2043,7 +2027,7 @@ mod tests {
 
     #[test]
     fn test_bound_methods_1() {
-        check_output(
+        check_output_default(
             "class Foo {\n\
                bar() {\n\
                  return 42;
@@ -2057,7 +2041,7 @@ mod tests {
 
     #[test]
     fn test_calling_bound_methods_no_this() {
-        check_output(
+        check_output_default(
             "class Scone {\n\
                topping(first, second) {\n\
                  print \"scone with \" + first + \" and \" + second;\n\
@@ -2072,7 +2056,7 @@ mod tests {
 
     #[test]
     fn test_calling_bound_methods_with_this_1() {
-        check_output(
+        check_output_default(
             "class Nested {\n\
                method() {\n\
                  print this;\n\
@@ -2086,7 +2070,7 @@ mod tests {
 
     #[test]
     fn test_calling_bound_methods_with_this_2() {
-        check_output(
+        check_output_default(
             "class Nested {\n\
                method() {\n\
                  fun function() {\n\
@@ -2104,7 +2088,7 @@ mod tests {
 
     #[test]
     fn test_multiple_method_definitions() {
-        check_output(
+        check_output_default(
             "class Brunch {\n\
                bacon() {}\n\
                eggs() {}\n\
@@ -2116,7 +2100,7 @@ mod tests {
 
     #[test]
     fn test_init_1() {
-        check_output(
+        check_output_default(
             "class Brunch {\n\
                init(x) {this.x = x;}\n\
                eggs(y) {return this.x + y;}\n\
@@ -2128,7 +2112,7 @@ mod tests {
 
     #[test]
     fn test_invoking_fields() {
-        check_output(
+        check_output_default(
             "class Oops {\n\
                init() {\n\
                  fun f() {\n\
@@ -2147,7 +2131,7 @@ mod tests {
 
     #[test]
     fn test_inheritance_1() {
-        check_output(
+        check_output_default(
             "class A {\n\
                f() {\n\
                  return \"cat\";\n\
@@ -2162,7 +2146,7 @@ mod tests {
 
     #[test]
     fn test_inheritance_2() {
-        check_output(
+        check_output_default(
             "class A {\n\
                f() {\n\
                  return \"cat\";\n\
@@ -2178,7 +2162,7 @@ mod tests {
 
     #[test]
     fn test_inheritance_3() {
-        check_output(
+        check_output_default(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -2197,7 +2181,7 @@ mod tests {
 
     #[test]
     fn test_inheritance_4() {
-        check_output(
+        check_output_default(
             "class A {\n\
                f() {\n\
                  return this.attr;
@@ -2214,7 +2198,7 @@ mod tests {
 
     #[test]
     fn test_inheriting_non_class() {
-        check_error(
+        check_error_default(
             "var NotClass = \"So not a class\";\n\
              class OhNo < NotClass {}\n",
             &|err: &str| {
@@ -2225,7 +2209,7 @@ mod tests {
 
     #[test]
     fn test_super_1() {
-        check_output(
+        check_output_default(
             "class A {\n\
                method() {\n\
                  print \"A method\";\n\
@@ -2251,7 +2235,7 @@ mod tests {
 
     #[test]
     fn test_super_2() {
-        check_output(
+        check_output_default(
             "class A {\n\
                method() {\n\
                  print \"A method\";\n\
@@ -2278,7 +2262,7 @@ mod tests {
 
     #[test]
     fn test_super_3() {
-        check_output(
+        check_output_default(
             "class Doughnut {\n\
                cook() {\n\
                  print \"Dunk in the fryer.\";\n\
@@ -2310,7 +2294,7 @@ mod tests {
 
     #[test]
     fn test_late_binding() {
-        check_output(
+        check_output_default(
             "fun a() { b(); }\n\
              fun b() { print \"hello world\"; }\n\
              \n\
@@ -2321,17 +2305,17 @@ mod tests {
 
     #[test]
     fn test_list_building() {
-        check_output("print([1,2,3]);", &vec_of_strings!["[1, 2, 3]"])
+        check_output_lists("print([1,2,3]);", &vec_of_strings!["[1, 2, 3]"])
     }
 
     #[test]
     fn test_empty_list_building() {
-        check_output("print([]);", &vec_of_strings!["[]"])
+        check_output_lists("print([]);", &vec_of_strings!["[]"])
     }
 
     #[test]
     fn test_list_concat() {
-        check_output(
+        check_output_lists(
             "print([1,2,3] + [4,5,6]);",
             &vec_of_strings!["[1, 2, 3, 4, 5, 6]"],
         )
@@ -2339,7 +2323,7 @@ mod tests {
 
     #[test]
     fn test_len() {
-        check_output(
+        check_output_lists(
             "print(len(\"\")); \n\
              print(len(\"cat\")); \n\
              print(len([])); \n\
@@ -2350,7 +2334,7 @@ mod tests {
 
     #[test]
     fn test_for_each() {
-        check_output(
+        check_output_lists(
             "fun f(arg) { print arg; } \n\
              forEach([1,2,3,4], f);",
             &vec_of_strings!["1", "2", "3", "4"],
@@ -2359,7 +2343,7 @@ mod tests {
 
     #[test]
     fn test_map() {
-        check_output(
+        check_output_lists(
             "fun f(arg) { return arg + 1; } \n\
              print(map(f, [1,2,3,4]));",
             &vec_of_strings!["[2, 3, 4, 5]"],
@@ -2368,7 +2352,7 @@ mod tests {
 
     #[test]
     fn test_list_subscript() {
-        check_output(
+        check_output_lists(
             "var xs = [0,1]; \n\
              print(xs[0]); \n\
              print(xs[1]); \n\
@@ -2381,7 +2365,7 @@ mod tests {
 
     #[test]
     fn test_list_setitem_1() {
-        check_output(
+        check_output_lists(
             "var xs = [0,1]; \n\
              xs[-1] = 42; \n\
              print(xs);",
@@ -2391,7 +2375,7 @@ mod tests {
 
     #[test]
     fn test_list_setitem_2() {
-        check_output(
+        check_output_lists(
             "var xs = [[0,1]]; \n\
              xs[0][1] = 42; \n\
              print(xs);",
@@ -2401,7 +2385,7 @@ mod tests {
 
     #[test]
     fn test_list_setitem_3() {
-        check_output(
+        check_output_lists(
             "class Foo {}\n\
              var foo = Foo();\n\
              foo.attr = [0];\n\
