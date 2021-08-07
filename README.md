@@ -175,3 +175,62 @@ Welcome to lox! using tree-walk interpreter.
 >>> f(x);
 43
 ```
+
+## Extensions
+
+Using the `--Xlists` command line switch, we can enable lists
+
+```
+===================================================
+Welcome to lox 0.1.0! Using tree-walk interpreter.
+
+Authors: Thomas Peters <thomas.d.peters@gmail.com>
+===================================================
+
+>>> var xs = [1,2,3]
+>>> xs
+[1, 2, 3]
+```
+
+Lists don't have much functionality yet, but they have lengths
+
+```
+>>> len(xs)
+3
+```
+
+can be concatenated 
+
+```
+>>> var ys = xs + xs
+>>> ys
+[1, 2, 3, 1, 2, 3]
+```
+
+can be mapped over
+
+```
+>>> fun square(x) { return x * x; }
+>>> map(square, xs)
+[1, 4, 9]
+>>>
+```
+
+can be iterated 
+
+```
+>>> fun printFun(elt) { print elt; }
+>>> forEach(xs, printFun)
+1
+2
+3
+```
+
+and also have expected indexing operators
+
+```
+>>> xs[0] = -xs[0]
+-1
+>>> xs
+[-1, 2, 3]
+```
