@@ -33,7 +33,7 @@ fn eval_tokens(
     let handle_err = |err| {
         println!("\nParse error: {:?}", err);
     };
-    match parser::parse(extensions.clone(), tokens.clone()) {
+    match parser::parse(extensions, tokens.clone()) {
         Ok(stmts) => {
             let stmts2: Vec<expr::Stmt> = stmts
                 .iter()

@@ -95,7 +95,7 @@ pub fn disassemble_chunk(chunk: &bytecode::Chunk, name: &str) -> String {
 
     lines.push("\n------------ code -----------------".to_string());
 
-    for code_line in disassemble_code(&chunk) {
+    for code_line in disassemble_code(chunk) {
         lines.push(code_line)
     }
 
@@ -291,7 +291,7 @@ impl Interpreter {
     pub fn format_upval(&self, val: &value::Upvalue) -> String {
         match val {
             value::Upvalue::Open(idx) => format!("Open({})", idx),
-            value::Upvalue::Closed(val) => format!("Closed({})", self.format_val(&val)),
+            value::Upvalue::Closed(val) => format!("Closed({})", self.format_val(val)),
         }
     }
 
@@ -636,7 +636,7 @@ impl Interpreter {
                 };
             }
             (bytecode::Op::JumpIfFalse(offset), _) => {
-                if self.is_falsey(&self.peek()) {
+                if self.is_falsey(self.peek()) {
                     self.frame_mut().ip += offset;
                 }
             }
@@ -747,7 +747,7 @@ impl Interpreter {
                         (not_a_class, value::Value::Class(_)) => {
                             return Err(InterpreterError::Runtime(format!(
                                 "Superclass must be a class, found {:?} at lineno={:?}",
-                                value::type_of(&not_a_class),
+                                value::type_of(not_a_class),
                                 lineno
                             )));
                         }
@@ -918,7 +918,7 @@ impl Interpreter {
         }
 
         let class_id = self.get_instance(receiver_id).class_id;
-        self.invoke_from_class(class_id, &method_name, arg_count)
+        self.invoke_from_class(class_id, method_name, arg_count)
     }
 
     fn frame_mut(&mut self) -> &mut CallFrame {

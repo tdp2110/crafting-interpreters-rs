@@ -138,7 +138,7 @@ impl Debugger {
                 line_reader::LineReadStatus::Line(line) => {
                     let line = line.trim();
 
-                    let command = self.read_command(&line);
+                    let command = self.read_command(line);
                     if let ShouldBreak::True = self.execute_command(command, Verbosity::Verbose) {
                         break;
                     }
@@ -185,7 +185,7 @@ impl Debugger {
             }
             DebugCommand::Stack => {
                 for val in self.interpreter.stack.iter().rev() {
-                    println!("{}", self.interpreter.format_val(&val));
+                    println!("{}", self.interpreter.format_val(val));
                 }
             }
             DebugCommand::Globals => {
@@ -193,7 +193,7 @@ impl Debugger {
                     println!("<empty globals>");
                 }
                 for (name, val) in &self.interpreter.globals {
-                    println!("{}: {}", name, self.interpreter.format_val(&val));
+                    println!("{}: {}", name, self.interpreter.format_val(val));
                 }
             }
             DebugCommand::Upvals => {
@@ -310,7 +310,7 @@ impl Debugger {
             println!();
 
             let chunk = &self.interpreter.frame().closure.function.chunk;
-            let dissed_code = bytecode_interpreter::disassemble_code(&chunk);
+            let dissed_code = bytecode_interpreter::disassemble_code(chunk);
             dissed_code
                 .iter()
                 .enumerate()

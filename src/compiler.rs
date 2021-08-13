@@ -812,10 +812,10 @@ impl Compiler {
     }
 
     fn resolve_variable(&mut self, name: &str) -> Result<Resolution, String> {
-        if let Some(idx) = self.resolve_local(&name)? {
+        if let Some(idx) = self.resolve_local(name)? {
             return Ok(Resolution::Local(idx));
         }
-        if let Some(idx) = self.resolve_upval(&name)? {
+        if let Some(idx) = self.resolve_upval(name)? {
             return Ok(Resolution::Upvalue(idx));
         }
 
@@ -1486,6 +1486,7 @@ impl Compiler {
                 infix: None,
                 precedence: Precedence::None,
             },
+            scanner::TokenType::Lambda => unimplemented!(),
             scanner::TokenType::Eof => ParseRule {
                 prefix: None,
                 infix: None,

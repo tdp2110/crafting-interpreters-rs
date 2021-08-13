@@ -292,7 +292,7 @@ impl Heap {
             .iter()
             .map(|upval| match &*upval.borrow() {
                 value::Upvalue::Open(_) => None,
-                value::Upvalue::Closed(value) => Heap::extract_id(&value),
+                value::Upvalue::Closed(value) => Heap::extract_id(value),
             })
             .flatten()
             .collect();

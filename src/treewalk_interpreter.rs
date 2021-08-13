@@ -167,7 +167,7 @@ impl Callable for LoxClass {
     fn call(&self, interpreter: &mut Interpreter, args: &[Value]) -> Result<Value, String> {
         let instance = interpreter.create_instance(&self.name, self.id);
 
-        if let Some(mut initializer) = self.init(&interpreter) {
+        if let Some(mut initializer) = self.init(interpreter) {
             initializer.this_binding = Some(Box::new(instance.clone()));
             initializer.call(interpreter, args)?;
         }
@@ -367,7 +367,7 @@ impl Environment {
     pub fn lookup(&self, sym: &expr::Symbol) -> LookupResult {
         match self.venv.get(&sym.name) {
             Some((maybe_val, defn_source_location)) => match maybe_val {
-                Some(val) => LookupResult::Ok(&val),
+                Some(val) => LookupResult::Ok(val),
                 None => LookupResult::UndefButDeclared(SourceLocation {
                     line: defn_source_location.line,
                     col: defn_source_location.col,
@@ -378,8 +378,8 @@ impl Environment {
     }
 
     pub fn get(&self, sym: &expr::Symbol) -> Result<&Value, String> {
-        match self.lookup(&sym) {
-            LookupResult::Ok(val) => Ok(&val),
+        match self.lookup(sym) {
+            LookupResult::Ok(val) => Ok(val),
             LookupResult::UndefButDeclared(source_location) => Err(format!(
                 "Use of undefined variable '{}' at line={},col={}.\
                 \nNote: {} was previously declared at line={},col={}, \
@@ -584,7 +584,7 @@ impl Interpreter {
 
     fn get_list_elts(&self, list_id: u64) -> &Vec<Value> {
         if let Some(elts) = self.lists.get(&list_id) {
-            &elts
+            elts
         } else {
             panic!(
                 "Internal interpreter error! Couldn't find list with id {}.",
@@ -851,8 +851,8 @@ impl Interpreter {
                     Some(func) => {
                         match &func.superclass {
                             Some(superclass_id) => {
-                                if let Some(superclass) = self.lox_classes.get(&superclass_id) {
-                                    if let Some((func_name, method_id)) = superclass.find_method(&sym.name, &self) {
+                                if let Some(superclass) = self.lox_classes.get(superclass_id) {
+                                    if let Some((func_name, method_id)) = superclass.find_method(&sym.name, self) {
                                         if let Some(method) = self.lox_functions.get(&method_id) {
                                             Ok(Value::LoxFunction(
                                                 func_name,
@@ -910,7 +910,7 @@ impl Interpreter {
         if let Value::List(list_id) = lhs {
             let elements = self.get_list_elts_mut(list_id);
             let subscript_index =
-                Interpreter::subscript_to_inbound_index(elements.len(), &slice, &source_location)?;
+                Interpreter::subscript_to_inbound_index(elements.len(), &slice, source_location)?;
             elements[subscript_index] = rhs.clone();
             Ok(rhs)
         } else {
@@ -932,7 +932,7 @@ impl Interpreter {
         if let Value::List(list_id) = value {
             let elements = self.get_list_elts(list_id);
             let subscript_index =
-                Interpreter::subscript_to_inbound_index(elements.len(), &slice, &source_location)?;
+                Interpreter::subscript_to_inbound_index(elements.len(), &slice, source_location)?;
             Ok(elements[subscript_index].clone())
         } else {
             Err(format!(
@@ -962,7 +962,7 @@ impl Interpreter {
         } else {
             Err(format!(
                 "Invalid subscript of type {:?} in subscript expression",
-                type_of(&slice),
+                type_of(slice),
             ))
         }
     }
@@ -983,7 +983,7 @@ impl Interpreter {
         let val = self.interpret_expr(lhs)?;
         match val {
             Value::LoxInstance(_, id) => match self.lox_instances.get(&id) {
-                Some(inst) => inst.getattr(&attr, &self),
+                Some(inst) => inst.getattr(attr, self),
                 None => panic!(
                     "Internal interpreter error: could not find an instance with id {}.",
                     id
@@ -1030,7 +1030,7 @@ impl Interpreter {
     ) -> Result<Value, String> {
         let callee = self.interpret_expr(callee_expr)?;
 
-        match as_callable(&self, &callee) {
+        match as_callable(self, &callee) {
             Some(callable) => {
                 let maybe_args: Result<Vec<_>, _> = arg_exprs
                     .iter()

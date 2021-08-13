@@ -50,6 +50,7 @@ pub enum TokenType {
     True,
     Var,
     While,
+    Lambda,
 
     Eof,
 }
@@ -133,6 +134,7 @@ impl Default for Scanner {
                 ("true", TokenType::True),
                 ("var", TokenType::Var),
                 ("while", TokenType::While),
+                ("lambda", TokenType::Lambda),
             ]
             .into_iter()
             .map(|(k, v)| (String::from(k), v))
