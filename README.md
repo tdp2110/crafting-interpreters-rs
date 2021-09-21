@@ -178,7 +178,7 @@ Welcome to lox! using tree-walk interpreter.
 
 ## Extensions
 
-Using the `--Xlists` command line switch, we can enable lists
+Using the `--Xlists` command line switch (eg `cargo run --release --quiet -- --Xlists`), we can enable lists
 
 ```
 ===================================================
