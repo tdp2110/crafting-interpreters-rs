@@ -4,22 +4,12 @@ use crate::syntax_extensions;
 
 use std::fmt;
 
+#[derive(Default)]
 struct Parser {
     tokens: Vec<scanner::Token>,
     current: usize,
-    in_fundec: bool,
+    in_fundec: bool, // in rust, booleans default to false: https://doc.rust-lang.org/std/primitive.bool.html#impl-Default
     extensions: syntax_extensions::Extensions,
-}
-
-impl Default for Parser {
-    fn default() -> Parser {
-        Parser {
-            tokens: Default::default(),
-            current: 0,
-            in_fundec: false,
-            extensions: Default::default(),
-        }
-    }
 }
 
 pub enum Error {

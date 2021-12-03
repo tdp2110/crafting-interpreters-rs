@@ -1,10 +1,4 @@
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Extensions {
     pub lists: bool,
-}
-
-impl Default for Extensions {
-    fn default() -> Extensions {
-        Extensions { lists: false }
-    }
 }
