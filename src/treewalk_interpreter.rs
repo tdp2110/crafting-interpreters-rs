@@ -193,13 +193,9 @@ impl LoxClass {
             let lox_fn = interpreter.get_lox_function(*method_id);
             return Some((lox_fn.name.clone(), *method_id));
         } else if let Some(superclass_id) = self.superclass {
-            if let Some(superclass) = interpreter.lox_classes.get(&superclass_id) {
-                return superclass.find_method(method_name, interpreter);
-            }
-            panic!(
-                "Internal interpreter error! Could not find lox fn with id {}.",
-                superclass_id
-            )
+            return interpreter
+                .get_lox_class(superclass_id)
+                .find_method(method_name, interpreter);
         }
         None
     }
@@ -218,27 +214,21 @@ impl LoxInstance {
         match self.fields.get(attr) {
             Some(val) => Ok(val.clone()),
             None => {
-                if let Some(cls) = interpreter.lox_classes.get(&self.class_id) {
-                    if let Some((func_name, method_id)) = cls.find_method(attr, interpreter) {
-                        return Ok(Value::LoxFunction(
-                            func_name,
-                            method_id,
-                            Some(Box::new(Value::LoxInstance(
-                                self.class_name.clone(),
-                                self.id,
-                            ))),
-                        ));
-                    }
-                    Err(format!(
-                        "AttributeError: '{}' instance has no '{}' attribute.",
-                        self.class_name.name, attr
-                    ))
-                } else {
-                    panic!(
-                        "Internal interpreter error! Could not find class with id {}",
-                        self.class_id
-                    );
+                let cls = interpreter.get_lox_class(self.class_id);
+                if let Some((func_name, method_id)) = cls.find_method(attr, interpreter) {
+                    return Ok(Value::LoxFunction(
+                        func_name,
+                        method_id,
+                        Some(Box::new(Value::LoxInstance(
+                            self.class_name.clone(),
+                            self.id,
+                        ))),
+                    ));
                 }
+                Err(format!(
+                    "AttributeError: '{}' instance has no '{}' attribute.",
+                    self.class_name.name, attr
+                ))
             }
         }
     }
@@ -270,13 +260,7 @@ fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Calla
             f_copy.this_binding = this_binding.clone();
             Some(Box::new(f_copy))
         }
-        Value::LoxClass(_, id) => match interpreter.lox_classes.get(id) {
-            Some(cls) => Some(Box::new(cls.clone())),
-            None => panic!(
-                "Internal interpreter error! Could not find loxClass with id {}.",
-                id
-            ),
-        },
+        Value::LoxClass(_, id) => Some(Box::new(interpreter.get_lox_class(*id).clone())),
         _ => None,
     }
 }
@@ -561,7 +545,17 @@ impl Interpreter {
         match self.lox_functions.get(&id) {
             Some(func) => func,
             None => panic!(
-                "Internal interpreter error! couldn't find an initializer method with id {}.",
+                "Internal interpreter error! couldn't find an function with id {}.",
+                id
+            ),
+        }
+    }
+
+    pub fn get_lox_class(&self, id: u64) -> &LoxClass {
+        match self.lox_classes.get(&id) {
+            Some(func) => func,
+            None => panic!(
+                "Internal interpreter error! couldn't find class with id {}.",
                 id
             ),
         }
@@ -848,22 +842,17 @@ impl Interpreter {
                     let func = self.get_lox_function(func_id);
                     match &func.superclass {
                         Some(superclass_id) => {
-                            if let Some(superclass) = self.lox_classes.get(superclass_id) {
-                                if let Some((func_name, method_id)) = superclass.find_method(&sym.name, self) {
-                                    let method = self.get_lox_function(method_id);
-                                    Ok(Value::LoxFunction(
-                                        func_name,
-                                        method.id,
-                                        func.this_binding.clone()))
-                                }
-                                else {
-                                    Err(format!("no superclass has method {} at line={}, col={}",
-                                                sym.name, source_location.line, source_location.col))
-                                }
+                            let superclass = self.get_lox_class(*superclass_id);
+                            if let Some((func_name, method_id)) = superclass.find_method(&sym.name, self) {
+                                let method = self.get_lox_function(method_id);
+                                Ok(Value::LoxFunction(
+                                    func_name,
+                                    method.id,
+                                    func.this_binding.clone()))
                             }
                             else {
-                                panic!("Internal interpreter error! Couldn't find class with id {}",
-                                       superclass_id)
+                                Err(format!("no superclass has method {} at line={}, col={}",
+                                            sym.name, source_location.line, source_location.col))
                             }
                         }
                         _ => {
