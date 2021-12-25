@@ -179,13 +179,7 @@ impl Callable for LoxClass {
 impl LoxClass {
     fn init(&self, interpreter: &Interpreter) -> Option<LoxFunction> {
         match self.methods.get(&String::from(INIT)) {
-            Some(initializer_id) => match interpreter.lox_functions.get(initializer_id) {
-                Some(initializer) => Some(initializer.clone()),
-                None => panic!(
-                    "Internal interpreter error! couldn't find an initializer method with id {}.",
-                    initializer_id
-                ),
-            },
+            Some(initializer_id) => Some(interpreter.get_lox_function(*initializer_id).clone()),
             None => None,
         }
     }
@@ -196,13 +190,8 @@ impl LoxClass {
         interpreter: &Interpreter,
     ) -> Option<(expr::Symbol, u64)> {
         if let Some(method_id) = self.methods.get(method_name) {
-            if let Some(lox_fn) = interpreter.lox_functions.get(method_id) {
-                return Some((lox_fn.name.clone(), *method_id));
-            }
-            panic!(
-                "Internal interpreter error! Could not find lox fn with id {}.",
-                method_id
-            );
+            let lox_fn = interpreter.get_lox_function(*method_id);
+            return Some((lox_fn.name.clone(), *method_id));
         } else if let Some(superclass_id) = self.superclass {
             if let Some(superclass) = interpreter.lox_classes.get(&superclass_id) {
                 return superclass.find_method(method_name, interpreter);
@@ -275,17 +264,12 @@ pub enum Value {
 fn as_callable(interpreter: &Interpreter, value: &Value) -> Option<Box<dyn Callable>> {
     match value {
         Value::NativeFunction(f) => Some(Box::new(f.clone())),
-        Value::LoxFunction(_, id, this_binding) => match interpreter.lox_functions.get(id) {
-            Some(f) => {
-                let mut f_copy = f.clone();
-                f_copy.this_binding = this_binding.clone();
-                Some(Box::new(f_copy))
-            }
-            None => panic!(
-                "Internal interpreter error! Could not find loxFunction with id {}.",
-                id
-            ),
-        },
+        Value::LoxFunction(_, id, this_binding) => {
+            let f = interpreter.get_lox_function(*id);
+            let mut f_copy = f.clone();
+            f_copy.this_binding = this_binding.clone();
+            Some(Box::new(f_copy))
+        }
         Value::LoxClass(_, id) => match interpreter.lox_classes.get(id) {
             Some(cls) => Some(Box::new(cls.clone())),
             None => panic!(
@@ -573,6 +557,16 @@ impl Interpreter {
         Ok(())
     }
 
+    pub fn get_lox_function(&self, id: u64) -> &LoxFunction {
+        match self.lox_functions.get(&id) {
+            Some(func) => func,
+            None => panic!(
+                "Internal interpreter error! couldn't find an initializer method with id {}.",
+                id
+            ),
+        }
+    }
+
     pub fn format_backtrace(&self) -> String {
         let lines: Vec<_> = self
             .backtrace
@@ -806,7 +800,10 @@ impl Interpreter {
         }
 
         match expr {
-            expr::Expr::This(source_location) => match self.lookup(&Interpreter::this_symbol(source_location.line, source_location.col)) {
+            expr::Expr::This(source_location) => match self.lookup(&Interpreter::this_symbol(
+                source_location.line,
+                source_location.col,
+            )) {
                 Ok(val) => Ok(val.clone()),
                 Err(err) => Err(err),
             },
@@ -847,53 +844,51 @@ impl Interpreter {
                 }
             }
             expr::Expr::Super(source_location, sym) => match self.enclosing_function {
-                Some(func_id) => match self.lox_functions.get(&func_id) {
-                    Some(func) => {
-                        match &func.superclass {
-                            Some(superclass_id) => {
-                                if let Some(superclass) = self.lox_classes.get(superclass_id) {
-                                    if let Some((func_name, method_id)) = superclass.find_method(&sym.name, self) {
-                                        if let Some(method) = self.lox_functions.get(&method_id) {
-                                            Ok(Value::LoxFunction(
-                                                func_name,
-                                                method.id,
-                                                func.this_binding.clone()))
-                                        }
-                                        else {
-                                            panic!("Internal interpreter error! Could not find method with id {}.",
-                                                   method_id)
-                                        }
-                                    }
-                                    else {
-                                        Err(format!("no superclass has method {} at line={}, col={}",
-                                                    sym.name, source_location.line, source_location.col))
-                                    }
+                Some(func_id) => {
+                    let func = self.get_lox_function(func_id);
+                    match &func.superclass {
+                        Some(superclass_id) => {
+                            if let Some(superclass) = self.lox_classes.get(superclass_id) {
+                                if let Some((func_name, method_id)) = superclass.find_method(&sym.name, self) {
+                                    let method = self.get_lox_function(method_id);
+                                    Ok(Value::LoxFunction(
+                                        func_name,
+                                        method.id,
+                                        func.this_binding.clone()))
                                 }
                                 else {
-                                    panic!("Internal interpreter error! Couldn't find class with id {}",
-                                           superclass_id)
+                                    Err(format!("no superclass has method {} at line={}, col={}",
+                                                sym.name, source_location.line, source_location.col))
                                 }
                             }
-                            _ => {
-                                Err(format!("Super expression not enclosed in a method definition at line={}, col={}.",
-                                    source_location.line, source_location.col))
+                            else {
+                                panic!("Internal interpreter error! Couldn't find class with id {}",
+                                       superclass_id)
                             }
-                        }}
-                    None => panic!(
-                        "Internal interpreter error! Couldn't find func with id {}.",
-                        func_id
-                    ),
-                },
+                        }
+                        _ => {
+                            Err(format!("Super expression not enclosed in a method definition at line={}, col={}.",
+                                        source_location.line, source_location.col))
+                        }
+                    }
+                }
                 None => Err(format!(
                     "super expression not enclosed in a function at line={}, col={}.",
                     source_location.line, source_location.col
                 )),
             },
             expr::Expr::List(elements) => self.list(elements),
-            expr::Expr::Subscript{value, slice, source_location} => {
-                self.subscript(value, slice, source_location)
-            },
-            expr::Expr::SetItem{lhs, slice, rhs, source_location} => self.setitem(lhs, slice, rhs, source_location)
+            expr::Expr::Subscript {
+                value,
+                slice,
+                source_location,
+            } => self.subscript(value, slice, source_location),
+            expr::Expr::SetItem {
+                lhs,
+                slice,
+                rhs,
+                source_location,
+            } => self.setitem(lhs, slice, rhs, source_location),
         }
     }
 
