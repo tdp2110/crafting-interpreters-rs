@@ -561,6 +561,16 @@ impl Interpreter {
         }
     }
 
+    pub fn get_lox_instance(&self, id: u64) -> &LoxInstance {
+        match self.lox_instances.get(&id) {
+            Some(inst) => inst,
+            None => panic!(
+                "Internal interpreter error: could not find an instance with id {}.",
+                id
+            ),
+        }
+    }
+
     pub fn format_backtrace(&self) -> String {
         let lines: Vec<_> = self
             .backtrace
@@ -966,13 +976,7 @@ impl Interpreter {
     fn getattr(&mut self, lhs: &expr::Expr, attr: &str) -> Result<Value, String> {
         let val = self.interpret_expr(lhs)?;
         match val {
-            Value::LoxInstance(_, id) => match self.lox_instances.get(&id) {
-                Some(inst) => inst.getattr(attr, self),
-                None => panic!(
-                    "Internal interpreter error: could not find an instance with id {}.",
-                    id
-                ),
-            },
+            Value::LoxInstance(_, id) => self.get_lox_instance(id).getattr(attr, self),
             _ => Err(format!(
                 "Only LoxInstance values have attributes. Found {:?}.",
                 type_of(&val)
