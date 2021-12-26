@@ -382,6 +382,7 @@ impl Environment {
 
 pub struct Interpreter {
     pub counter: u64,
+    pub lambda_counter: u64,
     pub lox_functions: HashMap<u64, LoxFunction>,
     pub lox_instances: HashMap<u64, LoxInstance>,
     pub lox_classes: HashMap<u64, LoxClass>,
@@ -517,6 +518,7 @@ impl Default for Interpreter {
 
         Interpreter {
             counter: 0,
+            lambda_counter: 0,
             lox_functions: Default::default(),
             lox_instances: Default::default(),
             lox_classes: Default::default(),
@@ -888,7 +890,28 @@ impl Interpreter {
                 rhs,
                 source_location,
             } => self.setitem(lhs, slice, rhs, source_location),
+            expr::Expr::Lambda(lambda_decl) => {
+                let lambda_sym = expr::Symbol {
+                    name: self.lambda_name(),
+                    line: 0,
+                    col: 0,
+                };
+                let maybe_err = self.execute(&expr::Stmt::FunDecl(expr::FunDecl {
+                    name: lambda_sym.clone(),
+                    params: lambda_decl.params.clone(),
+                    body: lambda_decl.body.clone(),
+                }));
+                match maybe_err {
+                    Ok(_) => self.interpret_expr(&expr::Expr::Variable(lambda_sym.clone())),
+                    Err(err) => Err(err),
+                }
+            }
         }
+    }
+    fn lambda_name(&mut self) -> String {
+        let res = format!("__lambda_{}", self.lambda_counter);
+        self.lambda_counter += 1;
+        res
     }
 
     fn setitem(
@@ -1255,6 +1278,28 @@ mod tests {
             syntax_extensions::Extensions {
                 lists: true,
                 ..Default::default()
+            },
+        )
+    }
+
+    fn check_output_lambdas(code: &str, expected_output: &str) {
+        check_output(
+            code,
+            expected_output,
+            syntax_extensions::Extensions {
+                lambdas: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    fn check_output_lambdas_lists(code: &str, expected_output: &str) {
+        check_output(
+            code,
+            expected_output,
+            syntax_extensions::Extensions {
+                lambdas: true,
+                lists: true,
             },
         )
     }
@@ -1904,6 +1949,26 @@ mod tests {
              foo.attr[0] = 1337;\n\
              print foo.attr;",
             "[1337]",
+        )
+    }
+
+    #[test]
+    fn test_lambdas_1() {
+        check_output_lambdas(
+            "var f = lambda(x) { return x + 1; };\n\
+             print f(1);",
+            "2",
+        )
+    }
+
+    #[test]
+    fn test_lambdas_2() {
+        check_output_lambdas_lists(
+            "var f = lambda(x) { return 2 * x; };\n\
+             var g = lambda(x) { return x + 1; };\n\
+             var h = lambda(x) { return g(f(x)); };\n\
+             print map(h, [0,1,2]);",
+            "[1, 3, 5]",
         )
     }
 }

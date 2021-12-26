@@ -1467,7 +1467,10 @@ mod tests {
     fn check_output_lists(code: &str, expected_output: &[String]) {
         check_output(
             code,
-            syntax_extensions::Extensions { lists: true },
+            syntax_extensions::Extensions {
+                lists: true,
+                ..Default::default()
+            },
             expected_output,
         );
     }

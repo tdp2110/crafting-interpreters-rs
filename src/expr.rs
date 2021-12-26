@@ -24,6 +24,7 @@ pub enum Expr {
         rhs: Box<Expr>,
         source_location: SourceLocation,
     },
+    Lambda(LambdaDecl),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -48,6 +49,12 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub struct FunDecl {
     pub name: Symbol,
+    pub params: Vec<Symbol>,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LambdaDecl {
     pub params: Vec<Symbol>,
     pub body: Vec<Stmt>,
 }

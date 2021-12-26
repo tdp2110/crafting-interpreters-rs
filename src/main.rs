@@ -28,6 +28,7 @@ static DEBUG_STR: &str = "debug";
 static TREEWALK_STR: &str = "treewalk";
 static LITERAL_INPUT: &str = "c";
 static EXTENSION_LISTS: &str = "Xlists";
+static EXTENSION_LAMBDAS: &str = "Xlambdas";
 
 fn get_input(matches: &clap::ArgMatches<'_>) -> Option<String> {
     if let Some(literal_input) = matches.value_of(LITERAL_INPUT) {
@@ -97,14 +98,21 @@ fn main() {
         )
         .arg(
             Arg::with_name(EXTENSION_LISTS)
-                .long("--Xlists")
+                .long(&format!["--{}", EXTENSION_LISTS])
                 .takes_value(false)
                 .help("use the lists extension"),
+        )
+        .arg(
+            Arg::with_name(EXTENSION_LAMBDAS)
+                .long(&format!["--{}", EXTENSION_LAMBDAS])
+                .takes_value(false)
+                .help("use the lambdas extension"),
         )
         .get_matches();
 
     let extensions = syntax_extensions::Extensions {
         lists: matches.is_present(EXTENSION_LISTS),
+        lambdas: matches.is_present(EXTENSION_LAMBDAS),
     };
 
     if let Some(input) = get_input(&matches) {

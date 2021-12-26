@@ -129,6 +129,7 @@ impl fmt::Debug for Error {
 pub enum FunctionKind {
     Function,
     Method,
+    Lambda,
 }
 
 pub fn parse(
@@ -302,6 +303,19 @@ impl Parser {
             col: name_tok.col,
         };
 
+        let (parameters, body) = self.params_and_body(kind)?;
+
+        Ok(expr::FunDecl {
+            name: fun_symbol,
+            params: parameters,
+            body,
+        })
+    }
+
+    fn params_and_body(
+        &mut self,
+        kind: FunctionKind,
+    ) -> Result<(Vec<expr::Symbol>, Vec<expr::Stmt>), Error> {
         self.consume(
             scanner::TokenType::LeftParen,
             format!("Expected ( after {:?} name", kind).as_ref(),
@@ -350,11 +364,7 @@ impl Parser {
         let body = self.block()?;
         self.in_fundec = saved_is_in_fundec;
 
-        Ok(expr::FunDecl {
-            name: fun_symbol,
-            params: parameters,
-            body,
-        })
+        Ok((parameters, body))
     }
 
     fn var_decl(&mut self) -> Result<expr::Stmt, Error> {
@@ -865,6 +875,10 @@ impl Parser {
             self.consume(scanner::TokenType::RightBracket, "Expected ].")?;
 
             return Ok(expr::Expr::List(list_elements));
+        }
+        if self.extensions.lambdas && self.matches(scanner::TokenType::Lambda) {
+            let (params, body) = self.params_and_body(FunctionKind::Lambda)?;
+            return Ok(expr::Expr::Lambda(expr::LambdaDecl { params, body }));
         }
 
         Err(Error::ExpectedExpression {
