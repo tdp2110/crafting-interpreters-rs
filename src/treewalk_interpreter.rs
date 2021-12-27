@@ -178,10 +178,9 @@ impl Callable for LoxClass {
 
 impl LoxClass {
     fn init(&self, interpreter: &Interpreter) -> Option<LoxFunction> {
-        match self.methods.get(&String::from(INIT)) {
-            Some(initializer_id) => Some(interpreter.get_lox_function(*initializer_id).clone()),
-            None => None,
-        }
+        self.methods
+            .get(&String::from(INIT))
+            .map(|initializer_id| interpreter.get_lox_function(*initializer_id).clone())
     }
 
     fn find_method(
@@ -932,7 +931,7 @@ impl Interpreter {
                     body: lambda_decl.body.clone(),
                 }));
                 match maybe_err {
-                    Ok(_) => self.interpret_expr(&expr::Expr::Variable(lambda_sym.clone())),
+                    Ok(_) => self.interpret_expr(&expr::Expr::Variable(lambda_sym)),
                     Err(err) => Err(err),
                 }
             }
