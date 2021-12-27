@@ -937,6 +937,7 @@ impl Interpreter {
             }
         }
     }
+
     fn lambda_name(&mut self) -> String {
         let res = format!("__lambda_{}", self.lambda_counter);
         self.lambda_counter += 1;

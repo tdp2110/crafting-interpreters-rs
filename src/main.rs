@@ -10,6 +10,7 @@ mod bytecode;
 mod bytecode_interpreter;
 mod compiler;
 mod debugger;
+mod error_formatting;
 mod expr;
 mod gc;
 mod line_reader;
@@ -155,13 +156,13 @@ fn main() {
                             }
                         }
                         Err(err) => {
-                            println!("parse error: {:?}", err);
+                            error_formatting::format_parse_error(&err);
                             std::process::exit(-1)
                         }
                     }
                 }
                 Err(err) => {
-                    println!("lexical error: {}", err);
+                    error_formatting::format_lexical_error(&err);
                     std::process::exit(-1);
                 }
             }
