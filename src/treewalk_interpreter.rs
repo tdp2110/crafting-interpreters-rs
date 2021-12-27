@@ -440,6 +440,36 @@ impl Default for Interpreter {
             ),
         );
         globals_venv.insert(
+            String::from("iota"),
+            (
+                Some(Value::NativeFunction(NativeFunction {
+                    name: String::from("iota"),
+                    arity: 2,
+                    callable: |interpreter, values| match (&values[0], &values[1]) {
+                        (Value::Number(low), Value::Number(high)) => {
+                            let elts: Vec<_> = (*low as i64..*high as i64)
+                                .map(|x| Value::Number(x as f64))
+                                .collect();
+                            Ok(interpreter.create_list(elts))
+                        }
+                        (Value::Number(_), high) => Err(format!(
+                            "invalid high argument of type {:?} in iota expression.",
+                            type_of(high)
+                        )),
+                        (low, _) => Err(format!(
+                            "invalid low argument of type {:?} in iota expression.",
+                            type_of(low)
+                        )),
+                    },
+                })),
+                SourceLocation {
+                    line: 1337,
+                    col: 1337,
+                },
+            ),
+        );
+
+        globals_venv.insert(
             String::from("forEach"),
             (
                 Some(Value::NativeFunction(NativeFunction {
