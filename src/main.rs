@@ -121,7 +121,7 @@ fn main() {
             || matches.is_present(SHOW_AST_STR)
             || matches.is_present(TREEWALK_STR)
         {
-            match scanner::scan_tokens(input) {
+            match scanner::scan_tokens(input.clone()) {
                 Ok(tokens) => {
                     if matches.is_present(SHOW_TOKENS_STR) {
                         println!("{:#?}", tokens);
@@ -156,7 +156,7 @@ fn main() {
                             }
                         }
                         Err(err) => {
-                            error_formatting::format_parse_error(&err);
+                            error_formatting::format_parse_error(&err, &input);
                             std::process::exit(-1)
                         }
                     }
