@@ -131,7 +131,7 @@ pub fn run(extensions: syntax_extensions::Extensions) {
             line_reader::LineReadStatus::Line(line) => match scanner::scan_tokens(line.clone()) {
                 Ok(tokens) => eval_tokens(&mut interpreter, tokens, 0, extensions, &line),
                 Err(err) => {
-                    error_formatting::format_lexical_error(&err);
+                    error_formatting::format_lexical_error(&err, &line);
                 }
             },
             line_reader::LineReadStatus::Done => break,

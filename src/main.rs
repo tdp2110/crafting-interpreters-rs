@@ -162,7 +162,7 @@ fn main() {
                     }
                 }
                 Err(err) => {
-                    error_formatting::format_lexical_error(&err);
+                    error_formatting::format_lexical_error(&err, &input);
                     std::process::exit(-1);
                 }
             }

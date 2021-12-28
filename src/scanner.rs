@@ -85,7 +85,7 @@ impl fmt::Debug for Token {
     }
 }
 
-pub fn scan_tokens(input: String) -> Result<Vec<Token>, String> {
+pub fn scan_tokens(input: String) -> Result<Vec<Token>, Error> {
     let mut scanner: Scanner = Default::default();
 
     scanner.scan_tokens(input);
@@ -96,10 +96,17 @@ pub fn scan_tokens(input: String) -> Result<Vec<Token>, String> {
     }
 }
 
+#[derive(Debug)]
+pub struct Error {
+    pub what: String,
+    pub line: usize,
+    pub col: i64,
+}
+
 struct Scanner {
     source: Vec<u8>,
     tokens: Vec<Token>,
-    err: Option<String>,
+    err: Option<Error>,
     start: usize,
     current: usize,
     line: usize,
@@ -240,7 +247,11 @@ impl Scanner {
                 } else if Scanner::is_alpha(c) {
                     self.identifier()
                 } else {
-                    self.err = Some(format!("scanner can't handle {}", c))
+                    self.err = Some(Error {
+                        what: format!("scanner can't handle {}", c),
+                        line: self.line,
+                        col: self.col,
+                    })
                 }
             }
         }
@@ -310,7 +321,11 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            self.err = Some(format!("Unterminated string at line {}", self.line))
+            self.err = Some(Error {
+                what: "Unterminated string".to_string(),
+                line: self.line,
+                col: self.col,
+            })
         }
 
         assert!(self.peek() == '"');

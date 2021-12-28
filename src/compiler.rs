@@ -140,7 +140,7 @@ impl Compiler {
 
                 Ok(std::mem::take(&mut compiler.current_level_mut().function))
             }
-            Err(err) => Err(err),
+            Err(err) => Err(format!("{:?}", err)),
         }
     }
 
