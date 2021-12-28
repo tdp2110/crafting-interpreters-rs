@@ -3,27 +3,26 @@ use crate::parser;
 use colored::*;
 
 pub fn format_parse_error(err: &parser::Error, input: &str) {
-    println!("{}: {:?}", "parse error".red().bold(), err);
+    let err_str = format!("{:?}", err);
+    println!("{}: {}", "parse error".red().bold(), err_str.white().bold());
 
-    let maybe_line_and_col = match err {
-        parser::Error::UnexpectedToken(_) => None,
-        parser::Error::TokenMismatch { .. } => None,
-        parser::Error::MaxParamsExceeded { line, col, .. } => Some((line, col)),
-        parser::Error::ReturnNotInFun { line, col, .. } => Some((line, col)),
-        parser::Error::InvalidAssignment { line, col, .. } => Some((line, col)),
-        parser::Error::TooManyArguments { line, col, .. } => Some((line, col)),
-        parser::Error::ExpectedExpression { line, col, .. } => Some((line, col)),
-        parser::Error::InvalidTokenInUnaryOp { line, col, .. } => Some((line, col)),
-        parser::Error::InvalidTokenInBinaryOp { line, col, .. } => Some((line, col)),
+    let (line, col) = match err {
+        parser::Error::UnexpectedToken(tok) => (&tok.line, &tok.col),
+        parser::Error::TokenMismatch { found, .. } => (&found.line, &found.col),
+        parser::Error::MaxParamsExceeded { line, col, .. } => (line, col),
+        parser::Error::ReturnNotInFun { line, col, .. } => (line, col),
+        parser::Error::InvalidAssignment { line, col, .. } => (line, col),
+        parser::Error::TooManyArguments { line, col, .. } => (line, col),
+        parser::Error::ExpectedExpression { line, col, .. } => (line, col),
+        parser::Error::InvalidTokenInUnaryOp { line, col, .. } => (line, col),
+        parser::Error::InvalidTokenInBinaryOp { line, col, .. } => (line, col),
     };
 
-    if let Some((line, col)) = maybe_line_and_col {
-        println!("{}", input.lines().nth(*line - 1).unwrap());
-        print!("{:~<1$}", "".red().bold(), *col as usize);
-        println!("{}", "^".red().bold());
-    }
+    println!("{}", input.lines().nth(*line - 1).unwrap());
+    print!("{:~<1$}", "".blue().bold(), *col as usize);
+    println!("{}", "^".blue().bold());
 }
 
 pub fn format_lexical_error(err: &str) {
-    println!("{}: {}", "lexical error".red().bold(), err);
+    println!("{}: {}", "lexical error".red().bold(), err.white().bold());
 }
