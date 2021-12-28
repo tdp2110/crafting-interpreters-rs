@@ -1,3 +1,4 @@
+use crate::error_formatting;
 use crate::expr;
 use crate::line_reader;
 use crate::parser;
@@ -29,9 +30,10 @@ fn eval_tokens(
     mut tokens: Vec<scanner::Token>,
     recursion_depth: i64,
     extensions: syntax_extensions::Extensions,
+    line: &str,
 ) {
     let handle_err = |err| {
-        println!("\nParse error: {:?}", err);
+        error_formatting::format_parse_error(err, line);
     };
     match parser::parse(extensions, tokens.clone()) {
         Ok(stmts) => {
@@ -101,12 +103,12 @@ fn eval_tokens(
             tokens.push(expected_eof);
 
             if recursion_depth > 0 {
-                handle_err(err)
+                handle_err(&err)
             } else {
-                eval_tokens(interpreter, tokens, recursion_depth + 1, extensions)
+                eval_tokens(interpreter, tokens, recursion_depth + 1, extensions, line)
             }
         }
-        Err(err) => handle_err(err),
+        Err(err) => handle_err(&err),
     }
 }
 
@@ -126,10 +128,10 @@ pub fn run(extensions: syntax_extensions::Extensions) {
         let readline = line_reader.readline();
 
         match readline {
-            line_reader::LineReadStatus::Line(line) => match scanner::scan_tokens(line) {
-                Ok(tokens) => eval_tokens(&mut interpreter, tokens, 0, extensions),
+            line_reader::LineReadStatus::Line(line) => match scanner::scan_tokens(line.clone()) {
+                Ok(tokens) => eval_tokens(&mut interpreter, tokens, 0, extensions, &line),
                 Err(err) => {
-                    println!("\nScanner error: {}", err);
+                    error_formatting::format_lexical_error(&err);
                 }
             },
             line_reader::LineReadStatus::Done => break,
