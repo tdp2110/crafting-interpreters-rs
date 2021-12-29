@@ -1424,10 +1424,7 @@ mod tests {
     use crate::compiler::*;
     use crate::extensions;
 
-    fn evaluate(
-        code: &str,
-        extensions: extensions::Extensions,
-    ) -> Result<Vec<String>, String> {
+    fn evaluate(code: &str, extensions: extensions::Extensions) -> Result<Vec<String>, String> {
         let func_or_err = Compiler::compile(String::from(code), extensions);
 
         match func_or_err {
@@ -1442,14 +1439,11 @@ mod tests {
             Err(Error::Lexical(err)) => Err(err.what),
             Err(Error::Parse(err)) => Err(err.what),
             Err(Error::Semantic(err)) => Err(err.what),
+            Err(Error::Internal(err)) => Err(err),
         }
     }
 
-    fn check_output(
-        code: &str,
-        extensions: extensions::Extensions,
-        expected_output: &[String],
-    ) {
+    fn check_output(code: &str, extensions: extensions::Extensions, expected_output: &[String]) {
         let res = evaluate(code, extensions);
 
         match res {
@@ -1459,11 +1453,7 @@ mod tests {
     }
 
     fn check_output_default(code: &str, expected_output: &[String]) {
-        check_output(
-            code,
-            extensions::Extensions::default(),
-            expected_output,
-        );
+        check_output(code, extensions::Extensions::default(), expected_output);
     }
 
     fn check_output_lists(code: &str, expected_output: &[String]) {

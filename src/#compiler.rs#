@@ -1,6 +1,6 @@
 use crate::bytecode;
-use crate::extensions;
 use crate::scanner;
+use crate::syntax_extensions;
 
 #[derive(Debug)]
 struct Local {
@@ -27,7 +27,7 @@ pub struct Compiler {
     levels: Vec<Level>,
     level_idx: usize,
     current_class: Option<ClassCompiler>,
-    extensions: extensions::Extensions,
+    extensions: syntax_extensions::Extensions,
 }
 
 impl Default for Compiler {
@@ -131,13 +131,12 @@ pub enum Error {
     Lexical(scanner::Error),
     Parse(ErrorInfo),
     Semantic(ErrorInfo),
-    Internal(String),
 }
 
 impl Compiler {
     pub fn compile(
         input: String,
-        extensions: extensions::Extensions,
+        extensions: syntax_extensions::Extensions,
     ) -> Result<bytecode::Function, Error> {
         let mut compiler = Compiler {
             extensions,
@@ -145,11 +144,9 @@ impl Compiler {
         };
 
         if extensions.lambdas {
-            return Err(Error::Internal(
-                "lambdas extension not implemented for bytecode interpreter".to_string(),
-            ));
+            panic!("lambdas extension not implemented in bytecode interpreter");
         }
-
+        
         match scanner::scan_tokens(input) {
             Ok(tokens) => {
                 compiler.tokens = tokens;
@@ -1589,7 +1586,8 @@ mod tests {
     use crate::compiler::*;
 
     fn check_semantic_error(code: &str, f: &dyn Fn(&str) -> ()) {
-        let func_or_err = Compiler::compile(String::from(code), extensions::Extensions::default());
+        let func_or_err =
+            Compiler::compile(String::from(code), syntax_extensions::Extensions::default());
 
         match func_or_err {
             Err(Error::Semantic(err)) => f(&err.what),
@@ -1601,7 +1599,7 @@ mod tests {
     fn test_compiles_1() {
         Compiler::compile(
             String::from("print 42 * 12;"),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1610,7 +1608,7 @@ mod tests {
     fn test_compiles_2() {
         Compiler::compile(
             String::from("print -2 * 3 + (-4 / 2);"),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1619,21 +1617,25 @@ mod tests {
     fn test_var_decl_compiles_1() {
         Compiler::compile(
             String::from("var x = 2;"),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         )
         .unwrap();
     }
 
     #[test]
     fn test_var_decl_implicit_nil() {
-        Compiler::compile(String::from("var x;"), extensions::Extensions::default()).unwrap();
+        Compiler::compile(
+            String::from("var x;"),
+            syntax_extensions::Extensions::default(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_var_reading_2() {
         Compiler::compile(
             String::from("var x; print x;"),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1642,7 +1644,7 @@ mod tests {
     fn test_var_reading_3() {
         Compiler::compile(
             String::from("var x; print x * 2 + x;"),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1690,7 +1692,7 @@ mod tests {
              var y = 3;\n\
              x * y = 5;",
             ),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         );
 
         match func_or_err {
@@ -1709,7 +1711,7 @@ mod tests {
                x * y = 5;\n\
              }\n",
             ),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         );
 
         match func_or_err {
@@ -1727,7 +1729,7 @@ mod tests {
                var x = 3;\n\
              }",
             ),
-            extensions::Extensions::default(),
+            syntax_extensions::Extensions::default(),
         );
 
         match func_or_err {

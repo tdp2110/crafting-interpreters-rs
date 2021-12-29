@@ -40,6 +40,13 @@ pub fn format_compiler_error(err: &compiler::Error, input: &str) {
         compiler::Error::Semantic(err) => {
             format_compiler_error_info(err, input, CompilerErrorKind::Semantic)
         }
+        compiler::Error::Internal(err) => {
+            println!(
+                "loxi: {}: {}",
+                "internal error".red().bold(),
+                err.white().bold()
+            );
+        }
     }
 }
 
