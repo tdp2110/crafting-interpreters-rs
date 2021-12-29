@@ -1439,7 +1439,9 @@ mod tests {
                     Err(InterpreterError::Runtime(err)) => Err(err),
                 }
             }
-            Err(err) => Err(err),
+            Err(Error::Lexical(err)) => Err(err.what),
+            Err(Error::Parse(err)) => Err(err.what),
+            Err(Error::Semantic(err)) => Err(err.what),
         }
     }
 

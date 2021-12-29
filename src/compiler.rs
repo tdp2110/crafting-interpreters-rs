@@ -119,11 +119,25 @@ enum Resolution {
     Upvalue(usize),
 }
 
+#[derive(Debug)]
+pub struct ErrorInfo {
+    pub what: String,
+    pub line: usize,
+    pub col: i64,
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Lexical(scanner::Error),
+    Parse(ErrorInfo),
+    Semantic(ErrorInfo),
+}
+
 impl Compiler {
     pub fn compile(
         input: String,
         extensions: syntax_extensions::Extensions,
-    ) -> Result<bytecode::Function, String> {
+    ) -> Result<bytecode::Function, Error> {
         let mut compiler = Compiler {
             extensions,
             ..Default::default()
@@ -140,11 +154,11 @@ impl Compiler {
 
                 Ok(std::mem::take(&mut compiler.current_level_mut().function))
             }
-            Err(err) => Err(format!("{:?}", err)),
+            Err(err) => Err(Error::Lexical(err)),
         }
     }
 
-    fn declaration(&mut self) -> Result<(), String> {
+    fn declaration(&mut self) -> Result<(), Error> {
         if self.matches(scanner::TokenType::Class) {
             self.class_decl()
         } else if self.matches(scanner::TokenType::Fun) {
@@ -156,7 +170,7 @@ impl Compiler {
         }
     }
 
-    fn class_decl(&mut self) -> Result<(), String> {
+    fn class_decl(&mut self) -> Result<(), Error> {
         self.consume(scanner::TokenType::Identifier, "Expected class name.")?;
         let class_name_tok = self.previous().clone();
         let class_name = String::from_utf8(class_name_tok.clone().lexeme).unwrap();
@@ -177,12 +191,14 @@ impl Compiler {
             self.variable(false)?;
 
             if Compiler::identifiers_equal(&class_name_tok.literal, &self.previous().literal) {
-                return Err(format!(
-                    "A class cannot inherit from itself. Class name = {}, line,col={},{}.",
-                    class_name,
-                    self.previous().line,
-                    self.previous().col
-                ));
+                return Err(Error::Semantic(ErrorInfo {
+                    what: format!(
+                        "A class cannot inherit from itself. Class name = {}",
+                        class_name
+                    ),
+                    line: self.previous().line,
+                    col: self.previous().col,
+                }));
             }
 
             self.begin_scope();
@@ -229,7 +245,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn method(&mut self) -> Result<(), String> {
+    fn method(&mut self) -> Result<(), Error> {
         self.consume(scanner::TokenType::Identifier, "Expected method name.")?;
         let method_name = if let Some(scanner::Literal::Identifier(method_name)) =
             &self.previous().literal.clone()
@@ -257,7 +273,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn fun_decl(&mut self) -> Result<(), String> {
+    fn fun_decl(&mut self) -> Result<(), Error> {
         let global_idx = self.parse_variable("Expected function name.")?;
         self.mark_initialized();
         self.function(FunctionType::Function)?;
@@ -265,7 +281,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn function(&mut self, function_type: FunctionType) -> Result<(), String> {
+    fn function(&mut self, function_type: FunctionType) -> Result<(), Error> {
         let level = Level {
             function_type,
             function: bytecode::Function {
@@ -333,7 +349,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn var_decl(&mut self) -> Result<(), String> {
+    fn var_decl(&mut self) -> Result<(), Error> {
         let global_idx = self.parse_variable("Expected variable name.")?;
 
         if self.matches(scanner::TokenType::Equal) {
@@ -374,7 +390,7 @@ impl Compiler {
         self.emit_op(bytecode::Op::DefineGlobal(global_idx), line);
     }
 
-    fn declare_variable(&mut self) -> Result<(), String> {
+    fn declare_variable(&mut self) -> Result<(), Error> {
         //global variables are implicitly declared
         if self.scope_depth() == 0 {
             return Ok(());
@@ -388,10 +404,14 @@ impl Compiler {
                 && Compiler::identifiers_equal(&local.name.literal, &name.literal)
         });
         if has_redeclaration {
-            return Err(format!(
-                "Redeclaration of variable {} in the same scope.",
-                String::from_utf8(name.lexeme).unwrap()
-            ));
+            return Err(Error::Semantic(ErrorInfo {
+                what: format!(
+                    "Redeclaration of variable {} in the same scope.",
+                    String::from_utf8(name.lexeme).unwrap()
+                ),
+                line: self.previous().line,
+                col: self.previous().col,
+            }));
         }
 
         self.add_local(name);
@@ -443,7 +463,7 @@ impl Compiler {
         });
     }
 
-    fn parse_variable(&mut self, error_msg: &str) -> Result<usize, String> {
+    fn parse_variable(&mut self, error_msg: &str) -> Result<usize, Error> {
         self.consume(scanner::TokenType::Identifier, error_msg)?;
         self.declare_variable()?;
 
@@ -465,7 +485,7 @@ impl Compiler {
         self.current_chunk().add_constant_string(name)
     }
 
-    fn statement(&mut self) -> Result<(), String> {
+    fn statement(&mut self) -> Result<(), Error> {
         if self.matches(scanner::TokenType::Print) {
             self.print_statement()?;
         } else if self.matches(scanner::TokenType::For) {
@@ -486,9 +506,13 @@ impl Compiler {
         Ok(())
     }
 
-    fn return_statement(&mut self) -> Result<(), String> {
+    fn return_statement(&mut self) -> Result<(), Error> {
         if self.function_type() == FunctionType::Script {
-            return Err("Cannot return from top-level code.".to_string());
+            return Err(Error::Semantic(ErrorInfo {
+                what: "Cannot return from top-level code.".to_string(),
+                line: self.previous().line,
+                col: self.previous().col,
+            }));
         }
 
         if self.matches(scanner::TokenType::Semicolon) {
@@ -504,7 +528,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn for_statement(&mut self) -> Result<(), String> {
+    fn for_statement(&mut self) -> Result<(), Error> {
         self.begin_scope();
         self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'for'.")?;
         if self.matches(scanner::TokenType::Semicolon) {
@@ -560,7 +584,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn while_statement(&mut self) -> Result<(), String> {
+    fn while_statement(&mut self) -> Result<(), Error> {
         let loop_start = self.current_chunk().code.len();
         self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'while'.")?;
         self.expression()?;
@@ -586,7 +610,7 @@ impl Compiler {
         self.emit_op(bytecode::Op::Loop(offset), self.previous().line);
     }
 
-    fn if_statement(&mut self) -> Result<(), String> {
+    fn if_statement(&mut self) -> Result<(), Error> {
         self.consume(scanner::TokenType::LeftParen, "Expected '(' after 'if'.")?;
         self.expression()?;
         self.consume(
@@ -631,16 +655,14 @@ impl Compiler {
         self.current_chunk().code.len() - 1
     }
 
-    fn block(&mut self) -> Result<(), String> {
+    fn block(&mut self) -> Result<(), Error> {
         while !self.check(scanner::TokenType::RightBrace) && !self.check(scanner::TokenType::Eof) {
             self.declaration()?;
         }
 
-        if let Err(err) = self.consume(scanner::TokenType::RightBrace, "Expected '}' after block") {
-            Err(err)
-        } else {
-            Ok(())
-        }
+        self.consume(scanner::TokenType::RightBrace, "Expected '}' after block")?;
+
+        Ok(())
     }
 
     fn begin_scope(&mut self) {
@@ -673,7 +695,7 @@ impl Compiler {
         }
     }
 
-    fn expression_statement(&mut self) -> Result<(), String> {
+    fn expression_statement(&mut self) -> Result<(), Error> {
         self.expression()?;
         self.consume(
             scanner::TokenType::Semicolon,
@@ -684,7 +706,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn print_statement(&mut self) -> Result<(), String> {
+    fn print_statement(&mut self) -> Result<(), Error> {
         self.expression()?;
         self.consume(scanner::TokenType::Semicolon, "Expected ';' after value.")?;
         self.emit_op(bytecode::Op::Print, self.previous().clone().line);
@@ -707,24 +729,21 @@ impl Compiler {
         self.peek().ty == ty
     }
 
-    fn expression(&mut self) -> Result<(), String> {
+    fn expression(&mut self) -> Result<(), Error> {
         self.parse_precedence(Precedence::Assignment)
     }
 
-    fn grouping(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn grouping(&mut self, _can_assign: bool) -> Result<(), Error> {
         self.expression()?;
 
-        if let Err(err) = self.consume(
+        self.consume(
             scanner::TokenType::RightParen,
             "Expected ')' after expression.",
-        ) {
-            Err(err)
-        } else {
-            Ok(())
-        }
+        )?;
+        Ok(())
     }
 
-    fn number(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn number(&mut self, _can_assign: bool) -> Result<(), Error> {
         let tok = self.previous().clone();
 
         match tok.literal {
@@ -739,7 +758,7 @@ impl Compiler {
         }
     }
 
-    fn literal(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn literal(&mut self, _can_assign: bool) -> Result<(), Error> {
         let tok = self.previous().clone();
 
         match tok.ty {
@@ -761,12 +780,12 @@ impl Compiler {
         }
     }
 
-    fn variable(&mut self, can_assign: bool) -> Result<(), String> {
+    fn variable(&mut self, can_assign: bool) -> Result<(), Error> {
         let tok = self.previous().clone();
         self.named_variable(tok, can_assign)
     }
 
-    fn named_variable(&mut self, tok: scanner::Token, can_assign: bool) -> Result<(), String> {
+    fn named_variable(&mut self, tok: scanner::Token, can_assign: bool) -> Result<(), Error> {
         let name = match tok.ty {
             scanner::TokenType::Identifier => {
                 if let Some(scanner::Literal::Identifier(n)) = tok.literal.clone() {
@@ -811,7 +830,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn resolve_variable(&mut self, name: &str) -> Result<Resolution, String> {
+    fn resolve_variable(&mut self, name: &str) -> Result<Resolution, Error> {
         if let Some(idx) = self.resolve_local(name)? {
             return Ok(Resolution::Local(idx));
         }
@@ -822,7 +841,7 @@ impl Compiler {
         Ok(Resolution::Global)
     }
 
-    fn resolve_upval(&mut self, name: &str) -> Result<Option<usize>, String> {
+    fn resolve_upval(&mut self, name: &str) -> Result<Option<usize>, Error> {
         if self.level_idx < 1 {
             return Ok(None);
         }
@@ -864,7 +883,7 @@ impl Compiler {
         self.current_level().upvals.len() - 1
     }
 
-    fn resolve_local(&self, name: &str) -> Result<Option<usize>, String> {
+    fn resolve_local(&self, name: &str) -> Result<Option<usize>, Error> {
         Compiler::resolve_local_static(self.current_level(), name, self.previous())
     }
 
@@ -872,7 +891,7 @@ impl Compiler {
         level: &Level,
         name: &str,
         prev_tok: &scanner::Token,
-    ) -> Result<Option<usize>, String> {
+    ) -> Result<Option<usize>, Error> {
         for (idx, local) in level.locals.iter().rev().enumerate() {
             if Compiler::identifier_equal(&local.name.literal, name) {
                 if local.depth == -1 {
@@ -887,7 +906,7 @@ impl Compiler {
         Ok(None)
     }
 
-    fn string(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn string(&mut self, _can_assign: bool) -> Result<(), Error> {
         let tok = self.previous().clone();
 
         match tok.literal {
@@ -900,7 +919,7 @@ impl Compiler {
         }
     }
 
-    fn binary(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn binary(&mut self, _can_assign: bool) -> Result<(), Error> {
         let operator = self.previous().clone();
 
         let rule = Compiler::get_rule(operator.ty);
@@ -951,14 +970,15 @@ impl Compiler {
                 self.emit_op(bytecode::Op::Not, operator.line);
                 Ok(())
             }
-            _ => Err(format!(
-                "Invalid token {:?} in binary expression at line={},col={}.",
-                operator.ty, operator.line, operator.col
-            )),
+            _ => Err(Error::Parse(ErrorInfo {
+                what: format!("Invalid token {:?} in binary expression", operator.ty),
+                line: operator.line,
+                col: operator.col,
+            })),
         }
     }
 
-    fn and(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn and(&mut self, _can_assign: bool) -> Result<(), Error> {
         let end_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
         self.emit_op(bytecode::Op::Pop, self.previous().line);
         self.parse_precedence(Precedence::And)?;
@@ -966,7 +986,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn or(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn or(&mut self, _can_assign: bool) -> Result<(), Error> {
         let else_jump = self.emit_jump(bytecode::Op::JumpIfFalse(/*placeholder*/ 0));
         let end_jump = self.emit_jump(bytecode::Op::Jump(/*placeholder*/ 0));
 
@@ -978,27 +998,29 @@ impl Compiler {
         Ok(())
     }
 
-    fn call(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn call(&mut self, _can_assign: bool) -> Result<(), Error> {
         let arg_count = self.argument_list()?;
         self.emit_op(bytecode::Op::Call(arg_count), self.previous().line);
         Ok(())
     }
 
-    fn super_(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn super_(&mut self, _can_assign: bool) -> Result<(), Error> {
         let tok = self.previous().clone();
         match &self.current_class {
             None => {
-                return Err(format!(
-                    "Can't use 'super' outside of a class (line,col={},{})",
-                    tok.line, tok.col
-                ))
+                return Err(Error::Semantic(ErrorInfo {
+                    what: "Can't use 'super' outside of a class".to_string(),
+                    line: tok.line,
+                    col: tok.col,
+                }))
             }
             Some(class) => {
                 if !class.has_superclass {
-                    return Err(format!(
-                        "Can't use 'super' in a class with no superclass (line,col={},{})",
-                        tok.line, tok.col
-                    ));
+                    return Err(Error::Semantic(ErrorInfo {
+                        what: "Can't use 'super' in a class with no superclass".to_string(),
+                        line: tok.line,
+                        col: tok.col,
+                    }));
                 }
             }
         }
@@ -1033,19 +1055,20 @@ impl Compiler {
         Ok(())
     }
 
-    fn this(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn this(&mut self, _can_assign: bool) -> Result<(), Error> {
         let tok = self.previous().clone();
         if self.current_class.is_none() {
-            return Err(format!(
-                "Cannot use 'this' outside of class at line={}, col={}",
-                tok.line, tok.col
-            ));
+            return Err(Error::Semantic(ErrorInfo {
+                what: "Cannot use 'this' outside of class.".to_string(),
+                line: tok.line,
+                col: tok.col,
+            }));
         }
 
         self.variable(false)
     }
 
-    fn dot(&mut self, can_assign: bool) -> Result<(), String> {
+    fn dot(&mut self, can_assign: bool) -> Result<(), Error> {
         self.consume(
             scanner::TokenType::Identifier,
             "Expected property name after '.'.",
@@ -1065,9 +1088,13 @@ impl Compiler {
         Ok(())
     }
 
-    fn subscr(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn subscr(&mut self, _can_assign: bool) -> Result<(), Error> {
         if !self.extensions.lists {
-            return Err(format!("Unexpected '[' at line {}", self.previous().line));
+            return Err(Error::Parse(ErrorInfo {
+                what: "Unexpected '['".to_string(),
+                line: self.previous().line,
+                col: self.previous().col,
+            }));
         }
 
         self.expression()?;
@@ -1079,9 +1106,13 @@ impl Compiler {
         Ok(())
     }
 
-    fn list(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn list(&mut self, _can_assign: bool) -> Result<(), Error> {
         if !self.extensions.lists {
-            return Err(format!("Unexpected '[' at line {}", self.previous().line));
+            return Err(Error::Parse(ErrorInfo {
+                what: "Unexpected '['".to_string(),
+                line: self.previous().line,
+                col: self.previous().col,
+            }));
         }
 
         let arg_count = self.list_elements()?;
@@ -1089,7 +1120,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn list_elements(&mut self) -> Result<usize, String> {
+    fn list_elements(&mut self) -> Result<usize, Error> {
         let mut num_elements: usize = 0;
         if !self.check(scanner::TokenType::RightBracket) {
             loop {
@@ -1104,7 +1135,7 @@ impl Compiler {
         Ok(num_elements)
     }
 
-    fn argument_list(&mut self) -> Result<u8, String> {
+    fn argument_list(&mut self) -> Result<u8, Error> {
         let mut arg_count: u8 = 0;
         if !self.check(scanner::TokenType::RightParen) {
             loop {
@@ -1122,7 +1153,7 @@ impl Compiler {
         Ok(arg_count)
     }
 
-    fn unary(&mut self, _can_assign: bool) -> Result<(), String> {
+    fn unary(&mut self, _can_assign: bool) -> Result<(), Error> {
         let operator = self.previous().clone();
 
         self.parse_precedence(Precedence::Unary)?;
@@ -1136,10 +1167,11 @@ impl Compiler {
                 self.emit_op(bytecode::Op::Not, operator.line);
                 Ok(())
             }
-            _ => Err(format!(
-                "Invalid token in unary op {:?} at line={},col={}",
-                operator.ty, operator.line, operator.col
-            )),
+            _ => Err(Error::Parse(ErrorInfo {
+                what: format!("Invalid token in unary op {:?}", operator.ty),
+                line: operator.line,
+                col: operator.col,
+            })),
         }
     }
 
@@ -1164,7 +1196,7 @@ impl Compiler {
         self.emit_op(bytecode::Op::Return, self.previous().line);
     }
 
-    fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), String> {
+    fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), Error> {
         self.advance();
 
         let can_assign = precedence <= Precedence::Assignment;
@@ -1195,22 +1227,26 @@ impl Compiler {
         Ok(())
     }
 
-    fn fixup_subscript_to_setitem(&mut self) -> Result<(), String> {
+    fn fixup_subscript_to_setitem(&mut self) -> Result<(), Error> {
         self.current_chunk().code.pop(); // pop the subscript op
         self.expression()?; // consume right hand side
         self.emit_op(bytecode::Op::SetItem, self.previous().line);
         Ok(())
     }
 
-    fn error(&self, what: &str) -> String {
+    fn error(&self, what: &str) -> Error {
         Compiler::error_at_tok(what, self.previous())
     }
 
-    fn error_at_tok(what: &str, prev_tok: &scanner::Token) -> String {
-        format!("{} at line={},col={}.", what, prev_tok.line, prev_tok.col)
+    fn error_at_tok(what: &str, prev_tok: &scanner::Token) -> Error {
+        Error::Semantic(ErrorInfo {
+            what: what.to_string(),
+            line: prev_tok.line,
+            col: prev_tok.col,
+        })
     }
 
-    fn apply_parse_fn(&mut self, parse_fn: ParseFn, can_assign: bool) -> Result<(), String> {
+    fn apply_parse_fn(&mut self, parse_fn: ParseFn, can_assign: bool) -> Result<(), Error> {
         match parse_fn {
             ParseFn::Grouping => self.grouping(can_assign),
             ParseFn::Unary => self.unary(can_assign),
@@ -1234,18 +1270,20 @@ impl Compiler {
         &mut self,
         tok: scanner::TokenType,
         on_err_str: &str,
-    ) -> Result<&scanner::Token, String> {
+    ) -> Result<&scanner::Token, Error> {
         if self.check(tok) {
             return Ok(self.advance());
         }
-        Err(format!(
-            "Expected token {:?}, but found token {:?} at line={},col={}: {}",
-            tok,
-            self.peek().ty,
-            self.peek().line,
-            self.peek().col,
-            on_err_str
-        ))
+        Err(Error::Parse(ErrorInfo {
+            what: format!(
+                "Expected token {:?}, but found token {:?}: {}",
+                tok,
+                self.peek().ty,
+                on_err_str
+            ),
+            line: self.peek().line,
+            col: self.peek().col,
+        }))
     }
 
     fn advance(&mut self) -> &scanner::Token {
@@ -1542,13 +1580,13 @@ impl Compiler {
 mod tests {
     use crate::compiler::*;
 
-    fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {
+    fn check_semantic_error(code: &str, f: &dyn Fn(&str) -> ()) {
         let func_or_err =
             Compiler::compile(String::from(code), syntax_extensions::Extensions::default());
 
         match func_or_err {
-            Ok(_) => panic!(),
-            Err(err) => f(&err),
+            Err(Error::Semantic(err)) => f(&err.what),
+            _ => panic!("expected semantic error"),
         }
     }
 
@@ -1608,35 +1646,35 @@ mod tests {
 
     #[test]
     fn test_this_outside_method_1() {
-        check_error("print this;", &|err: &str| {
+        check_semantic_error("print this;", &|err: &str| {
             assert!(err.starts_with("Cannot use 'this' outside of class"))
         })
     }
 
     #[test]
     fn test_this_outside_method_2() {
-        check_error("fun foo() {print this;}", &|err: &str| {
+        check_semantic_error("fun foo() {print this;}", &|err: &str| {
             assert!(err.starts_with("Cannot use 'this' outside of class"))
         })
     }
 
     #[test]
     fn test_self_ineritance_is_error() {
-        check_error("class A < A {}", &|err: &str| {
+        check_semantic_error("class A < A {}", &|err: &str| {
             assert!(err.starts_with("A class cannot inherit from itself."))
         })
     }
 
     #[test]
     fn test_cant_use_super_outside_class() {
-        check_error("fun f() { super.bar(); }", &|err: &str| {
+        check_semantic_error("fun f() { super.bar(); }", &|err: &str| {
             assert!(err.starts_with("Can't use 'super' outside of a class"))
         })
     }
 
     #[test]
     fn test_cant_use_super_in_class_with_no_superclass() {
-        check_error("class Foo { bar() { super.bar(); } }", &|err: &str| {
+        check_semantic_error("class Foo { bar() { super.bar(); } }", &|err: &str| {
             assert!(err.starts_with("Can't use 'super' in a class with no superclass"))
         })
     }
@@ -1653,8 +1691,8 @@ mod tests {
         );
 
         match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => assert!(err.starts_with("Invalid assignment target")),
+            Err(Error::Semantic(err)) => assert!(err.what.starts_with("Invalid assignment target")),
+            _ => panic!("expected semantic error"),
         }
     }
 
@@ -1672,8 +1710,8 @@ mod tests {
         );
 
         match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => assert!(err.starts_with("Invalid assignment target")),
+            Err(Error::Semantic(err)) => assert!(err.what.starts_with("Invalid assignment target")),
+            _ => panic!("expected semantic error"),
         }
     }
 
@@ -1690,8 +1728,8 @@ mod tests {
         );
 
         match func_or_err {
-            Ok(_) => panic!("expected compile error"),
-            Err(err) => assert!(err.starts_with("Redeclaration of variable")),
+            Err(Error::Semantic(err)) => assert!(err.what.starts_with("Redeclaration of variable")),
+            _ => panic!("expected semantic error"),
         }
     }
 }

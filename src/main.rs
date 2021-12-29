@@ -201,7 +201,7 @@ fn main() {
                 }
             }
             Err(err) => {
-                println!("{}", err);
+                error_formatting::format_compiler_error(&err, &input);
                 std::process::exit(1);
             }
         }
