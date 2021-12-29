@@ -1422,11 +1422,11 @@ mod tests {
 
     use crate::bytecode_interpreter::*;
     use crate::compiler::*;
-    use crate::syntax_extensions;
+    use crate::extensions;
 
     fn evaluate(
         code: &str,
-        extensions: syntax_extensions::Extensions,
+        extensions: extensions::Extensions,
     ) -> Result<Vec<String>, String> {
         let func_or_err = Compiler::compile(String::from(code), extensions);
 
@@ -1447,7 +1447,7 @@ mod tests {
 
     fn check_output(
         code: &str,
-        extensions: syntax_extensions::Extensions,
+        extensions: extensions::Extensions,
         expected_output: &[String],
     ) {
         let res = evaluate(code, extensions);
@@ -1461,7 +1461,7 @@ mod tests {
     fn check_output_default(code: &str, expected_output: &[String]) {
         check_output(
             code,
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
             expected_output,
         );
     }
@@ -1469,7 +1469,7 @@ mod tests {
     fn check_output_lists(code: &str, expected_output: &[String]) {
         check_output(
             code,
-            syntax_extensions::Extensions {
+            extensions::Extensions {
                 lists: true,
                 ..Default::default()
             },
@@ -1477,7 +1477,7 @@ mod tests {
         );
     }
 
-    fn check_error(code: &str, extensions: syntax_extensions::Extensions, f: &dyn Fn(&str) -> ()) {
+    fn check_error(code: &str, extensions: extensions::Extensions, f: &dyn Fn(&str) -> ()) {
         let res = evaluate(code, extensions);
 
         match res {
@@ -1487,7 +1487,7 @@ mod tests {
     }
 
     fn check_error_default(code: &str, f: &dyn Fn(&str) -> ()) {
-        check_error(code, syntax_extensions::Extensions::default(), f);
+        check_error(code, extensions::Extensions::default(), f);
     }
 
     #[test]
@@ -1896,7 +1896,7 @@ mod tests {
              print fib(5);\n\
              print clock() - start;\n\
              print 42;",
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         );
 
         match res {

@@ -1,6 +1,6 @@
 use crate::bytecode;
 use crate::scanner;
-use crate::syntax_extensions;
+use crate::extensions;
 
 #[derive(Debug)]
 struct Local {
@@ -27,7 +27,7 @@ pub struct Compiler {
     levels: Vec<Level>,
     level_idx: usize,
     current_class: Option<ClassCompiler>,
-    extensions: syntax_extensions::Extensions,
+    extensions: extensions::Extensions,
 }
 
 impl Default for Compiler {
@@ -136,7 +136,7 @@ pub enum Error {
 impl Compiler {
     pub fn compile(
         input: String,
-        extensions: syntax_extensions::Extensions,
+        extensions: extensions::Extensions,
     ) -> Result<bytecode::Function, Error> {
         let mut compiler = Compiler {
             extensions,
@@ -1582,7 +1582,7 @@ mod tests {
 
     fn check_semantic_error(code: &str, f: &dyn Fn(&str) -> ()) {
         let func_or_err =
-            Compiler::compile(String::from(code), syntax_extensions::Extensions::default());
+            Compiler::compile(String::from(code), extensions::Extensions::default());
 
         match func_or_err {
             Err(Error::Semantic(err)) => f(&err.what),
@@ -1594,7 +1594,7 @@ mod tests {
     fn test_compiles_1() {
         Compiler::compile(
             String::from("print 42 * 12;"),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1603,7 +1603,7 @@ mod tests {
     fn test_compiles_2() {
         Compiler::compile(
             String::from("print -2 * 3 + (-4 / 2);"),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1612,7 +1612,7 @@ mod tests {
     fn test_var_decl_compiles_1() {
         Compiler::compile(
             String::from("var x = 2;"),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1621,7 +1621,7 @@ mod tests {
     fn test_var_decl_implicit_nil() {
         Compiler::compile(
             String::from("var x;"),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1630,7 +1630,7 @@ mod tests {
     fn test_var_reading_2() {
         Compiler::compile(
             String::from("var x; print x;"),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1639,7 +1639,7 @@ mod tests {
     fn test_var_reading_3() {
         Compiler::compile(
             String::from("var x; print x * 2 + x;"),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
         .unwrap();
     }
@@ -1687,7 +1687,7 @@ mod tests {
              var y = 3;\n\
              x * y = 5;",
             ),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         );
 
         match func_or_err {
@@ -1706,7 +1706,7 @@ mod tests {
                x * y = 5;\n\
              }\n",
             ),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         );
 
         match func_or_err {
@@ -1724,7 +1724,7 @@ mod tests {
                var x = 3;\n\
              }",
             ),
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         );
 
         match func_or_err {

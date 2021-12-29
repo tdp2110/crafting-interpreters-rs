@@ -17,7 +17,7 @@ mod line_reader;
 mod parser;
 mod repl;
 mod scanner;
-mod syntax_extensions;
+mod extensions;
 mod treewalk_interpreter;
 mod value;
 
@@ -111,7 +111,7 @@ fn main() {
         )
         .get_matches();
 
-    let extensions = syntax_extensions::Extensions {
+    let extensions = extensions::Extensions {
         lists: matches.is_present(EXTENSION_LISTS),
         lambdas: matches.is_present(EXTENSION_LAMBDAS),
     };

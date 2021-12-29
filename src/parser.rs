@@ -1,6 +1,6 @@
 use crate::expr;
 use crate::scanner;
-use crate::syntax_extensions;
+use crate::extensions;
 
 use std::fmt;
 
@@ -9,7 +9,7 @@ struct Parser {
     tokens: Vec<scanner::Token>,
     current: usize,
     in_fundec: bool, // in rust, booleans default to false: https://doc.rust-lang.org/std/primitive.bool.html#impl-Default
-    extensions: syntax_extensions::Extensions,
+    extensions: extensions::Extensions,
 }
 
 pub enum Error {
@@ -133,7 +133,7 @@ pub enum FunctionKind {
 }
 
 pub fn parse(
-    extensions: syntax_extensions::Extensions,
+    extensions: extensions::Extensions,
     tokens: Vec<scanner::Token>,
 ) -> Result<Vec<expr::Stmt>, Error> {
     let mut p = Parser {

@@ -3,7 +3,7 @@ use crate::expr;
 use crate::line_reader;
 use crate::parser;
 use crate::scanner;
-use crate::syntax_extensions;
+use crate::extensions;
 use crate::treewalk_interpreter;
 
 use std::sync::atomic::Ordering;
@@ -29,7 +29,7 @@ fn eval_tokens(
     interpreter: &mut treewalk_interpreter::Interpreter,
     mut tokens: Vec<scanner::Token>,
     recursion_depth: i64,
-    extensions: syntax_extensions::Extensions,
+    extensions: extensions::Extensions,
     line: &str,
 ) {
     let handle_err = |err| {
@@ -112,7 +112,7 @@ fn eval_tokens(
     }
 }
 
-pub fn run(extensions: syntax_extensions::Extensions) {
+pub fn run(extensions: extensions::Extensions) {
     let mut interpreter = mk_interpreter();
     let mut line_reader = line_reader::LineReader::new(".repl-history.txt", ">>> ");
     println!(

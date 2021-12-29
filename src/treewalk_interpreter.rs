@@ -1269,10 +1269,10 @@ impl Interpreter {
 mod tests {
     use crate::parser;
     use crate::scanner;
-    use crate::syntax_extensions;
+    use crate::extensions;
     use crate::treewalk_interpreter;
 
-    fn evaluate(code: &str, options: syntax_extensions::Extensions) -> Result<String, String> {
+    fn evaluate(code: &str, options: extensions::Extensions) -> Result<String, String> {
         let tokens = scanner::scan_tokens(code.to_string()).unwrap();
 
         match parser::parse(options, tokens) {
@@ -1289,10 +1289,10 @@ mod tests {
     }
 
     fn evaluate_default(code: &str) -> Result<String, String> {
-        evaluate(code, syntax_extensions::Extensions::default())
+        evaluate(code, extensions::Extensions::default())
     }
 
-    fn check_output(code: &str, expected_output: &str, options: syntax_extensions::Extensions) {
+    fn check_output(code: &str, expected_output: &str, options: extensions::Extensions) {
         let res = evaluate(code, options);
 
         match res {
@@ -1305,7 +1305,7 @@ mod tests {
         check_output(
             code,
             expected_output,
-            syntax_extensions::Extensions {
+            extensions::Extensions {
                 lists: true,
                 ..Default::default()
             },
@@ -1316,7 +1316,7 @@ mod tests {
         check_output(
             code,
             expected_output,
-            syntax_extensions::Extensions {
+            extensions::Extensions {
                 lambdas: true,
                 ..Default::default()
             },
@@ -1327,7 +1327,7 @@ mod tests {
         check_output(
             code,
             expected_output,
-            syntax_extensions::Extensions {
+            extensions::Extensions {
                 lambdas: true,
                 lists: true,
             },
@@ -1338,7 +1338,7 @@ mod tests {
         check_output(
             code,
             expected_output,
-            syntax_extensions::Extensions::default(),
+            extensions::Extensions::default(),
         )
     }
 
