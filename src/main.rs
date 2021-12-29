@@ -12,24 +12,24 @@ mod compiler;
 mod debugger;
 mod error_formatting;
 mod expr;
+mod extensions;
 mod gc;
 mod line_reader;
 mod parser;
 mod repl;
 mod scanner;
-mod extensions;
 mod treewalk_interpreter;
 mod value;
 
-static INPUT_STR: &str = "INPUT";
-static SHOW_TOKENS_STR: &str = "tokens";
-static SHOW_AST_STR: &str = "ast";
-static DISASSEMBLE_STR: &str = "disassemble";
-static DEBUG_STR: &str = "debug";
-static TREEWALK_STR: &str = "treewalk";
-static LITERAL_INPUT: &str = "c";
-static EXTENSION_LISTS: &str = "Xlists";
-static EXTENSION_LAMBDAS: &str = "Xlambdas";
+const INPUT_STR: &str = "INPUT";
+const SHOW_TOKENS_STR: &str = "tokens";
+const SHOW_AST_STR: &str = "ast";
+const DISASSEMBLE_STR: &str = "disassemble";
+const DEBUG_STR: &str = "debug";
+const TREEWALK_STR: &str = "treewalk";
+const LITERAL_INPUT: &str = "c";
+const EXTENSION_LISTS: &str = "Xlists";
+const EXTENSION_LAMBDAS: &str = "Xlambdas";
 
 fn get_input(matches: &clap::ArgMatches<'_>) -> Option<String> {
     if let Some(literal_input) = matches.value_of(LITERAL_INPUT) {
