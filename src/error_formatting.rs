@@ -5,9 +5,9 @@ use crate::scanner;
 use colored::*;
 
 fn format_input(input: &str, line: usize, col: i64) {
-    println!("{}", input.lines().nth(line - 1).unwrap());
-    print!("{:~<1$}", "".blue().bold(), col as usize);
-    println!("{}", "^".blue().bold());
+    eprintln!("{}", input.lines().nth(line - 1).unwrap());
+    eprint!("{:~<1$}", "".blue().bold(), col as usize);
+    eprintln!("{}", "^".blue().bold());
 }
 
 enum CompilerErrorKind {
@@ -16,7 +16,7 @@ enum CompilerErrorKind {
 }
 
 fn format_compiler_error_info(err: &compiler::ErrorInfo, input: &str, kind: CompilerErrorKind) {
-    println!(
+    eprintln!(
         "loxi: {}: {}",
         match kind {
             CompilerErrorKind::Parse => "parse error",
@@ -41,7 +41,7 @@ pub fn format_compiler_error(err: &compiler::Error, input: &str) {
             format_compiler_error_info(err, input, CompilerErrorKind::Semantic)
         }
         compiler::Error::Internal(err) => {
-            println!(
+            eprintln!(
                 "loxi: {}: {}",
                 "internal error".red().bold(),
                 err.white().bold()
@@ -52,7 +52,7 @@ pub fn format_compiler_error(err: &compiler::Error, input: &str) {
 
 pub fn format_parse_error(err: &parser::Error, input: &str) {
     let err_str = format!("{:?}", err);
-    println!(
+    eprintln!(
         "loxi: {}: {}",
         "parse error".red().bold(),
         err_str.white().bold()
@@ -74,7 +74,7 @@ pub fn format_parse_error(err: &parser::Error, input: &str) {
 }
 
 pub fn format_lexical_error(err: &scanner::Error, input: &str) {
-    println!(
+    eprintln!(
         "loxi: {}: {} at line={}, col={}",
         "lexical error".red().bold(),
         err.what.white().bold(),
