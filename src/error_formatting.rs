@@ -17,7 +17,7 @@ enum CompilerErrorKind {
 
 fn format_compiler_error_info(err: &compiler::ErrorInfo, input: &str, kind: CompilerErrorKind) {
     eprintln!(
-        "loxi: {}: {}",
+        "loxi: {}: {} (at line={}, col={})",
         match kind {
             CompilerErrorKind::Parse => "parse error",
             CompilerErrorKind::Semantic => "semantic error",
@@ -25,7 +25,9 @@ fn format_compiler_error_info(err: &compiler::ErrorInfo, input: &str, kind: Comp
         .to_string()
         .red()
         .bold(),
-        err.what.white().bold()
+        err.what.white().bold(),
+        err.line,
+        err.col
     );
 
     format_input(input, err.line, err.col);
@@ -75,7 +77,7 @@ pub fn format_parse_error(err: &parser::Error, input: &str) {
 
 pub fn format_lexical_error(err: &scanner::Error, input: &str) {
     eprintln!(
-        "loxi: {}: {} at line={}, col={}",
+        "loxi: {}: {} (at line={}, col={})",
         "lexical error".red().bold(),
         err.what.white().bold(),
         err.line,
