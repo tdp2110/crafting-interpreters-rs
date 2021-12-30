@@ -1,11 +1,21 @@
 use crate::compiler;
+use crate::input;
 use crate::parser;
 use crate::scanner;
 
 use colored::*;
 
-fn format_input(input: &str, line: usize, col: i64) {
-    eprintln!("{}", input.lines().nth(line - 1).unwrap());
+fn format_input(input: &input::Input, line: usize, col: i64) {
+    eprintln!(
+        "in {}, at line {}, column {}:",
+        match &input.source {
+            input::Source::Literal => "<command-line input>",
+            input::Source::File(filename) => &filename,
+        },
+        line,
+        col
+    );
+    eprintln!("{}", input.content.lines().nth(line - 1).unwrap());
     eprint!("{:~<1$}", "".blue().bold(), col as usize);
     eprintln!("{}", "^".blue().bold());
 }
@@ -15,9 +25,13 @@ enum CompilerErrorKind {
     Semantic,
 }
 
-fn format_compiler_error_info(err: &compiler::ErrorInfo, input: &str, kind: CompilerErrorKind) {
+fn format_compiler_error_info(
+    err: &compiler::ErrorInfo,
+    input: &input::Input,
+    kind: CompilerErrorKind,
+) {
     eprintln!(
-        "loxi: {}: {} (at line={}, col={})",
+        "loxi: {}: {}",
         match kind {
             CompilerErrorKind::Parse => "parse error",
             CompilerErrorKind::Semantic => "semantic error",
@@ -26,14 +40,12 @@ fn format_compiler_error_info(err: &compiler::ErrorInfo, input: &str, kind: Comp
         .red()
         .bold(),
         err.what.white().bold(),
-        err.line,
-        err.col
     );
 
     format_input(input, err.line, err.col);
 }
 
-pub fn format_compiler_error(err: &compiler::Error, input: &str) {
+pub fn format_compiler_error(err: &compiler::Error, input: &input::Input) {
     match err {
         compiler::Error::Lexical(err) => format_lexical_error(err, input),
         compiler::Error::Parse(err) => {
@@ -52,7 +64,7 @@ pub fn format_compiler_error(err: &compiler::Error, input: &str) {
     }
 }
 
-pub fn format_parse_error(err: &parser::Error, input: &str) {
+pub fn format_parse_error(err: &parser::Error, input: &input::Input) {
     let err_str = format!("{:?}", err);
     eprintln!(
         "loxi: {}: {}",
@@ -75,13 +87,11 @@ pub fn format_parse_error(err: &parser::Error, input: &str) {
     format_input(input, *line, *col);
 }
 
-pub fn format_lexical_error(err: &scanner::Error, input: &str) {
+pub fn format_lexical_error(err: &scanner::Error, input: &input::Input) {
     eprintln!(
-        "loxi: {}: {} (at line={}, col={})",
+        "loxi: {}: {}",
         "lexical error".red().bold(),
         err.what.white().bold(),
-        err.line,
-        err.col
     );
 
     format_input(input, err.line, err.col);

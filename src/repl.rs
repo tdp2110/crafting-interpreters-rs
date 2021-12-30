@@ -1,9 +1,10 @@
 use crate::error_formatting;
 use crate::expr;
+use crate::extensions;
+use crate::input;
 use crate::line_reader;
 use crate::parser;
 use crate::scanner;
-use crate::extensions;
 use crate::treewalk_interpreter;
 
 use std::sync::atomic::Ordering;
@@ -33,7 +34,13 @@ fn eval_tokens(
     line: &str,
 ) {
     let handle_err = |err| {
-        error_formatting::format_parse_error(err, line);
+        error_formatting::format_parse_error(
+            err,
+            &input::Input {
+                source: input::Source::Literal,
+                content: line.to_string(),
+            },
+        );
     };
     match parser::parse(extensions, tokens.clone()) {
         Ok(stmts) => {
@@ -131,7 +138,13 @@ pub fn run(extensions: extensions::Extensions) {
             line_reader::LineReadStatus::Line(line) => match scanner::scan_tokens(line.clone()) {
                 Ok(tokens) => eval_tokens(&mut interpreter, tokens, 0, extensions, &line),
                 Err(err) => {
-                    error_formatting::format_lexical_error(&err, &line);
+                    error_formatting::format_lexical_error(
+                        &err,
+                        &input::Input {
+                            source: input::Source::Literal,
+                            content: line.to_string(),
+                        },
+                    );
                 }
             },
             line_reader::LineReadStatus::Done => break,

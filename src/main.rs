@@ -14,6 +14,7 @@ mod error_formatting;
 mod expr;
 mod extensions;
 mod gc;
+mod input;
 mod line_reader;
 mod parser;
 mod repl;
@@ -31,14 +32,20 @@ const LITERAL_INPUT: &str = "c";
 const EXTENSION_LISTS: &str = "Xlists";
 const EXTENSION_LAMBDAS: &str = "Xlambdas";
 
-fn get_input(matches: &clap::ArgMatches<'_>) -> Option<String> {
+fn get_input(matches: &clap::ArgMatches<'_>) -> Option<input::Input> {
     if let Some(literal_input) = matches.value_of(LITERAL_INPUT) {
-        return Some(literal_input.to_string());
+        return Some(input::Input {
+            source: input::Source::Literal,
+            content: literal_input.to_string(),
+        });
     }
     if let Some(input_file) = matches.value_of(INPUT_STR) {
         match fs::read_to_string(input_file) {
             Ok(input) => {
-                return Some(input);
+                return Some(input::Input {
+                    source: input::Source::File(input_file.to_string()),
+                    content: input,
+                });
             }
             Err(err) => {
                 println!("Error reading {}: {}", input_file, err);
@@ -121,7 +128,7 @@ fn main() {
             || matches.is_present(SHOW_AST_STR)
             || matches.is_present(TREEWALK_STR)
         {
-            match scanner::scan_tokens(input.clone()) {
+            match scanner::scan_tokens(input.content.clone()) {
                 Ok(tokens) => {
                     if matches.is_present(SHOW_TOKENS_STR) {
                         println!("{:#?}", tokens);
@@ -168,7 +175,7 @@ fn main() {
             }
         }
 
-        let func_or_err = compiler::Compiler::compile(input.clone(), extensions);
+        let func_or_err = compiler::Compiler::compile(input.content.clone(), extensions);
 
         match func_or_err {
             Ok(func) => {
@@ -180,7 +187,7 @@ fn main() {
                     std::process::exit(0);
                 }
                 if matches.is_present(DEBUG_STR) {
-                    debugger::Debugger::new(func, input).debug();
+                    debugger::Debugger::new(func, input.content).debug();
                     std::process::exit(0);
                 }
                 let mut interpreter = bytecode_interpreter::Interpreter::default();
