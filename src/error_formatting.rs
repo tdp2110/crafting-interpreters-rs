@@ -10,7 +10,7 @@ fn format_input(input: &input::Input, line: usize, col: i64) {
         "in {}, at line {}, column {}:",
         match &input.source {
             input::Source::Literal => "<command-line input>",
-            input::Source::File(filename) => &filename,
+            input::Source::File(filename) => filename,
         },
         line,
         col
