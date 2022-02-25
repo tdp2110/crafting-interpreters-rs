@@ -95,8 +95,7 @@ impl Default for Heap {
     fn default() -> Heap {
         let next_gc = std::env::var("LOX_GC_TRIGGER_SIZE")
             .ok()
-            .map(|env_str| env_str.parse::<usize>().ok())
-            .flatten()
+            .and_then(|env_str| env_str.parse::<usize>().ok())
             .unwrap_or(1024 * 1024);
         Heap {
             bytes_allocated: 0,
@@ -290,11 +289,10 @@ impl Heap {
         let res: Vec<HeapId> = closure
             .upvalues
             .iter()
-            .map(|upval| match &*upval.borrow() {
+            .filter_map(|upval| match &*upval.borrow() {
                 value::Upvalue::Open(_) => None,
                 value::Upvalue::Closed(value) => Heap::extract_id(value),
             })
-            .flatten()
             .collect();
         res
     }

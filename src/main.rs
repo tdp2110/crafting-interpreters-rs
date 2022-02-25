@@ -182,7 +182,7 @@ fn main() {
                 if matches.is_present(DISASSEMBLE_STR) {
                     println!(
                         "{}",
-                        bytecode_interpreter::disassemble_chunk(&func.chunk, &"".to_string())
+                        bytecode_interpreter::disassemble_chunk(&func.chunk, "")
                     );
                     std::process::exit(0);
                 }

@@ -1374,12 +1374,8 @@ impl Interpreter {
     }
 
     fn mark_roots(&mut self) {
-        let stack_vals_to_mark: Vec<gc::HeapId> = self
-            .stack
-            .iter()
-            .map(gc::Heap::extract_id)
-            .flatten()
-            .collect();
+        let stack_vals_to_mark: Vec<gc::HeapId> =
+            self.stack.iter().filter_map(gc::Heap::extract_id).collect();
 
         let frame_closure_children: Vec<gc::HeapId> = self
             .frames
@@ -1391,8 +1387,7 @@ impl Interpreter {
         let globals_to_mark: Vec<gc::HeapId> = self
             .globals
             .values()
-            .map(gc::Heap::extract_id)
-            .flatten()
+            .flat_map(gc::Heap::extract_id)
             .collect();
 
         for val in stack_vals_to_mark
