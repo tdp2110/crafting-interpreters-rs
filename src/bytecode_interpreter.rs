@@ -1380,8 +1380,7 @@ impl Interpreter {
         let frame_closure_children: Vec<gc::HeapId> = self
             .frames
             .iter()
-            .map(|frame| self.heap.closure_children(&frame.closure))
-            .flatten()
+            .flat_map(|frame| self.heap.closure_children(&frame.closure))
             .collect();
 
         let globals_to_mark: Vec<gc::HeapId> = self
