@@ -72,10 +72,8 @@ pub fn disassemble_code(chunk: &bytecode::Chunk) -> Vec<String> {
         };
 
         lines.push(format!(
-            "{0: <04}   {1: <50} {2: <50}",
-            idx,
-            formatted_op,
-            format!("line {}", lineno.value)
+            "{0: <04}   {1: <50} line {2: <50}",
+            idx, formatted_op, lineno.value
         ));
     }
     lines
