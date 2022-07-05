@@ -262,7 +262,7 @@ impl Scanner {
     }
 
     fn is_decimal_digit(c: char) -> bool {
-        c.is_digit(10)
+        c.is_ascii_digit()
     }
 
     fn is_alphanumeric(c: char) -> bool {
