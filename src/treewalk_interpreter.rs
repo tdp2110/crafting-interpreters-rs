@@ -856,9 +856,7 @@ impl Interpreter {
             expr::Expr::Assign(sym, val_expr) => {
                 let val = self.interpret_expr(val_expr)?;
 
-                if let Err(err) = self.env.assign(sym.clone(), &val) {
-                    return Err(err);
-                }
+                self.env.assign(sym.clone(), &val)?;
 
                 Ok(val)
             }
@@ -1267,9 +1265,9 @@ impl Interpreter {
 
 #[cfg(test)]
 mod tests {
+    use crate::extensions;
     use crate::parser;
     use crate::scanner;
-    use crate::extensions;
     use crate::treewalk_interpreter;
 
     fn evaluate(code: &str, options: extensions::Extensions) -> Result<String, String> {
@@ -1335,11 +1333,7 @@ mod tests {
     }
 
     fn check_output_default(code: &str, expected_output: &str) {
-        check_output(
-            code,
-            expected_output,
-            extensions::Extensions::default(),
-        )
+        check_output(code, expected_output, extensions::Extensions::default())
     }
 
     fn check_error(code: &str, f: &dyn Fn(&str) -> ()) {

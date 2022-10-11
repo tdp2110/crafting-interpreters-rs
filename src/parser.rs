@@ -1,6 +1,6 @@
 use crate::expr;
-use crate::scanner;
 use crate::extensions;
+use crate::scanner;
 
 use std::fmt;
 
@@ -852,12 +852,10 @@ impl Parser {
         }
         if self.matches(scanner::TokenType::LeftParen) {
             let expr = Box::new(self.expression()?);
-            if let Err(err) = self.consume(
+            self.consume(
                 scanner::TokenType::RightParen,
                 "Expected ')' after expression.",
-            ) {
-                return Err(err);
-            }
+            )?;
             return Ok(expr::Expr::Grouping(expr));
         }
         if self.extensions.lists && self.matches(scanner::TokenType::LeftBracket) {

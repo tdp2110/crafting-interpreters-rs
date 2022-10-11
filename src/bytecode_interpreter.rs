@@ -337,9 +337,7 @@ impl Interpreter {
                 return Ok(());
             }
 
-            if let Err(err) = self.step() {
-                return Err(err);
-            }
+            self.step()?;
         }
     }
 
