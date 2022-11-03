@@ -201,7 +201,7 @@ impl Debugger {
                     println!("<empty upvals>")
                 }
                 for val in &self.interpreter.upvalues {
-                    println!("{}", self.interpreter.format_upval(&*val.borrow()));
+                    println!("{}", self.interpreter.format_upval(&val.borrow()));
                 }
             }
             DebugCommand::List => self.list(),
